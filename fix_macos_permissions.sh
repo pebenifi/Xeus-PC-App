@@ -1,40 +1,43 @@
 #!/bin/bash
-# Скрипт для исправления проблем с запуском приложения на macOS
-# Использование: ./fix_macos_permissions.sh
+# Script to fix macOS application launch issues
+# This script removes quarantine attributes and fixes permissions for XeusGUI.app
+# Usage: ./fix_macos_permissions.sh
 
 APP_PATH="XeusGUI.app"
 
+# Check if the application exists
 if [ ! -d "$APP_PATH" ]; then
-    echo "❌ Ошибка: $APP_PATH не найден!"
-    echo "Убедитесь, что вы находитесь в папке с приложением."
+    echo "❌ Error: $APP_PATH not found!"
+    echo "Make sure you are in the directory containing the application."
     exit 1
 fi
 
-echo "🔧 Исправление прав доступа для $APP_PATH..."
+echo "🔧 Fixing permissions for $APP_PATH..."
 
-# Удаляем карантин (quarantine) атрибут
-echo "1. Удаление карантина..."
-xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || echo "   Карантин не найден или уже удален"
+# Step 1: Remove quarantine attribute
+# macOS adds this attribute to downloaded files, which blocks execution
+echo "1. Removing quarantine attribute..."
+xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || echo "   Quarantine not found or already removed"
 
-# Удаляем другие расширенные атрибуты, которые могут блокировать запуск
-echo "2. Очистка расширенных атрибутов..."
-xattr -cr "$APP_PATH" 2>/dev/null || echo "   Атрибуты очищены"
+# Step 2: Clear all extended attributes that might block execution
+echo "2. Clearing extended attributes..."
+xattr -cr "$APP_PATH" 2>/dev/null || echo "   Attributes cleared"
 
-# Устанавливаем права на выполнение
-echo "3. Установка прав на выполнение..."
-chmod +x "$APP_PATH/Contents/MacOS/XeusGUI" 2>/dev/null || echo "   Права уже установлены"
+# Step 3: Set execute permissions on the executable
+echo "3. Setting execute permissions..."
+chmod +x "$APP_PATH/Contents/MacOS/XeusGUI" 2>/dev/null || echo "   Permissions already set"
 
-# Подписываем приложение adhoc (временная подпись)
-echo "4. Подпись приложения..."
-codesign --force --deep --sign - "$APP_PATH" 2>/dev/null || echo "   Подпись выполнена или не требуется"
+# Step 4: Sign the application with adhoc signature
+# This allows the app to run without a developer certificate
+echo "4. Signing application..."
+codesign --force --deep --sign - "$APP_PATH" 2>/dev/null || echo "   Signing completed or not required"
 
 echo ""
-echo "✅ Готово! Теперь попробуйте запустить приложение:"
-echo "   - Двойной клик на $APP_PATH"
-echo "   - Или через терминал: open $APP_PATH"
+echo "✅ Done! Now try to launch the application:"
+echo "   - Double-click on $APP_PATH"
+echo "   - Or via terminal: open $APP_PATH"
 echo ""
-echo "Если macOS все еще блокирует запуск:"
-echo "1. Правый клик на приложении → 'Открыть'"
-echo "2. Перейдите в Системные настройки → Безопасность и конфиденциальность"
-echo "3. Нажмите 'Открыть в любом случае' рядом с предупреждением"
-
+echo "If macOS still blocks the launch:"
+echo "1. Right-click on the application → 'Open'"
+echo "2. Go to System Settings → Privacy & Security"
+echo "3. Click 'Open Anyway' next to the warning"

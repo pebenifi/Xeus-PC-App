@@ -1,0 +1,64 @@
+═══════════════════════════════════════════════════════════════
+  XEUSGUI INSTALLATION INSTRUCTIONS FOR macOS
+═══════════════════════════════════════════════════════════════
+
+If you see the error "the application can't be opened" when trying
+to launch the app, follow these instructions:
+
+┌─────────────────────────────────────────────────────────────┐
+│  METHOD 1: VIA TERMINAL (FASTEST)                          │
+└─────────────────────────────────────────────────────────────┘
+
+1. Open Terminal (Applications → Utilities → Terminal)
+
+2. Navigate to the folder where you downloaded the application:
+   cd ~/Downloads
+
+3. Run these commands:
+   xattr -dr com.apple.quarantine XeusGUI.app
+   chmod +x XeusGUI.app/Contents/MacOS/XeusGUI
+   open XeusGUI.app
+
+┌─────────────────────────────────────────────────────────────┐
+│  METHOD 2: USING THE SCRIPT                                 │
+└─────────────────────────────────────────────────────────────┘
+
+If the fix_macos_permissions.sh file is in the same folder:
+
+1. Open Terminal
+2. Navigate to the folder with the application:
+   cd ~/Downloads
+3. Run the script:
+   ./fix_macos_permissions.sh
+
+┌─────────────────────────────────────────────────────────────┐
+│  METHOD 3: VIA FINDER (NO TERMINAL NEEDED)                 │
+└─────────────────────────────────────────────────────────────┘
+
+1. Find XeusGUI.app in Finder
+2. RIGHT-CLICK (or Control + click) on the application
+3. Select "Open" from the menu
+4. Click "Open" in the dialog that appears
+
+After the first launch via "Open", macOS will remember the permission,
+and you'll be able to launch it with a double-click in the future.
+
+┌─────────────────────────────────────────────────────────────┐
+│  METHOD 4: VIA SYSTEM SETTINGS                             │
+└─────────────────────────────────────────────────────────────┘
+
+1. Try to launch the application with a double-click
+2. Go to: System Settings → Privacy & Security
+3. Click "Open Anyway" next to the warning
+
+═══════════════════════════════════════════════════════════════
+  IMPORTANT NOTES
+═══════════════════════════════════════════════════════════════
+
+• Make sure you downloaded the application from a trusted source
+• After fixing permissions, the application should launch normally
+• If the problem persists, run via Terminal to see error messages:
+  ./XeusGUI.app/Contents/MacOS/XeusGUI
+
+═══════════════════════════════════════════════════════════════
+
