@@ -26,6 +26,8 @@ if __name__ == "__main__":
     # Создаем глобальный экземпляр ModbusManager
     modbus_manager = ModbusManager()
     engine.rootContext().setContextProperty("modbusManager", modbus_manager)
+    # Гарантированно останавливаем I/O thread при выходе (даже если QML не загрузился)
+    app.aboutToQuit.connect(lambda: modbus_manager._shutdownIoThread())
 
     # Определяем базовый путь (директория исполняемого файла)
     if getattr(sys, 'frozen', False):
