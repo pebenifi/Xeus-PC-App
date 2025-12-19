@@ -106,19 +106,25 @@ Rectangle {
         var yHi = irAxisYMain.max
         try { if (irMarkerResFreqMain.clear) irMarkerResFreqMain.clear() } catch (e3) { console.log("[IR] Screen01: marker clear(res) failed:", e3) }
         try { if (irMarkerFreqMain.clear) irMarkerFreqMain.clear() } catch (e4) { console.log("[IR] Screen01: marker clear(freq) failed:", e4) }
-        if (isFinite(resX) && !isNaN(resX) && isFinite(yLo) && isFinite(yHi)) {
+        var xMin = irAxisXMain.min
+        var xMax = irAxisXMain.max
+        if (isFinite(resX) && !isNaN(resX) && isFinite(yLo) && isFinite(yHi) && resX >= xMin && resX <= xMax) {
             try {
                 if (irMarkerResFreqMain.append) { irMarkerResFreqMain.append(resX, yLo); irMarkerResFreqMain.append(resX, yHi) }
             } catch (e5) {
                 console.log("[IR] Screen01: marker append(res) failed:", resX, yLo, yHi, e5)
             }
+        } else {
+            console.log("[IR] Screen01: marker(res) out of X range:", resX, "range=", xMin, xMax)
         }
-        if (isFinite(freqX) && !isNaN(freqX) && isFinite(yLo) && isFinite(yHi)) {
+        if (isFinite(freqX) && !isNaN(freqX) && isFinite(yLo) && isFinite(yHi) && freqX >= xMin && freqX <= xMax) {
             try {
                 if (irMarkerFreqMain.append) { irMarkerFreqMain.append(freqX, yLo); irMarkerFreqMain.append(freqX, yHi) }
             } catch (e6) {
                 console.log("[IR] Screen01: marker append(freq) failed:", freqX, yLo, yHi, e6)
             }
+        } else {
+            console.log("[IR] Screen01: marker(freq) out of X range:", freqX, "range=", xMin, xMax)
         }
 
         // Диагностика: где заканчиваются ненулевые значения
