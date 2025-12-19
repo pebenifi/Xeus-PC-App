@@ -13,6 +13,32 @@ Item {
     
     // IR spectrum: обновляем по событию подключения + по приходу данных.
     // (Не держим таймер — оба экрана всегда загружены, иначе будем дергать IR даже когда экран "сзади")
+    function _updateDashedVerticalMarker(markerSegments, xVal, yLo, yHi, xMin, xMax, tag) {
+        if (!markerSegments || markerSegments.length === 0) return
+        // всегда чистим старые сегменты
+        for (var c = 0; c < markerSegments.length; c++) {
+            try { if (markerSegments[c].clear) markerSegments[c].clear() } catch (e0) {}
+        }
+        if (!isFinite(xVal) || isNaN(xVal) || !isFinite(yLo) || !isFinite(yHi) || yHi <= yLo || xVal < xMin || xVal > xMax) {
+            console.log("[IR] Clinicalmode: marker(" + tag + ") out of X range:", xVal, "range=", xMin, xMax)
+            return
+        }
+        var total = yHi - yLo
+        var dash = total / (markerSegments.length * 2.0) // dash + gap
+        if (!isFinite(dash) || dash <= 0) return
+        for (var i = 0; i < markerSegments.length; i++) {
+            var seg = markerSegments[i]
+            var ys = yLo + (i * 2.0) * dash
+            if (ys >= yHi) break
+            var ye = Math.min(ys + dash, yHi)
+            try {
+                if (seg.append) { seg.append(xVal, ys); seg.append(xVal, ye) }
+            } catch (e1) {
+                console.log("[IR] Clinicalmode: marker(" + tag + ") append failed:", i, xVal, ys, ye, e1)
+            }
+        }
+    }
+
     function updateIrGraph(payload) {
         console.log("[IR] Clinicalmode updateIrGraph payload=", payload)
         if (!payload) {
@@ -100,28 +126,11 @@ Item {
         var freqX = Number(payload.freq)
         var yLo = irAxisY.min
         var yHi = irAxisY.max
-        try { if (irMarkerResFreq.clear) irMarkerResFreq.clear() } catch (e3) { console.log("[IR] Clinicalmode: marker clear(res) failed:", e3) }
-        try { if (irMarkerFreq.clear) irMarkerFreq.clear() } catch (e4) { console.log("[IR] Clinicalmode: marker clear(freq) failed:", e4) }
         var xMin = irAxisX.min
         var xMax = irAxisX.max
-        if (isFinite(resX) && !isNaN(resX) && isFinite(yLo) && isFinite(yHi) && resX >= xMin && resX <= xMax) {
-            try {
-                if (irMarkerResFreq.append) { irMarkerResFreq.append(resX, yLo); irMarkerResFreq.append(resX, yHi) }
-            } catch (e5) {
-                console.log("[IR] Clinicalmode: marker append(res) failed:", resX, yLo, yHi, e5)
-            }
-        } else {
-            console.log("[IR] Clinicalmode: marker(res) out of X range:", resX, "range=", xMin, xMax)
-        }
-        if (isFinite(freqX) && !isNaN(freqX) && isFinite(yLo) && isFinite(yHi) && freqX >= xMin && freqX <= xMax) {
-            try {
-                if (irMarkerFreq.append) { irMarkerFreq.append(freqX, yLo); irMarkerFreq.append(freqX, yHi) }
-            } catch (e6) {
-                console.log("[IR] Clinicalmode: marker append(freq) failed:", freqX, yLo, yHi, e6)
-            }
-        } else {
-            console.log("[IR] Clinicalmode: marker(freq) out of X range:", freqX, "range=", xMin, xMax)
-        }
+        // пунктир делаем набором коротких сегментов (QtGraphs LineSeries не умеет DashLine)
+        root._updateDashedVerticalMarker(spline.resMarkerSegments, resX, yLo, yHi, xMin, xMax, "res")
+        root._updateDashedVerticalMarker(spline.freqMarkerSegments, freqX, yLo, yHi, xMin, xMax, "freq")
 
         var lastNonZero = -1
         for (var k = n - 1; k >= 0; k--) {
@@ -995,6 +1004,36 @@ Item {
         height: 280
         axisX: irAxisX
         axisY: irAxisY
+        marginLeft: 0
+        marginRight: 0
+        marginTop: 0
+        marginBottom: 0
+
+        GraphsTheme { id: irTheme }
+        theme: irTheme
+
+        property var resMarkerSegments: []
+        property var freqMarkerSegments: []
+
+        Component.onCompleted: {
+            resMarkerSegments = [
+                irMarkerResFreq0, irMarkerResFreq1, irMarkerResFreq2, irMarkerResFreq3, irMarkerResFreq4, irMarkerResFreq5,
+                irMarkerResFreq6, irMarkerResFreq7, irMarkerResFreq8, irMarkerResFreq9, irMarkerResFreq10, irMarkerResFreq11
+            ]
+            freqMarkerSegments = [
+                irMarkerFreq0, irMarkerFreq1, irMarkerFreq2, irMarkerFreq3, irMarkerFreq4, irMarkerFreq5,
+                irMarkerFreq6, irMarkerFreq7, irMarkerFreq8, irMarkerFreq9, irMarkerFreq10, irMarkerFreq11
+            ]
+            // Сетка тёмно-синяя, подписи/оси — светлые
+            try { irTheme.grid.mainColor = "#102a66" } catch (e1) {}
+            try { irTheme.grid.subColor = "#0b1a3a" } catch (e2) {}
+            try { irTheme.axisX.mainColor = "#102a66" } catch (e3) {}
+            try { irTheme.axisX.subColor = "#0b1a3a" } catch (e4) {}
+            try { irTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+            try { irTheme.axisY.mainColor = "#102a66" } catch (e6) {}
+            try { irTheme.axisY.subColor = "#0b1a3a" } catch (e7) {}
+            try { irTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+        }
 
         ValueAxis {
             id: irAxisX
@@ -1006,6 +1045,8 @@ Item {
         ValueAxis { id: irAxisY; min: 0; max: 1 }
         SplineSeries {
             id: splineSeries
+            // Линия спектра — красная
+            color: "#ff0000"
             XYPoint {
                 x: 1
                 y: 1
@@ -1027,10 +1068,34 @@ Item {
             }
         }
 
-        // Вертикальные маркеры (две "палки") по res_freq/freq
-        // Важно: используем LineSeries, чтобы было строго под 90° (SplineSeries сглаживает и может "уводить" линию).
-        LineSeries { id: irMarkerResFreq; color: "#ff2d2d"; width: 2 }
-        LineSeries { id: irMarkerFreq; color: "#2dff2d"; width: 2 }
+        // Пунктирные вертикальные маркеры (делаем набором коротких сегментов)
+        // 1) res_freq — жёлтый
+        LineSeries { id: irMarkerResFreq0; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq1; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq2; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq3; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq4; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq5; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq6; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq7; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq8; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq9; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq10; color: "#ffd400"; width: 2 }
+        LineSeries { id: irMarkerResFreq11; color: "#ffd400"; width: 2 }
+
+        // 2) freq — белый
+        LineSeries { id: irMarkerFreq0; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq1; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq2; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq3; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq4; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq5; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq6; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq7; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq8; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq9; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq10; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq11; color: "#ffffff"; width: 2 }
     }
 
     GraphsView {
