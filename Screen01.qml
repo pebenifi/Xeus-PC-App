@@ -1061,7 +1061,6 @@ Rectangle {
             id: irAxisXMain
             min: 792
             max: 798
-            tickType: ValueAxis.TicksDynamic
             tickAnchor: 792
             tickInterval: 0.5
         }

@@ -927,9 +927,6 @@ Item {
             id: irAxisX
             min: 792
             max: 798
-            // хотим деления/подписи каждые 0.5
-            // (если tickType/tickInterval не поддерживаются в QtGraphs версии — будет warning в QML, но не критично)
-            tickType: ValueAxis.TicksDynamic
             tickAnchor: 792
             tickInterval: 0.5
         }
