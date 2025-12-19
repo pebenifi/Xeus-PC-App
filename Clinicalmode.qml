@@ -1016,8 +1016,9 @@ Item {
         }
 
         // Вертикальные маркеры (две "палки") по res_freq/freq
-        SplineSeries { id: irMarkerResFreq; color: "#ff2d2d" }
-        SplineSeries { id: irMarkerFreq; color: "#2dff2d" }
+        // Важно: используем LineSeries, чтобы было строго под 90° (SplineSeries сглаживает и может "уводить" линию).
+        LineSeries { id: irMarkerResFreq; color: "#ff2d2d"; width: 2 }
+        LineSeries { id: irMarkerFreq; color: "#2dff2d"; width: 2 }
     }
 
     GraphsView {
