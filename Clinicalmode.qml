@@ -39,6 +39,9 @@ Item {
             if (pj.y < minY) minY = pj.y
             if (pj.y > maxY) maxY = pj.y
         }
+        // если диапазон нулевой — расширяем, иначе QtGraphs может не отрисовать
+        if (minX === maxX) { maxX = minX + 1 }
+        if (minY === maxY) { maxY = minY + 1 }
         irAxisX.min = minX
         irAxisX.max = maxX
         irAxisY.min = minY
@@ -54,6 +57,17 @@ Item {
         }
     }
 
+    // Retry: если IR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
+    Timer {
+        id: irRetryTimer
+        interval: 2000
+        repeat: true
+        running: root.cachedIsConnected
+        onTriggered: {
+            if (modbusManager) modbusManager.requestIrSpectrum()
+        }
+    }
+
     Connections {
         target: modbusManager
         function onIrSpectrumChanged(payload) {
@@ -65,7 +79,7 @@ Item {
     Connections {
         target: modbusManager
         function onConnectionStatusChanged(connected) {
-            cachedIsConnected = connected
+            root.cachedIsConnected = connected
             if (connected && modbusManager) {
                 Qt.callLater(function() { modbusManager.requestIrSpectrum() })
             }
@@ -77,7 +91,7 @@ Item {
         // Устанавливаем начальное значение асинхронно, чтобы не блокировать рендеринг
         Qt.callLater(function() {
             if (modbusManager) {
-                cachedIsConnected = modbusManager.isConnected
+                root.cachedIsConnected = modbusManager.isConnected
             }
         })
     }
