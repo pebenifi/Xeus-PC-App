@@ -149,8 +149,9 @@ class ModbusManager(QObject):
     opCellHeatingStateChanged = Signal(bool)  # OP cell heating (реле 7)
     # Сигналы для паузы/возобновления опросов (используется при переключении экранов)
     pollingPausedChanged = Signal(bool)
-    # IR spectrum (Clinicalmode IR graph)
-    irSpectrumChanged = Signal(object)  # payload dict: {x_min,x_max,y_min,y_max,points,data,...}
+    # IR spectrum (Clinicalmode/Screen01 IR graph)
+    # Важно: используем QVariantMap, чтобы QML видел обычный JS object/array, а не PyObjectWrapper.
+    irSpectrumChanged = Signal('QVariantMap')  # payload map: {x_min,x_max,y_min,y_max,points,data,...}
 
     # Внутренние сигналы (НЕ для QML): отправка задач в worker-поток
     _workerSetClient = Signal(object)
@@ -1152,6 +1153,7 @@ class ModbusManager(QObject):
                 f"points={len(points)} y_range=[{min(y_values) if y_values else 'n/a'},{max(y_values) if y_values else 'n/a'}]"
             )
 
+            # Возвращаем только простые типы (int/float/str/list/dict), чтобы конвертировалось в QVariantMap
             return {
                 "status": status,
                 "x_min": float(x_min),
