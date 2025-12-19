@@ -53,8 +53,11 @@ Item {
             if (yv > maxY) maxY = yv
         }
         if (minY === maxY) { maxY = minY + 1 }
-        irAxisY.min = minY
-        irAxisY.max = maxY
+        var rangeY = maxY - minY
+        var padY = rangeY * 0.05
+        if (padY < 0.1) padY = 0.1
+        irAxisY.min = minY - padY
+        irAxisY.max = maxY + padY
 
         // QtGraphs: используем API XYSeries
         try {
@@ -77,7 +80,15 @@ Item {
                 console.log("[IR] Clinicalmode: append failed at", i, x, y, e2)
             }
         }
-        console.log("[IR] Clinicalmode: n=", n, "dx=", dx, "points added =", added, "x0=", x0, "x_last=", (x0 + dx * (n - 1)), "axisY=", minY, maxY)
+        var lastNonZero = -1
+        for (var k = n - 1; k >= 0; k--) {
+            if (Number(ys[k]) !== 0) { lastNonZero = k; break }
+        }
+        var xLastNonZero = (lastNonZero >= 0) ? (x0 + dx * lastNonZero) : null
+        console.log("[IR] Clinicalmode: n=", n, "dx=", dx, "points added =", added, "x0=", x0, "x_last=", (x0 + dx * (n - 1)),
+                    "axisY=", (minY - padY), (maxY + padY),
+                    "lastNonZeroIdx=", lastNonZero, "xLastNonZero=", xLastNonZero,
+                    "tail=", ys.slice(Math.max(0, n - 6)))
     }
 
     // Retry: если IR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
