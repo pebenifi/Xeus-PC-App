@@ -68,8 +68,12 @@ Rectangle {
             if (yv > maxY) maxY = yv
         }
         if (minY === maxY) { maxY = minY + 1 }
-        irAxisYMain.min = minY
-        irAxisYMain.max = maxY
+        // паддинг, чтобы линия на y=0 не прилипала к нижней рамке и "не исчезала"
+        var rangeY = maxY - minY
+        var padY = rangeY * 0.05
+        if (padY < 0.1) padY = 0.1
+        irAxisYMain.min = minY - padY
+        irAxisYMain.max = maxY + padY
 
         try {
             if (splineSeries1.clear) splineSeries1.clear()
@@ -92,7 +96,16 @@ Rectangle {
                 // не прерываем: попробуем добавить остальные точки
             }
         }
-        console.log("[IR] Screen01: n=", n, "dx=", dx, "points added =", added, "x0=", x0, "x_last=", (x0 + dx * (n - 1)), "axisY=", minY, maxY)
+        // Диагностика: где заканчиваются ненулевые значения
+        var lastNonZero = -1
+        for (var k = n - 1; k >= 0; k--) {
+            if (Number(ys[k]) !== 0) { lastNonZero = k; break }
+        }
+        var xLastNonZero = (lastNonZero >= 0) ? (x0 + dx * lastNonZero) : null
+        console.log("[IR] Screen01: n=", n, "dx=", dx, "points added =", added, "x0=", x0, "x_last=", (x0 + dx * (n - 1)),
+                    "axisY=", (minY - padY), (maxY + padY),
+                    "lastNonZeroIdx=", lastNonZero, "xLastNonZero=", xLastNonZero,
+                    "tail=", ys.slice(Math.max(0, n - 6)))
     }
 
     Connections {
