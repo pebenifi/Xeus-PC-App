@@ -1154,8 +1154,9 @@ Rectangle {
         }
 
         // Вертикальные маркеры (две "палки") по res_freq/freq
-        SplineSeries { id: irMarkerResFreqMain; color: "#ff2d2d" }
-        SplineSeries { id: irMarkerFreqMain; color: "#2dff2d" }
+        // Важно: используем LineSeries, чтобы было строго под 90° (SplineSeries сглаживает и может "уводить" линию).
+        LineSeries { id: irMarkerResFreqMain; color: "#ff2d2d"; width: 2 }
+        LineSeries { id: irMarkerFreqMain; color: "#2dff2d"; width: 2 }
     }
 
     Text {
