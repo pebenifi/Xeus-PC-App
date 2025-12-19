@@ -52,6 +52,8 @@ Rectangle {
             if (pj.y < minY) minY = pj.y
             if (pj.y > maxY) maxY = pj.y
         }
+        if (minX === maxX) { maxX = minX + 1 }
+        if (minY === maxY) { maxY = minY + 1 }
         irAxisXMain.min = minX
         irAxisXMain.max = maxX
         irAxisYMain.min = minY
@@ -70,13 +72,23 @@ Rectangle {
     Connections {
         target: modbusManager
         function onConnectionStatusChanged(connected) {
-            cachedIsConnected = connected
+            screen01.cachedIsConnected = connected
             if (connected && modbusManager) {
                 Qt.callLater(function() { modbusManager.requestIrSpectrum() })
             }
         }
         function onIrSpectrumChanged(payload) {
             screen01.updateIrGraphMain(payload)
+        }
+    }
+
+    Timer {
+        id: irRetryTimer
+        interval: 2000
+        repeat: true
+        running: screen01.cachedIsConnected
+        onTriggered: {
+            if (modbusManager) modbusManager.requestIrSpectrum()
         }
     }
 

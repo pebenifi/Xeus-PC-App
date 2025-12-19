@@ -1074,13 +1074,30 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task():
-            # читаем 400..414 и 420..477, каждый range chunked внутри modbus_client (max_chunk=10)
-            meta = client.read_input_registers_direct(400, 15, max_chunk=10)
-            if meta is None or len(meta) < 15:
-                return None
+            # Устройство может использовать 0-based адресацию.
+            # Пробуем сначала 400/420, затем 399/419 (как в test_modbus).
+            candidates = [
+                (400, 420),
+                (399, 419),
+            ]
 
-            data_regs = client.read_input_registers_direct(420, 58, max_chunk=10)
-            if data_regs is None or len(data_regs) < 58:
+            meta = None
+            data_regs = None
+            base_meta = None
+            base_data = None
+
+            for m_base, d_base in candidates:
+                meta = client.read_input_registers_direct(m_base, 15, max_chunk=10)
+                if meta is None or len(meta) < 15:
+                    continue
+                data_regs = client.read_input_registers_direct(d_base, 58, max_chunk=10)
+                if data_regs is None or len(data_regs) < 58:
+                    continue
+                base_meta = m_base
+                base_data = d_base
+                break
+
+            if meta is None or data_regs is None:
                 return None
 
             status = int(meta[0])
@@ -1115,6 +1132,8 @@ class ModbusManager(QObject):
 
             return {
                 "status": status,
+                "addr_meta_base": base_meta,
+                "addr_data_base": base_data,
                 "x_min": float(x_min),
                 "x_max": float(x_max),
                 "y_min": float(y_min),
