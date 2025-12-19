@@ -212,6 +212,7 @@ class ModbusManager(QObject):
 
         # IR spectrum cache
         self._ir_last = None
+        self._ir_request_in_flight = False
         
         # Буфер состояний устройств для мгновенного отображения при переключении страниц
         # Реле (регистр 1021)
@@ -804,6 +805,7 @@ class ModbusManager(QObject):
         elif key == "1020":
             self._applyExternalRelays1020Value(value)
         elif key == "ir":
+            self._ir_request_in_flight = False
             self._applyIrSpectrum(value)
         else:
             # Это могут быть "fire-and-forget" задачи; игнорируем.
@@ -1064,6 +1066,10 @@ class ModbusManager(QObject):
         """
         if not self._is_connected or self._modbus_client is None:
             return False
+        if self._ir_request_in_flight:
+            return False
+
+        self._ir_request_in_flight = True
 
         client = self._modbus_client
 
@@ -1099,12 +1105,13 @@ class ModbusManager(QObject):
                 for i, y in enumerate(y_values):
                     points.append({"x": float(i), "y": float(y)})
 
-            # Если y_min/y_max выглядят невалидно — рассчитаем по данным
-            if y_min == y_max:
-                y_min_calc = float(min(y_values)) if y_values else 0.0
-                y_max_calc = float(max(y_values)) if y_values else 1.0
-                y_min = y_min_calc
-                y_max = y_max_calc
+            # Если y_min/y_max не покрывают данные — рассчитаем по данным, чтобы график точно был виден
+            if y_values:
+                y_min_calc = float(min(y_values))
+                y_max_calc = float(max(y_values))
+                if (y_max - y_min) < 1e-9 or y_min > y_max_calc or y_max < y_min_calc:
+                    y_min = y_min_calc
+                    y_max = y_max_calc
 
             return {
                 "status": status,

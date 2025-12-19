@@ -11,56 +11,46 @@ Item {
     // Инициализируем через сигнал после загрузки компонента, чтобы не блокировать рендеринг
     property bool cachedIsConnected: false
     
-    // Обновляем кэш при изменении состояния подключения через сигнал (не блокирует UI)
-    Connections {
-        target: modbusManager
-        function onConnectionStatusChanged(connected) {
-            cachedIsConnected = connected
-        }
-    }
-
-    // IR spectrum auto-refresh (аккуратно: чтение идет батчами по 10 регистров в фоне)
-    Timer {
-        id: irRefreshTimer
-        interval: 1500
-        repeat: true
-        running: root.cachedIsConnected && root.visible
-        triggeredOnStart: true
-        onTriggered: {
-            if (modbusManager) {
-                modbusManager.requestIrSpectrum()
+    // IR spectrum: обновляем по событию подключения + по приходу данных.
+    // (Не держим таймер — оба экрана всегда загружены, иначе будем дергать IR даже когда экран "сзади")
+    function clearSeriesPoints(series) {
+        if (!series || !series.children) return
+        for (var i = series.children.length - 1; i >= 0; i--) {
+            var c = series.children[i]
+            // У XYPoint есть x/y; удаляем все такие объекты
+            if (c && c.destroy && c.x !== undefined && c.y !== undefined) {
+                c.destroy()
             }
-        }
-    }
-
-    function clearSeries(series) {
-        if (!series) return
-        while (series.count > 0) {
-            series.remove(0)
         }
     }
 
     function updateIrGraph(payload) {
         if (!payload || !payload.points) return
 
-        // axes
-        if (payload.x_min !== undefined && payload.x_max !== undefined) {
-            irAxisX.min = payload.x_min
-            irAxisX.max = payload.x_max
+        // Пересчитываем оси по точкам, чтобы график точно был виден
+        var minX = payload.points[0].x
+        var maxX = payload.points[0].x
+        var minY = payload.points[0].y
+        var maxY = payload.points[0].y
+        for (var j = 1; j < payload.points.length; j++) {
+            var pj = payload.points[j]
+            if (pj.x < minX) minX = pj.x
+            if (pj.x > maxX) maxX = pj.x
+            if (pj.y < minY) minY = pj.y
+            if (pj.y > maxY) maxY = pj.y
         }
-        if (payload.y_min !== undefined && payload.y_max !== undefined) {
-            irAxisY.min = payload.y_min
-            irAxisY.max = payload.y_max
-        }
+        irAxisX.min = minX
+        irAxisX.max = maxX
+        irAxisY.min = minY
+        irAxisY.max = maxY
 
-        clearSeries(splineSeries)
+        clearSeriesPoints(splineSeries)
         for (var i = 0; i < payload.points.length; i++) {
             var p = payload.points[i]
-            var obj = Qt.createQmlObject(
-                'import QtGraphs; XYPoint { x: ' + p.x + '; y: ' + p.y + ' }',
+            Qt.createQmlObject(
+                'import QtGraphs; XYPoint { objectName: "irPoint"; x: ' + p.x + '; y: ' + p.y + ' }',
                 splineSeries
             )
-            splineSeries.append(obj)
         }
     }
 
@@ -68,6 +58,17 @@ Item {
         target: modbusManager
         function onIrSpectrumChanged(payload) {
             updateIrGraph(payload)
+        }
+    }
+
+    // При подключении дергаем один раз IR спектр
+    Connections {
+        target: modbusManager
+        function onConnectionStatusChanged(connected) {
+            cachedIsConnected = connected
+            if (connected && modbusManager) {
+                Qt.callLater(function() { modbusManager.requestIrSpectrum() })
+            }
         }
     }
     

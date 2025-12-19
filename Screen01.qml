@@ -25,6 +25,61 @@ Rectangle {
     // Получаем ссылку на главное окно для доступа к функции смены экрана
     property var mainWindow: ApplicationWindow.window ? ApplicationWindow.window : null
 
+    // IR spectrum on main screen
+    property bool cachedIsConnected: false
+
+    function clearSeriesPoints(series) {
+        if (!series || !series.children) return
+        for (var i = series.children.length - 1; i >= 0; i--) {
+            var c = series.children[i]
+            if (c && c.destroy && c.x !== undefined && c.y !== undefined) {
+                c.destroy()
+            }
+        }
+    }
+
+    function updateIrGraphMain(payload) {
+        if (!payload || !payload.points || payload.points.length === 0) return
+
+        var minX = payload.points[0].x
+        var maxX = payload.points[0].x
+        var minY = payload.points[0].y
+        var maxY = payload.points[0].y
+        for (var j = 1; j < payload.points.length; j++) {
+            var pj = payload.points[j]
+            if (pj.x < minX) minX = pj.x
+            if (pj.x > maxX) maxX = pj.x
+            if (pj.y < minY) minY = pj.y
+            if (pj.y > maxY) maxY = pj.y
+        }
+        irAxisXMain.min = minX
+        irAxisXMain.max = maxX
+        irAxisYMain.min = minY
+        irAxisYMain.max = maxY
+
+        clearSeriesPoints(splineSeries1)
+        for (var i = 0; i < payload.points.length; i++) {
+            var p = payload.points[i]
+            Qt.createQmlObject(
+                'import QtGraphs; XYPoint { objectName: "irPoint"; x: ' + p.x + '; y: ' + p.y + ' }',
+                splineSeries1
+            )
+        }
+    }
+
+    Connections {
+        target: modbusManager
+        function onConnectionStatusChanged(connected) {
+            cachedIsConnected = connected
+            if (connected && modbusManager) {
+                Qt.callLater(function() { modbusManager.requestIrSpectrum() })
+            }
+        }
+        function onIrSpectrumChanged(payload) {
+            updateIrGraphMain(payload)
+        }
+    }
+
     Button {
         id: modeButton
         anchors.left: parent.left
@@ -981,6 +1036,11 @@ Rectangle {
         anchors.topMargin: 16
         width: 480
         height: 279
+        axisX: irAxisXMain
+        axisY: irAxisYMain
+
+        ValueAxis { id: irAxisXMain; min: 0; max: 1 }
+        ValueAxis { id: irAxisYMain; min: 0; max: 1 }
         SplineSeries {
             id: splineSeries1
             XYPoint {
