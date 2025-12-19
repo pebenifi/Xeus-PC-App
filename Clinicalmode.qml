@@ -57,7 +57,7 @@ Item {
     Connections {
         target: modbusManager
         function onIrSpectrumChanged(payload) {
-            updateIrGraph(payload)
+            root.updateIrGraph(payload)
         }
     }
 

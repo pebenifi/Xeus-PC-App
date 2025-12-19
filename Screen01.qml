@@ -76,7 +76,7 @@ Rectangle {
             }
         }
         function onIrSpectrumChanged(payload) {
-            updateIrGraphMain(payload)
+            screen01.updateIrGraphMain(payload)
         }
     }
 
