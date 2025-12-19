@@ -1088,6 +1088,7 @@ class ModbusManager(QObject):
 
         def task():
             import math
+            import struct
             # Читаем 400..414 и 420..477 (как в test_modbus при ir)
             meta = client.read_input_registers_direct(400, 15, max_chunk=10)
             if meta is None or len(meta) < 15:
@@ -1148,10 +1149,63 @@ class ModbusManager(QObject):
             # поэтому используем фиксированный диапазон.
             x_min = 792.0
             x_max = 798.0
+
+            def _float_variants_from_regs(reg1: int, reg2: int) -> dict:
+                """
+                Декодируем float из двух uint16 во всех популярных Modbus byte/word order.
+                A,B = bytes of reg1 (hi,lo); C,D = bytes of reg2 (hi,lo)
+                Variants: ABCD, BADC (swap bytes in words), CDAB (swap words), DCBA (full reverse)
+                """
+                A = (reg1 >> 8) & 0xFF
+                B = reg1 & 0xFF
+                C = (reg2 >> 8) & 0xFF
+                D = reg2 & 0xFF
+                orders = {
+                    "ABCD": bytes([A, B, C, D]),
+                    "BADC": bytes([B, A, D, C]),
+                    "CDAB": bytes([C, D, A, B]),
+                    "DCBA": bytes([D, C, B, A]),
+                }
+                out: dict[str, float] = {}
+                for k, bb in orders.items():
+                    try:
+                        v = float(struct.unpack(">f", bb)[0])
+                    except Exception:
+                        continue
+                    if math.isfinite(v):
+                        out[k] = v
+                return out
+
+            def _pick_variant_in_range(variants: dict, lo: float, hi: float) -> float:
+                """Выбираем вариант float, который попадает в нужный диапазон (если есть)."""
+                if not variants:
+                    return float("nan")
+                in_range = [(k, v) for k, v in variants.items() if lo <= v <= hi]
+                if not in_range:
+                    return float("nan")
+                # если несколько — берем ближайший к центру диапазона
+                mid = (lo + hi) / 2.0
+                in_range.sort(key=lambda kv: abs(kv[1] - mid))
+                return float(in_range[0][1])
+
+            # Метаданные (как в test_modbus: float в IR-байтсвапе), но для палок нам важны 409-410 / 411-412:
             y_min = self._registers_to_float_ir(int(meta[5]), int(meta[6]))
             y_max = self._registers_to_float_ir(int(meta[7]), int(meta[8]))
-            res_freq = self._registers_to_float_ir(int(meta[9]), int(meta[10]))
-            freq = self._registers_to_float_ir(int(meta[11]), int(meta[12]))
+
+            res_r1, res_r2 = int(meta[9]), int(meta[10])
+            freq_r1, freq_r2 = int(meta[11]), int(meta[12])
+            res_variants = _float_variants_from_regs(res_r1, res_r2)
+            freq_variants = _float_variants_from_regs(freq_r1, freq_r2)
+
+            # Обычно палки должны попадать в диапазон X графика (792..798). Если нет — оставляем IR-variant,
+            # но логируем варианты для диагностики.
+            res_freq = _pick_variant_in_range(res_variants, x_min, x_max)
+            freq = _pick_variant_in_range(freq_variants, x_min, x_max)
+            if not math.isfinite(res_freq):
+                res_freq = self._registers_to_float_ir(res_r1, res_r2)
+            if not math.isfinite(freq):
+                freq = self._registers_to_float_ir(freq_r1, freq_r2)
+
             integral = self._registers_to_float_ir(int(meta[13]), int(meta[14]))
 
             for name, val in (
@@ -1216,6 +1270,11 @@ class ModbusManager(QObject):
                 "res_freq": float(res_freq),
                 "freq": float(freq),
                 "integral": float(integral),
+                # Диагностика декодирования "палок" (409-410 / 411-412)
+                "res_freq_regs": [res_r1, res_r2],
+                "freq_regs": [freq_r1, freq_r2],
+                "res_freq_variants": {k: float(v) for k, v in res_variants.items()},
+                "freq_variants": {k: float(v) for k, v in freq_variants.items()},
                 "data_raw_u16": y_values_raw_u16,
                 "data_raw_i16": y_values_raw_i16,
                 "data": y_values,

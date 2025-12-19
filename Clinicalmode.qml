@@ -90,19 +90,25 @@ Item {
         var yHi = irAxisY.max
         try { if (irMarkerResFreq.clear) irMarkerResFreq.clear() } catch (e3) { console.log("[IR] Clinicalmode: marker clear(res) failed:", e3) }
         try { if (irMarkerFreq.clear) irMarkerFreq.clear() } catch (e4) { console.log("[IR] Clinicalmode: marker clear(freq) failed:", e4) }
-        if (isFinite(resX) && !isNaN(resX) && isFinite(yLo) && isFinite(yHi)) {
+        var xMin = irAxisX.min
+        var xMax = irAxisX.max
+        if (isFinite(resX) && !isNaN(resX) && isFinite(yLo) && isFinite(yHi) && resX >= xMin && resX <= xMax) {
             try {
                 if (irMarkerResFreq.append) { irMarkerResFreq.append(resX, yLo); irMarkerResFreq.append(resX, yHi) }
             } catch (e5) {
                 console.log("[IR] Clinicalmode: marker append(res) failed:", resX, yLo, yHi, e5)
             }
+        } else {
+            console.log("[IR] Clinicalmode: marker(res) out of X range:", resX, "range=", xMin, xMax)
         }
-        if (isFinite(freqX) && !isNaN(freqX) && isFinite(yLo) && isFinite(yHi)) {
+        if (isFinite(freqX) && !isNaN(freqX) && isFinite(yLo) && isFinite(yHi) && freqX >= xMin && freqX <= xMax) {
             try {
                 if (irMarkerFreq.append) { irMarkerFreq.append(freqX, yLo); irMarkerFreq.append(freqX, yHi) }
             } catch (e6) {
                 console.log("[IR] Clinicalmode: marker append(freq) failed:", freqX, yLo, yHi, e6)
             }
+        } else {
+            console.log("[IR] Clinicalmode: marker(freq) out of X range:", freqX, "range=", xMin, xMax)
         }
 
         var lastNonZero = -1
