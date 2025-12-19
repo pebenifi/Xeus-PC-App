@@ -1126,9 +1126,13 @@ class ModbusManager(QObject):
                     logger.warning(f"IR spectrum: {name} is not finite: {val}")
 
             # y values (raw ushort)
-            y_values = [int(v) for v in data_regs[:58]]
-            if not y_values:
+            y_values_raw = [int(v) for v in data_regs[:58]]
+            if not y_values_raw:
                 logger.warning("IR spectrum: y_values empty (no points)")
+
+            # Преобразование для отображения:
+            # каждое значение / 65535 * 100 (0..100%)
+            y_values = [(v / 65535.0) * 100.0 for v in y_values_raw]
 
             # Собираем точки для графика (x равномерно от x_min до x_max)
             points = []
@@ -1140,17 +1144,16 @@ class ModbusManager(QObject):
                 for i, y in enumerate(y_values):
                     points.append({"x": float(i), "y": float(y)})
 
-            # Если y_min/y_max не покрывают данные — рассчитаем по данным, чтобы график точно был виден
+            # Для отображения используем диапазон из преобразованных данных (0..100%)
+            # чтобы оси соответствовали тому, что рисуем.
             if y_values:
-                y_min_calc = float(min(y_values))
-                y_max_calc = float(max(y_values))
-                if (y_max - y_min) < 1e-9 or y_min > y_max_calc or y_max < y_min_calc:
-                    y_min = y_min_calc
-                    y_max = y_max_calc
+                y_min = float(min(y_values))
+                y_max = float(max(y_values))
 
             logger.info(
                 f"IR spectrum decoded: status={status} x=[{x_min},{x_max}] y=[{y_min},{y_max}] "
-                f"points={len(points)} y_range=[{min(y_values) if y_values else 'n/a'},{max(y_values) if y_values else 'n/a'}]"
+                f"points={len(points)} raw_y_range=[{min(y_values_raw) if y_values_raw else 'n/a'},{max(y_values_raw) if y_values_raw else 'n/a'}] "
+                f"scaled_y_range=[{y_min},{y_max}]"
             )
 
             # Возвращаем только простые типы (int/float/str/list/dict), чтобы конвертировалось в QVariantMap
@@ -1163,6 +1166,7 @@ class ModbusManager(QObject):
                 "res_freq": float(res_freq),
                 "freq": float(freq),
                 "integral": float(integral),
+                "data_raw": y_values_raw,
                 "data": y_values,
                 "points": points,
             }
