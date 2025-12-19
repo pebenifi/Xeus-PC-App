@@ -43,6 +43,11 @@ Item {
         if (!isFinite(x0) || !isFinite(x1)) { x0 = 792.0; x1 = 798.0 }
         if (x1 < x0) { var tmp = x0; x0 = x1; x1 = tmp }
         if (x1 === x0) { x1 = x0 + 1.0 }
+        // если диапазон близок к "792..798", снапим к шагу 0.5, чтобы ось была ровная как на приборе
+        if (Math.abs((x1 - x0) - 6.0) < 1.0) {
+            x0 = Math.round(x0 * 2.0) / 2.0
+            x1 = Math.round(x1 * 2.0) / 2.0
+        }
         // обновляем ось X (тик 0.5 остается в ValueAxis)
         irAxisX.min = x0
         irAxisX.max = x1
