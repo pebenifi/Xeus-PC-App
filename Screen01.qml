@@ -52,9 +52,16 @@ Rectangle {
             return
         }
 
-        // X всегда 792..798, 58 точек равномерно на весь диапазон
-        var x0 = 792.0
-        var x1 = 798.0
+        // X берём из метаданных устройства: x_min (401-402), x_max (403-404)
+        var x0 = Number(payload.x_min)
+        var x1 = Number(payload.x_max)
+        if (!isFinite(x0) || !isFinite(x1)) { x0 = 792.0; x1 = 798.0 }
+        if (x1 < x0) { var tmp = x0; x0 = x1; x1 = tmp }
+        if (x1 === x0) { x1 = x0 + 1.0 }
+        // обновляем ось X (тик 0.5 остается в ValueAxis)
+        irAxisXMain.min = x0
+        irAxisXMain.max = x1
+        irAxisXMain.tickAnchor = x0
         var n = ys.length
         var dx = (n > 1) ? ((x1 - x0) / (n - 1)) : 0.0
 

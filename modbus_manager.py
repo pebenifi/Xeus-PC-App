@@ -1144,11 +1144,9 @@ class ModbusManager(QObject):
             )
 
             status = int(meta[0])
-            # Для отображения IR спектра ось X фиксированная: 792..798 (шаг сетки задается в QML)
-            # Декодированные x_min/x_max из регистра могут быть "мусором" (как видно по логам),
-            # поэтому используем фиксированный диапазон.
-            x_min = 792.0
-            x_max = 798.0
+            # Метаданные IR (как в test_modbus): устройство реально хранит x/y range в регистрах
+            # 401-408, но порядок слов/байт может отличаться. Подбираем вариант по x_min/x_max,
+            # чтобы далее декодировать остальные float (y_min/y_max/res_freq/freq/integral) в том же формате.
 
             def _float_variants_from_regs(reg1: int, reg2: int) -> dict:
                 """
@@ -1176,37 +1174,94 @@ class ModbusManager(QObject):
                         out[k] = v
                 return out
 
-            def _pick_variant_in_range(variants: dict, lo: float, hi: float) -> float:
-                """Выбираем вариант float, который попадает в нужный диапазон (если есть)."""
-                if not variants:
-                    return float("nan")
-                in_range = [(k, v) for k, v in variants.items() if lo <= v <= hi]
-                if not in_range:
-                    return float("nan")
-                # если несколько — берем ближайший к центру диапазона
-                mid = (lo + hi) / 2.0
-                in_range.sort(key=lambda kv: abs(kv[1] - mid))
-                return float(in_range[0][1])
+            def _float_from_regs_with_key(reg1: int, reg2: int, key: str) -> float:
+                vmap = _float_variants_from_regs(reg1, reg2)
+                return float(vmap.get(key, float("nan")))
 
-            # Метаданные (как в test_modbus: float в IR-байтсвапе), но для палок нам важны 409-410 / 411-412:
-            y_min = self._registers_to_float_ir(int(meta[5]), int(meta[6]))
-            y_max = self._registers_to_float_ir(int(meta[7]), int(meta[8]))
+            # Определяем формат метаданных по x_min/x_max (401-404)
+            xmin_r1, xmin_r2 = int(meta[1]), int(meta[2])
+            xmax_r1, xmax_r2 = int(meta[3]), int(meta[4])
+            x_min_variants = _float_variants_from_regs(xmin_r1, xmin_r2)
+            x_max_variants = _float_variants_from_regs(xmax_r1, xmax_r2)
+            common_keys = sorted(set(x_min_variants.keys()) & set(x_max_variants.keys()))
 
+            meta_float_key = None
+            x_min = float("nan")
+            x_max = float("nan")
+            candidates = []
+            for k in common_keys:
+                xv0 = float(x_min_variants[k])
+                xv1 = float(x_max_variants[k])
+                if not (math.isfinite(xv0) and math.isfinite(xv1)):
+                    continue
+                if xv1 <= xv0:
+                    continue
+                if abs(xv0) > 1e6 or abs(xv1) > 1e6:
+                    continue
+                rng = xv1 - xv0
+                if rng <= 0 or rng > 1e6:
+                    continue
+                # IR обычно 792..798 (range ~6). Если несколько кандидатов — выбираем ближе к этому.
+                score = abs(rng - 6.0) + 0.1 * abs(xv0 - 792.0) + 0.1 * abs(xv1 - 798.0)
+                candidates.append((score, k, xv0, xv1))
+            if candidates:
+                candidates.sort(key=lambda t: t[0])
+                _, meta_float_key, x_min, x_max = candidates[0]
+            else:
+                # fallback (старое поведение)
+                x_min = 792.0
+                x_max = 798.0
+
+            # Декодируем остальные float-метаданные в том же формате, если удалось подобрать ключ
+            y_min_meta = float("nan")
+            y_max_meta = float("nan")
+            res_freq = float("nan")
+            freq = float("nan")
+            integral = float("nan")
+
+            y_min_r1, y_min_r2 = int(meta[5]), int(meta[6])
+            y_max_r1, y_max_r2 = int(meta[7]), int(meta[8])
             res_r1, res_r2 = int(meta[9]), int(meta[10])
             freq_r1, freq_r2 = int(meta[11]), int(meta[12])
-            res_variants = _float_variants_from_regs(res_r1, res_r2)
-            freq_variants = _float_variants_from_regs(freq_r1, freq_r2)
+            int_r1, int_r2 = int(meta[13]), int(meta[14])
 
-            # Обычно палки должны попадать в диапазон X графика (792..798). Если нет — оставляем IR-variant,
-            # но логируем варианты для диагностики.
-            res_freq = _pick_variant_in_range(res_variants, x_min, x_max)
-            freq = _pick_variant_in_range(freq_variants, x_min, x_max)
-            if not math.isfinite(res_freq):
-                res_freq = self._registers_to_float_ir(res_r1, res_r2)
-            if not math.isfinite(freq):
-                freq = self._registers_to_float_ir(freq_r1, freq_r2)
+            if meta_float_key:
+                y_min_meta = _float_from_regs_with_key(y_min_r1, y_min_r2, meta_float_key)
+                y_max_meta = _float_from_regs_with_key(y_max_r1, y_max_r2, meta_float_key)
+                res_freq = _float_from_regs_with_key(res_r1, res_r2, meta_float_key)
+                freq = _float_from_regs_with_key(freq_r1, freq_r2, meta_float_key)
+                integral = _float_from_regs_with_key(int_r1, int_r2, meta_float_key)
+            else:
+                # Fallback: старый IR байтсвап (для некоторых полей может быть неверно, но лучше чем NaN)
+                y_min_meta = self._registers_to_float_ir(y_min_r1, y_min_r2)
+                y_max_meta = self._registers_to_float_ir(y_max_r1, y_max_r2)
 
-            integral = self._registers_to_float_ir(int(meta[13]), int(meta[14]))
+                # Для палок пробуем подобрать вариант, который попадает в диапазон X
+                def _pick_variant_in_range(variants: dict, lo: float, hi: float) -> float:
+                    if not variants:
+                        return float("nan")
+                    in_range = [(k, v) for k, v in variants.items() if lo <= v <= hi]
+                    if not in_range:
+                        return float("nan")
+                    mid = (lo + hi) / 2.0
+                    in_range.sort(key=lambda kv: abs(kv[1] - mid))
+                    return float(in_range[0][1])
+
+                res_variants = _float_variants_from_regs(res_r1, res_r2)
+                freq_variants = _float_variants_from_regs(freq_r1, freq_r2)
+                res_freq = _pick_variant_in_range(res_variants, x_min, x_max)
+                freq = _pick_variant_in_range(freq_variants, x_min, x_max)
+                if not math.isfinite(res_freq):
+                    res_freq = self._registers_to_float_ir(res_r1, res_r2)
+                if not math.isfinite(freq):
+                    freq = self._registers_to_float_ir(freq_r1, freq_r2)
+
+                integral = self._registers_to_float_ir(int_r1, int_r2)
+
+            # Для логов/передачи: y_min/y_max по умолчанию берем из метаданных (как в регистре),
+            # но если невалидно — позже перетрем диапазоном по данным.
+            y_min = float(y_min_meta) if math.isfinite(y_min_meta) else 0.0
+            y_max = float(y_max_meta) if math.isfinite(y_max_meta) else 1.0
 
             for name, val in (
                 ("x_min", x_min),
@@ -1270,11 +1325,20 @@ class ModbusManager(QObject):
                 "res_freq": float(res_freq),
                 "freq": float(freq),
                 "integral": float(integral),
+                "meta_float_key": meta_float_key,
+                "x_min_regs": [xmin_r1, xmin_r2],
+                "x_max_regs": [xmax_r1, xmax_r2],
+                "y_min_regs": [y_min_r1, y_min_r2],
+                "y_max_regs": [y_max_r1, y_max_r2],
+                "y_min_meta": float(y_min_meta) if math.isfinite(y_min_meta) else None,
+                "y_max_meta": float(y_max_meta) if math.isfinite(y_max_meta) else None,
                 # Диагностика декодирования "палок" (409-410 / 411-412)
                 "res_freq_regs": [res_r1, res_r2],
                 "freq_regs": [freq_r1, freq_r2],
-                "res_freq_variants": {k: float(v) for k, v in res_variants.items()},
-                "freq_variants": {k: float(v) for k, v in freq_variants.items()},
+                "x_min_variants": {k: float(v) for k, v in x_min_variants.items()},
+                "x_max_variants": {k: float(v) for k, v in x_max_variants.items()},
+                "res_freq_variants": {k: float(v) for k, v in _float_variants_from_regs(res_r1, res_r2).items()},
+                "freq_variants": {k: float(v) for k, v in _float_variants_from_regs(freq_r1, freq_r2).items()},
                 "data_raw_u16": y_values_raw_u16,
                 "data_raw_i16": y_values_raw_i16,
                 "data": y_values,
