@@ -1090,7 +1090,8 @@ class ModbusManager(QObject):
             import math
             import struct
             # Читаем 400..414 и 420..477 (как в test_modbus при ir)
-            meta = client.read_input_registers_direct(400, 15, max_chunk=10)
+            # Метаданные лучше читать одним блоком (15 регистров) — иначе иногда "плывут" поля.
+            meta = client.read_input_registers_direct(400, 15, max_chunk=15)
             if meta is None or len(meta) < 15:
                 logger.warning(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
@@ -1231,6 +1232,27 @@ class ModbusManager(QObject):
                 res_freq = _float_from_regs_with_key(res_r1, res_r2, meta_float_key)
                 freq = _float_from_regs_with_key(freq_r1, freq_r2, meta_float_key)
                 integral = _float_from_regs_with_key(int_r1, int_r2, meta_float_key)
+
+                # Иногда отдельные поля могут приехать "битые". Тогда добираем res_freq/freq
+                # из вариантов, которые попадают в диапазон X.
+                def _pick_any_in_range(reg1: int, reg2: int, lo: float, hi: float) -> float:
+                    vmap = _float_variants_from_regs(reg1, reg2)
+                    in_range = [v for v in vmap.values() if lo <= v <= hi]
+                    if not in_range:
+                        return float("nan")
+                    # выбираем ближе к центру диапазона
+                    mid = (lo + hi) / 2.0
+                    in_range.sort(key=lambda v: abs(v - mid))
+                    return float(in_range[0])
+
+                if not (math.isfinite(res_freq) and x_min <= res_freq <= x_max):
+                    rf2 = _pick_any_in_range(res_r1, res_r2, x_min, x_max)
+                    if math.isfinite(rf2):
+                        res_freq = rf2
+                if not (math.isfinite(freq) and x_min <= freq <= x_max):
+                    f2 = _pick_any_in_range(freq_r1, freq_r2, x_min, x_max)
+                    if math.isfinite(f2):
+                        freq = f2
             else:
                 # Fallback: старый IR байтсвап (для некоторых полей может быть неверно, но лучше чем NaN)
                 y_min_meta = self._registers_to_float_ir(y_min_r1, y_min_r2)
