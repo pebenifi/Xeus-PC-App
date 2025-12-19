@@ -806,6 +806,8 @@ class ModbusManager(QObject):
             self._applyExternalRelays1020Value(value)
         elif key == "ir":
             self._ir_request_in_flight = False
+            if value is None:
+                logger.warning("IR spectrum read returned None")
             self._applyIrSpectrum(value)
         else:
             # Это могут быть "fire-and-forget" задачи; игнорируем.
@@ -1050,7 +1052,14 @@ class ModbusManager(QObject):
         Применяет результат чтения IR спектра (GUI поток) и дергает сигнал для QML графика.
         """
         if not value or not isinstance(value, dict):
+            logger.warning("IR spectrum: empty/invalid payload (not a dict or None)")
             return
+        pts = value.get("points")
+        logger.info(
+            f"IR spectrum: payload received, points={len(pts) if isinstance(pts, list) else 'n/a'} "
+            f"x=[{value.get('x_min')},{value.get('x_max')}] y=[{value.get('y_min')},{value.get('y_max')}] "
+            f"status={value.get('status')}"
+        )
         self._ir_last = value
         self.irSpectrumChanged.emit(value)
 
@@ -1065,40 +1074,34 @@ class ModbusManager(QObject):
         - 420..477 (58) данные
         """
         if not self._is_connected or self._modbus_client is None:
+            logger.info("IR spectrum request ignored: not connected")
             return False
         if self._ir_request_in_flight:
+            logger.info("IR spectrum request ignored: previous request still in flight")
             return False
 
         self._ir_request_in_flight = True
+        logger.info("IR spectrum request queued")
 
         client = self._modbus_client
 
         def task():
-            # Устройство может использовать 0-based адресацию.
-            # Пробуем сначала 400/420, затем 399/419 (как в test_modbus).
-            candidates = [
-                (400, 420),
-                (399, 419),
-            ]
-
-            meta = None
-            data_regs = None
-            base_meta = None
-            base_data = None
-
-            for m_base, d_base in candidates:
-                meta = client.read_input_registers_direct(m_base, 15, max_chunk=10)
-                if meta is None or len(meta) < 15:
-                    continue
-                data_regs = client.read_input_registers_direct(d_base, 58, max_chunk=10)
-                if data_regs is None or len(data_regs) < 58:
-                    continue
-                base_meta = m_base
-                base_data = d_base
-                break
-
-            if meta is None or data_regs is None:
+            import math
+            # Читаем 400..414 и 420..477 (как в test_modbus при ir)
+            meta = client.read_input_registers_direct(400, 15, max_chunk=10)
+            if meta is None or len(meta) < 15:
+                logger.warning(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
+
+            data_regs = client.read_input_registers_direct(420, 58, max_chunk=10)
+            if data_regs is None or len(data_regs) < 58:
+                logger.warning(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                return None
+
+            logger.info(
+                f"IR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
+                f"data_first10={data_regs[0:10]} data_last3={data_regs[-3:]}"
+            )
 
             status = int(meta[0])
             x_min = self._registers_to_float_ir(int(meta[1]), int(meta[2]))
@@ -1109,8 +1112,22 @@ class ModbusManager(QObject):
             freq = self._registers_to_float_ir(int(meta[11]), int(meta[12]))
             integral = self._registers_to_float_ir(int(meta[13]), int(meta[14]))
 
+            for name, val in (
+                ("x_min", x_min),
+                ("x_max", x_max),
+                ("y_min", y_min),
+                ("y_max", y_max),
+                ("res_freq", res_freq),
+                ("freq", freq),
+                ("integral", integral),
+            ):
+                if not math.isfinite(val):
+                    logger.warning(f"IR spectrum: {name} is not finite: {val}")
+
             # y values (raw ushort)
             y_values = [int(v) for v in data_regs[:58]]
+            if not y_values:
+                logger.warning("IR spectrum: y_values empty (no points)")
 
             # Собираем точки для графика (x равномерно от x_min до x_max)
             points = []
@@ -1130,10 +1147,13 @@ class ModbusManager(QObject):
                     y_min = y_min_calc
                     y_max = y_max_calc
 
+            logger.info(
+                f"IR spectrum decoded: status={status} x=[{x_min},{x_max}] y=[{y_min},{y_max}] "
+                f"points={len(points)} y_range=[{min(y_values) if y_values else 'n/a'},{max(y_values) if y_values else 'n/a'}]"
+            )
+
             return {
                 "status": status,
-                "addr_meta_base": base_meta,
-                "addr_data_base": base_data,
                 "x_min": float(x_min),
                 "x_max": float(x_max),
                 "y_min": float(y_min),

@@ -28,18 +28,12 @@ Rectangle {
     // IR spectrum on main screen
     property bool cachedIsConnected: false
 
-    function clearSeriesPoints(series) {
-        if (!series || !series.children) return
-        for (var i = series.children.length - 1; i >= 0; i--) {
-            var c = series.children[i]
-            if (c && c.destroy && c.x !== undefined && c.y !== undefined) {
-                c.destroy()
-            }
-        }
-    }
-
     function updateIrGraphMain(payload) {
-        if (!payload || !payload.points || payload.points.length === 0) return
+        console.log("[IR] Screen01 updateIrGraphMain payload=", payload)
+        if (!payload || !payload.points || payload.points.length === 0) {
+            console.log("[IR] Screen01: no points to draw", payload ? payload.points : payload)
+            return
+        }
 
         var minX = payload.points[0].x
         var maxX = payload.points[0].x
@@ -59,14 +53,28 @@ Rectangle {
         irAxisYMain.min = minY
         irAxisYMain.max = maxY
 
-        clearSeriesPoints(splineSeries1)
+        try {
+            if (splineSeries1.clear) splineSeries1.clear()
+        } catch (e) {
+            console.log("[IR] Screen01: splineSeries1.clear() failed:", e)
+        }
+
+        var added = 0
         for (var i = 0; i < payload.points.length; i++) {
             var p = payload.points[i]
-            Qt.createQmlObject(
-                'import QtGraphs; XYPoint { objectName: "irPoint"; x: ' + p.x + '; y: ' + p.y + ' }',
-                splineSeries1
-            )
+            if (p === undefined || p.x === undefined || p.y === undefined) continue
+            if (isNaN(p.x) || isNaN(p.y)) continue
+            try {
+                if (splineSeries1.append) {
+                    splineSeries1.append(p.x, p.y)
+                    added++
+                }
+            } catch (e2) {
+                console.log("[IR] Screen01: append failed at", i, p, e2)
+                break
+            }
         }
+        console.log("[IR] Screen01: points added =", added, "axisX=", minX, maxX, "axisY=", minY, maxY)
     }
 
     Connections {
