@@ -13,19 +13,12 @@ Item {
     
     // IR spectrum: обновляем по событию подключения + по приходу данных.
     // (Не держим таймер — оба экрана всегда загружены, иначе будем дергать IR даже когда экран "сзади")
-    function clearSeriesPoints(series) {
-        if (!series || !series.children) return
-        for (var i = series.children.length - 1; i >= 0; i--) {
-            var c = series.children[i]
-            // У XYPoint есть x/y; удаляем все такие объекты
-            if (c && c.destroy && c.x !== undefined && c.y !== undefined) {
-                c.destroy()
-            }
-        }
-    }
-
     function updateIrGraph(payload) {
-        if (!payload || !payload.points) return
+        console.log("[IR] Clinicalmode updateIrGraph payload=", payload)
+        if (!payload || !payload.points || payload.points.length === 0) {
+            console.log("[IR] Clinicalmode: no points to draw", payload ? payload.points : payload)
+            return
+        }
 
         // Пересчитываем оси по точкам, чтобы график точно был виден
         var minX = payload.points[0].x
@@ -47,14 +40,29 @@ Item {
         irAxisY.min = minY
         irAxisY.max = maxY
 
-        clearSeriesPoints(splineSeries)
+        // QtGraphs: используем API XYSeries
+        try {
+            if (splineSeries.clear) splineSeries.clear()
+        } catch (e) {
+            console.log("[IR] Clinicalmode: splineSeries.clear() failed:", e)
+        }
+
+        var added = 0
         for (var i = 0; i < payload.points.length; i++) {
             var p = payload.points[i]
-            Qt.createQmlObject(
-                'import QtGraphs; XYPoint { objectName: "irPoint"; x: ' + p.x + '; y: ' + p.y + ' }',
-                splineSeries
-            )
+            if (p === undefined || p.x === undefined || p.y === undefined) continue
+            if (isNaN(p.x) || isNaN(p.y)) continue
+            try {
+                if (splineSeries.append) {
+                    splineSeries.append(p.x, p.y)
+                    added++
+                }
+            } catch (e2) {
+                console.log("[IR] Clinicalmode: append failed at", i, p, e2)
+                break
+            }
         }
+        console.log("[IR] Clinicalmode: points added =", added, "axisX=", minX, maxX, "axisY=", minY, maxY)
     }
 
     // Retry: если IR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
