@@ -448,6 +448,36 @@ class ModbusManager(QObject):
             logger.info("⏸ Опрос реле (регистр 1021) выключен")
     
     @Slot()
+    def enableValvePolling(self):
+        """Включить чтение регистра 1111 (клапаны) по требованию (например, при открытии Valves and Fans)"""
+        if self._is_connected and not self._polling_paused:
+            if not self._valve_1111_timer.isActive():
+                self._valve_1111_timer.start()
+                logger.info("▶️ Опрос клапанов (регистр 1111) включен")
+    
+    @Slot()
+    def disableValvePolling(self):
+        """Выключить чтение регистра 1111 (клапаны) по требованию (например, при закрытии Valves and Fans)"""
+        if self._valve_1111_timer.isActive():
+            self._valve_1111_timer.stop()
+            logger.info("⏸ Опрос клапанов (регистр 1111) выключен")
+    
+    @Slot()
+    def enableFanPolling(self):
+        """Включить чтение регистра 1131 (вентиляторы) по требованию (например, при открытии Valves and Fans)"""
+        if self._is_connected and not self._polling_paused:
+            if not self._fan_1131_timer.isActive():
+                self._fan_1131_timer.start()
+                logger.info("▶️ Опрос вентиляторов (регистр 1131) включен")
+    
+    @Slot()
+    def disableFanPolling(self):
+        """Выключить чтение регистра 1131 (вентиляторы) по требованию (например, при закрытии Valves and Fans)"""
+        if self._fan_1131_timer.isActive():
+            self._fan_1131_timer.stop()
+            logger.info("⏸ Опрос вентиляторов (регистр 1131) выключен")
+    
+    @Slot()
     def refreshUIFromCache(self):
         """Публичный метод для принудительного обновления UI из буфера (можно вызывать из QML при переключении страниц)"""
         self._emitCachedStates()

@@ -398,7 +398,7 @@ Item {
         property var groups: ({
             "1 Manual Mode": { 
                 label: "1 Manual Mode", 
-                params: ["External Relays", "IR Spectrometer", "NMR Spectrometer", "PID Controller", "Alicats", "Laser", "Power Supply", "Vacuum Controller", "Water Chiller", "Valves and Fans"] 
+                params: ["External Relays", "Valves and Fans", "Power Supply", "PID Controller", "Water Chiller", "Alicats", "Vacuum Controller", "Laser"] 
             },
             "2 Advanced Programs List": { 
                 label: "2 Advanced Programs List", 
@@ -433,15 +433,13 @@ Item {
         // Данные о параметрах (упрощенная версия, можно расширить)
         property var params: ({
             "External Relays": { id: 101, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "IR Spectrometer": { id: 102, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "NMR Spectrometer": { id: 103, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "PID Controller": { id: 104, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "Alicats": { id: 105, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "Laser": { id: 106, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
+            "Valves and Fans": { id: 110, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
             "Power Supply": { id: 107, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "Vacuum Controller": { id: 108, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
+            "PID Controller": { id: 104, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
             "Water Chiller": { id: 109, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
-            "Valves and Fans": { id: 110, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" }
+            "Alicats": { id: 105, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
+            "Vacuum Controller": { id: 108, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
+            "Laser": { id: 106, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" }
         })
     }
     
@@ -450,10 +448,16 @@ Item {
     property string activeParam: ""
     property string activeParamGroup: ""
 
-    // При смене активного параметра выключаем опрос реле, если закрываем External Relays
+    // При смене активного параметра выключаем опрос реле/клапанов/вентиляторов, если закрываем соответствующие меню
     onActiveParamChanged: {
-        if (activeParam !== "External Relays" && modbusManager) {
-            modbusManager.disableRelayPolling()
+        if (modbusManager) {
+            if (activeParam !== "External Relays") {
+                modbusManager.disableRelayPolling()
+            }
+            if (activeParam !== "Valves and Fans") {
+                modbusManager.disableValvePolling()
+                modbusManager.disableFanPolling()
+            }
         }
     }
 
@@ -542,153 +546,707 @@ Item {
                         Text { id: paramDtype; text: "—"; font.pixelSize: 12; color: "#000000" }
                     }
 
-                    // Список реле для External Relays
-                    Column {
-                        id: relayButtonsColumn
+                    // Таблица реле для External Relays (в стиле paramGrid с кнопками on/off справа)
+                    Grid {
+                        id: relayTableGrid
                         width: parent.width
-                        spacing: 12
+                        columns: 2
+                        columnSpacing: 16
+                        rowSpacing: 8
                         visible: false
 
-                        Button {
-                            id: relayWaterChiller
-                            width: parent.width
-                            height: 50
-                            text: "Water Chiller"
-                            font.pointSize: 18
-                            checkable: true
-                            property color normalColor: "#979797"
-                            property color pressedColor: "#38691e"
-                            background: Rectangle {
-                                color: relayWaterChiller.checked ? relayWaterChiller.pressedColor : relayWaterChiller.normalColor
-                                radius: 5
-                            }
-                            onClicked: {
-                                if (modbusManager) modbusManager.setWaterChiller(relayWaterChiller.checked)
-                            }
-                            Connections {
-                                target: modbusManager
-                                function onWaterChillerStateChanged(state) {
-                                    if (relayWaterChiller.checked !== state) relayWaterChiller.checked = state
+                        // Water Chiller
+                        Text { text: "Water Chiller:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: relayWaterChiller
+                                width: 80
+                                height: 28
+                                text: relayWaterChiller.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: relayWaterChiller.checked ? relayWaterChiller.pressedColor : relayWaterChiller.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setWaterChiller(relayWaterChiller.checked)
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onWaterChillerStateChanged(state) {
+                                        if (relayWaterChiller.checked !== state) relayWaterChiller.checked = state
+                                    }
                                 }
                             }
                         }
 
-                        Button {
-                            id: relayMagnetPSU
-                            width: parent.width
-                            height: 50
-                            text: "Magnet PSU"
-                            font.pointSize: 18
-                            checkable: true
-                            property color normalColor: "#979797"
-                            property color pressedColor: "#38691e"
-                            background: Rectangle {
-                                color: relayMagnetPSU.checked ? relayMagnetPSU.pressedColor : relayMagnetPSU.normalColor
-                                radius: 5
-                            }
-                            onClicked: {
-                                if (modbusManager) modbusManager.setMagnetPSU(relayMagnetPSU.checked)
-                            }
-                            Connections {
-                                target: modbusManager
-                                function onMagnetPSUStateChanged(state) {
-                                    if (relayMagnetPSU.checked !== state) relayMagnetPSU.checked = state
+                        // Magnet PSU
+                        Text { text: "Magnet PSU:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: relayMagnetPSU
+                                width: 80
+                                height: 28
+                                text: relayMagnetPSU.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: relayMagnetPSU.checked ? relayMagnetPSU.pressedColor : relayMagnetPSU.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setMagnetPSU(relayMagnetPSU.checked)
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onMagnetPSUStateChanged(state) {
+                                        if (relayMagnetPSU.checked !== state) relayMagnetPSU.checked = state
+                                    }
                                 }
                             }
                         }
 
-                        Button {
-                            id: relayLaserPSU
-                            width: parent.width
-                            height: 50
-                            text: "Laser PSU"
-                            font.pointSize: 18
-                            checkable: true
-                            property color normalColor: "#979797"
-                            property color pressedColor: "#38691e"
-                            background: Rectangle {
-                                color: relayLaserPSU.checked ? relayLaserPSU.pressedColor : relayLaserPSU.normalColor
-                                radius: 5
-                            }
-                            onClicked: {
-                                if (modbusManager) modbusManager.setLaserPSU(relayLaserPSU.checked)
-                            }
-                            Connections {
-                                target: modbusManager
-                                function onLaserPSUStateChanged(state) {
-                                    if (relayLaserPSU.checked !== state) relayLaserPSU.checked = state
+                        // Laser PSU
+                        Text { text: "Laser PSU:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: relayLaserPSU
+                                width: 80
+                                height: 28
+                                text: relayLaserPSU.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: relayLaserPSU.checked ? relayLaserPSU.pressedColor : relayLaserPSU.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setLaserPSU(relayLaserPSU.checked)
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onLaserPSUStateChanged(state) {
+                                        if (relayLaserPSU.checked !== state) relayLaserPSU.checked = state
+                                    }
                                 }
                             }
                         }
 
-                        Button {
-                            id: relayVacuumPump
-                            width: parent.width
-                            height: 50
-                            text: "Vacuum Pump"
-                            font.pointSize: 18
-                            checkable: true
-                            property color normalColor: "#979797"
-                            property color pressedColor: "#38691e"
-                            background: Rectangle {
-                                color: relayVacuumPump.checked ? relayVacuumPump.pressedColor : relayVacuumPump.normalColor
-                                radius: 5
-                            }
-                            onClicked: {
-                                if (modbusManager) modbusManager.setVacuumPump(relayVacuumPump.checked)
-                            }
-                            Connections {
-                                target: modbusManager
-                                function onVacuumPumpStateChanged(state) {
-                                    if (relayVacuumPump.checked !== state) relayVacuumPump.checked = state
+                        // Vacuum Pump
+                        Text { text: "Vacuum Pump:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: relayVacuumPump
+                                width: 80
+                                height: 28
+                                text: relayVacuumPump.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: relayVacuumPump.checked ? relayVacuumPump.pressedColor : relayVacuumPump.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setVacuumPump(relayVacuumPump.checked)
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onVacuumPumpStateChanged(state) {
+                                        if (relayVacuumPump.checked !== state) relayVacuumPump.checked = state
+                                    }
                                 }
                             }
                         }
 
-                        Button {
-                            id: relayVacuumGauge
-                            width: parent.width
-                            height: 50
-                            text: "Vacuum Gauge"
-                            font.pointSize: 18
-                            checkable: true
-                            property color normalColor: "#979797"
-                            property color pressedColor: "#38691e"
-                            background: Rectangle {
-                                color: relayVacuumGauge.checked ? relayVacuumGauge.pressedColor : relayVacuumGauge.normalColor
-                                radius: 5
-                            }
-                            onClicked: {
-                                if (modbusManager) modbusManager.setVacuumGauge(relayVacuumGauge.checked)
-                            }
-                            Connections {
-                                target: modbusManager
-                                function onVacuumGaugeStateChanged(state) {
-                                    if (relayVacuumGauge.checked !== state) relayVacuumGauge.checked = state
+                        // Vacuum Gauge
+                        Text { text: "Vacuum Gauge:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: relayVacuumGauge
+                                width: 80
+                                height: 28
+                                text: relayVacuumGauge.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: relayVacuumGauge.checked ? relayVacuumGauge.pressedColor : relayVacuumGauge.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setVacuumGauge(relayVacuumGauge.checked)
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onVacuumGaugeStateChanged(state) {
+                                        if (relayVacuumGauge.checked !== state) relayVacuumGauge.checked = state
+                                    }
                                 }
                             }
                         }
 
-                        Button {
-                            id: relayPIDController
-                            width: parent.width
-                            height: 50
-                            text: "PID Controller"
-                            font.pointSize: 18
-                            checkable: true
-                            property color normalColor: "#979797"
-                            property color pressedColor: "#38691e"
-                            background: Rectangle {
-                                color: relayPIDController.checked ? relayPIDController.pressedColor : relayPIDController.normalColor
-                                radius: 5
+                        // PID Controller
+                        Text { text: "PID Controller:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: relayPIDController
+                                width: 80
+                                height: 28
+                                text: relayPIDController.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: relayPIDController.checked ? relayPIDController.pressedColor : relayPIDController.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setPIDController(relayPIDController.checked)
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onPidControllerStateChanged(state) {
+                                        if (relayPIDController.checked !== state) relayPIDController.checked = state
+                                    }
+                                }
                             }
-                            onClicked: {
-                                if (modbusManager) modbusManager.setPIDController(relayPIDController.checked)
+                        }
+                    }
+
+                    // Таблица клапанов и вентиляторов для Valves and Fans (в стиле paramGrid с кнопками on/off справа)
+                    Grid {
+                        id: valvesFansTableGrid
+                        width: parent.width
+                        columns: 2
+                        columnSpacing: 16
+                        rowSpacing: 8
+                        visible: false
+
+                        // Valves (X6-X12)
+                        Text { text: "Valves:"; font.pixelSize: 12; color: "#666666"; font.bold: true }
+                        Text { text: ""; font.pixelSize: 12; color: "#000000" }
+
+                        Text { text: "X6:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX6
+                                width: 80
+                                height: 28
+                                text: valveX6.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX6.checked ? valveX6.pressedColor : valveX6.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(5, valveX6.checked)  // valveIndex 5 = X6
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 5 && valveX6.checked !== state) valveX6.checked = state
+                                    }
+                                }
                             }
-                            Connections {
-                                target: modbusManager
-                                function onPidControllerStateChanged(state) {
-                                    if (relayPIDController.checked !== state) relayPIDController.checked = state
+                        }
+
+                        Text { text: "X7:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX7
+                                width: 80
+                                height: 28
+                                text: valveX7.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX7.checked ? valveX7.pressedColor : valveX7.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(6, valveX7.checked)  // valveIndex 6 = X7
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 6 && valveX7.checked !== state) valveX7.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "X8:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX8
+                                width: 80
+                                height: 28
+                                text: valveX8.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX8.checked ? valveX8.pressedColor : valveX8.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(7, valveX8.checked)  // valveIndex 7 = X8
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 7 && valveX8.checked !== state) valveX8.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "X9:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX9
+                                width: 80
+                                height: 28
+                                text: valveX9.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX9.checked ? valveX9.pressedColor : valveX9.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(8, valveX9.checked)  // valveIndex 8 = X9
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 8 && valveX9.checked !== state) valveX9.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "X10:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX10
+                                width: 80
+                                height: 28
+                                text: valveX10.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX10.checked ? valveX10.pressedColor : valveX10.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(9, valveX10.checked)  // valveIndex 9 = X10
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 9 && valveX10.checked !== state) valveX10.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "X11:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX11
+                                width: 80
+                                height: 28
+                                text: valveX11.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX11.checked ? valveX11.pressedColor : valveX11.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(10, valveX11.checked)  // valveIndex 10 = X11
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 10 && valveX11.checked !== state) valveX11.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "X12:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: valveX12
+                                width: 80
+                                height: 28
+                                text: valveX12.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: valveX12.checked ? valveX12.pressedColor : valveX12.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setValve(11, valveX12.checked)  // valveIndex 11 = X12
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onValveStateChanged(valveIndex, state) {
+                                        if (valveIndex === 11 && valveX12.checked !== state) valveX12.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fans (Inlet, Outlet, OpCell, Laser)
+                        Text { text: "Fans:"; font.pixelSize: 12; color: "#666666"; font.bold: true }
+                        Text { text: ""; font.pixelSize: 12; color: "#000000" }
+
+                        Text { text: "Inlet Fan 1:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanInlet1
+                                width: 80
+                                height: 28
+                                text: fanInlet1.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanInlet1.checked ? fanInlet1.pressedColor : fanInlet1.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(0, fanInlet1.checked)  // fanIndex 0 = Inlet Fan 1
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 0 && fanInlet1.checked !== state) fanInlet1.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "Inlet Fan 2:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanInlet2
+                                width: 80
+                                height: 28
+                                text: fanInlet2.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanInlet2.checked ? fanInlet2.pressedColor : fanInlet2.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(1, fanInlet2.checked)  // fanIndex 1 = Inlet Fan 2
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 1 && fanInlet2.checked !== state) fanInlet2.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "Inlet Fan 3:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanInlet3
+                                width: 80
+                                height: 28
+                                text: fanInlet3.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanInlet3.checked ? fanInlet3.pressedColor : fanInlet3.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(2, fanInlet3.checked)  // fanIndex 2 = Inlet Fan 3
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 2 && fanInlet3.checked !== state) fanInlet3.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "Inlet Fan 4:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanInlet4
+                                width: 80
+                                height: 28
+                                text: fanInlet4.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanInlet4.checked ? fanInlet4.pressedColor : fanInlet4.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(3, fanInlet4.checked)  // fanIndex 3 = Inlet Fan 4
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 3 && fanInlet4.checked !== state) fanInlet4.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "Outlet Fan 1:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanOutlet1
+                                width: 80
+                                height: 28
+                                text: fanOutlet1.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanOutlet1.checked ? fanOutlet1.pressedColor : fanOutlet1.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(4, fanOutlet1.checked)  // fanIndex 4 = Outlet Fan 1
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 4 && fanOutlet1.checked !== state) fanOutlet1.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "Outlet Fan 2:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanOutlet2
+                                width: 80
+                                height: 28
+                                text: fanOutlet2.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanOutlet2.checked ? fanOutlet2.pressedColor : fanOutlet2.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(5, fanOutlet2.checked)  // fanIndex 5 = Outlet Fan 2
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 5 && fanOutlet2.checked !== state) fanOutlet2.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "OpCell Fan 1:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanOpCell1
+                                width: 80
+                                height: 28
+                                text: fanOpCell1.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanOpCell1.checked ? fanOpCell1.pressedColor : fanOpCell1.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(6, fanOpCell1.checked)  // fanIndex 6 = OpCell Fan 1
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 6 && fanOpCell1.checked !== state) fanOpCell1.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "OpCell Fan 2:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanOpCell2
+                                width: 80
+                                height: 28
+                                text: fanOpCell2.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanOpCell2.checked ? fanOpCell2.pressedColor : fanOpCell2.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(7, fanOpCell2.checked)  // fanIndex 7 = OpCell Fan 2
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 7 && fanOpCell2.checked !== state) fanOpCell2.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "OpCell Fan 3:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanOpCell3
+                                width: 80
+                                height: 28
+                                text: fanOpCell3.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanOpCell3.checked ? fanOpCell3.pressedColor : fanOpCell3.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(8, fanOpCell3.checked)  // fanIndex 8 = OpCell Fan 3
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 8 && fanOpCell3.checked !== state) fanOpCell3.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "OpCell Fan 4:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanOpCell4
+                                width: 80
+                                height: 28
+                                text: fanOpCell4.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanOpCell4.checked ? fanOpCell4.pressedColor : fanOpCell4.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(9, fanOpCell4.checked)  // fanIndex 9 = OpCell Fan 4
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 9 && fanOpCell4.checked !== state) fanOpCell4.checked = state
+                                    }
+                                }
+                            }
+                        }
+
+                        Text { text: "Laser Fan:"; font.pixelSize: 12; color: "#666666" }
+                        Row {
+                            spacing: 8
+                            Button {
+                                id: fanLaser
+                                width: 80
+                                height: 28
+                                text: fanLaser.checked ? "ON" : "OFF"
+                                font.pixelSize: 11
+                                checkable: true
+                                property color normalColor: "#979797"
+                                property color pressedColor: "#38691e"
+                                background: Rectangle {
+                                    color: fanLaser.checked ? fanLaser.pressedColor : fanLaser.normalColor
+                                    radius: 3
+                                }
+                                onClicked: {
+                                    if (modbusManager) modbusManager.setFan(10, fanLaser.checked)  // fanIndex 10 = Laser Fan
+                                }
+                                Connections {
+                                    target: modbusManager
+                                    function onFanStateChanged(fanIndex, state) {
+                                        if (fanIndex === 10 && fanLaser.checked !== state) fanLaser.checked = state
+                                    }
                                 }
                             }
                         }
@@ -1077,25 +1635,59 @@ Item {
                                             activeParam = modelData
                                             activeParamGroup = menuItemContainer.groupData.label
                                             
-                                            // Специальная обработка для External Relays - показываем кнопки реле
+                                            // Специальная обработка для External Relays - показываем таблицу с кнопками
                                             if (modelData === "External Relays") {
                                                 // Включаем опрос реле (регистр 1021) по требованию
                                                 if (modbusManager) {
                                                     modbusManager.enableRelayPolling()
                                                 }
-                                                // Показываем список реле вместо таблицы параметров
-                                                relayButtonsColumn.visible = true
+                                                // Показываем таблицу реле с кнопками on/off справа
+                                                relayTableGrid.visible = true
+                                                valvesFansTableGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "External Relays"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
                                                 infoContent.text = "Control external relay devices"
+                                            } else if (modelData === "Valves and Fans") {
+                                                // Включаем опрос клапанов (регистр 1111) и вентиляторов (регистр 1131) по требованию
+                                                if (modbusManager) {
+                                                    modbusManager.enableValvePolling()
+                                                    modbusManager.enableFanPolling()
+                                                }
+                                                // Показываем таблицу клапанов/вентиляторов с кнопками on/off справа
+                                                valvesFansTableGrid.visible = true
+                                                relayTableGrid.visible = false
+                                                paramGrid.visible = false
+                                                infoTitle.text = "Valves and Fans"
+                                                infoSubtitle.text = menuItemContainer.groupData.label
+                                                infoContent.text = "Control valves (X6-X12) and fans"
+                                            } else if (modelData === "Alicats") {
+                                                // Показываем информацию о том, что Alicats еще не реализовано
+                                                relayTableGrid.visible = false
+                                                valvesFansTableGrid.visible = false
+                                                paramGrid.visible = true
+                                                infoTitle.text = "Alicats"
+                                                infoSubtitle.text = menuItemContainer.groupData.label
+                                                infoContent.text = "Alicats functionality is not yet implemented. See TODO.md for details."
+                                                paramId.text = "—"
+                                                paramType.text = "Not implemented"
+                                                paramUnits.text = "—"
+                                                paramDefault.text = "—"
+                                                paramMin.text = "—"
+                                                paramMax.text = "—"
+                                                paramDtype.text = "—"
                                             } else {
                                                 // Для остальных параметров - стандартная таблица
-                                                if (modbusManager && activeParam === "External Relays") {
-                                                    // Если закрываем External Relays - выключаем опрос реле
-                                                    modbusManager.disableRelayPolling()
+                                                if (modbusManager) {
+                                                    if (activeParam === "External Relays") {
+                                                        modbusManager.disableRelayPolling()
+                                                    } else if (activeParam === "Valves and Fans") {
+                                                        modbusManager.disableValvePolling()
+                                                        modbusManager.disableFanPolling()
+                                                    }
                                                 }
-                                                relayButtonsColumn.visible = false
+                                                relayTableGrid.visible = false
+                                                valvesFansTableGrid.visible = false
                                                 
                                                 // Получаем данные о параметре
                                                 var paramData = menuData.params[modelData]
