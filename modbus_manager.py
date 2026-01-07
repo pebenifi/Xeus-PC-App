@@ -128,21 +128,33 @@ class ModbusManager(QObject):
     valveStateChanged = Signal(int, bool)  # valveIndex, state
     laserPSUStateChanged = Signal(bool)
     magnetPSUStateChanged = Signal(bool)
-    pidControllerStateChanged = Signal(bool)
-    waterChillerStateChanged = Signal(bool)
-    waterChillerTemperatureChanged = Signal(float)  # Текущая температура Water Chiller в градусах Цельсия (регистр 1511)
+    pidControllerStateChanged = Signal(bool)  # Состояние PID Controller (вкл/выкл, регистр 1431)
+    pidControllerTemperatureChanged = Signal(float)  # Температура PID Controller в градусах Цельсия (регистр 1411)
+    pidControllerSetpointChanged = Signal(float)  # Заданная температура PID Controller в градусах Цельсия (регистр 1421)
+    waterChillerStateChanged = Signal(bool)  # Состояние Water Chiller (вкл/выкл, регистр 1541)
+    waterChillerInletTemperatureChanged = Signal(float)  # Температура на входе Water Chiller в градусах Цельсия (регистр 1511)
+    waterChillerOutletTemperatureChanged = Signal(float)  # Температура на выходе Water Chiller в градусах Цельсия (регистр 1521)
     waterChillerSetpointChanged = Signal(float)  # Заданная температура Water Chiller в градусах Цельсия (регистр 1531)
+    # Старый сигнал для обратной совместимости (использует inlet temp)
+    waterChillerTemperatureChanged = Signal(float)  # Текущая температура Water Chiller в градусах Цельсия (регистр 1511)
     seopCellTemperatureChanged = Signal(float)  # Температура SEOP Cell в градусах Цельсия (регистр 1411)
     seopCellSetpointChanged = Signal(float)  # Заданная температура SEOP Cell в градусах Цельсия (регистр 1421)
-    magnetPSUCurrentChanged = Signal(float)  # Ток Magnet PSU в амперах (регистр 1341)
-    magnetPSUSetpointChanged = Signal(float)  # Заданная температура Magnet PSU в градусах Цельсия (регистр 1331)
-    laserPSUCurrentChanged = Signal(float)  # Ток Laser PSU в амперах (регистр 1251)
-    laserPSUSetpointChanged = Signal(float)  # Заданная температура Laser PSU в градусах Цельсия (регистр 1241)
+    magnetPSUCurrentChanged = Signal(float)  # Ток Magnet PSU в амперах (регистр 1321)
+    magnetPSUSetpointChanged = Signal(float)  # Заданный ток Magnet PSU в амперах (регистр 1331)
+    magnetPSUVoltageChanged = Signal(float)  # Напряжение Magnet PSU в вольтах (регистр 1301)
+    magnetPSUVoltageSetpointChanged = Signal(float)  # Заданное напряжение Magnet PSU в вольтах (регистр 1311)
+    magnetPSUStateChanged = Signal(bool)  # Состояние Magnet PSU (вкл/выкл, регистр 1341)
+    laserPSUCurrentChanged = Signal(float)  # Ток Laser PSU в амперах (регистр 1231)
+    laserPSUSetpointChanged = Signal(float)  # Заданный ток Laser PSU в амперах (регистр 1241)
+    laserPSUVoltageChanged = Signal(float)  # Напряжение Laser PSU в вольтах (регистр 1211)
+    laserPSUVoltageSetpointChanged = Signal(float)  # Заданное напряжение Laser PSU в вольтах (регистр 1221)
+    laserPSUStateChanged = Signal(bool)  # Состояние Laser PSU (вкл/выкл, регистр 1251)
     xenonPressureChanged = Signal(float)  # Давление Xenon в Torr (регистр 1611)
     n2SetpointChanged = Signal(float)  # Заданное давление N2 в Torr (регистр 1661)
     xenonSetpointChanged = Signal(float)  # Заданное давление Xenon в Torr (регистр 1621)
     n2PressureChanged = Signal(float)  # Давление N2 в Torr (регистр 1651)
     vacuumPressureChanged = Signal(float)  # Давление Vacuum в Torr (регистр 1701)
+    vacuumControllerPressureChanged = Signal(float)  # Давление Vacuum Controller в mTorr (регистр 1701)
     vacuumPumpStateChanged = Signal(bool)
     vacuumGaugeStateChanged = Signal(bool)
     externalRelaysChanged = Signal(int, str)  # value, binary_string - для регистра 1020
@@ -169,14 +181,25 @@ class ModbusManager(QObject):
         self._last_reconnect_attempt_time = 0.0
         self._status_text = "Disconnected"
         self._connection_button_text = "Connect"  # Текст кнопки подключения: "Connect" или "Disconnect"
-        self._water_chiller_temperature = 0.0  # Текущая температура Water Chiller (регистр 1511)
+        self._water_chiller_inlet_temperature = 0.0  # Температура на входе Water Chiller (регистр 1511)
+        self._water_chiller_outlet_temperature = 0.0  # Температура на выходе Water Chiller (регистр 1521)
         self._water_chiller_setpoint = 0.0  # Заданная температура Water Chiller (регистр 1531)
+        self._water_chiller_state = False  # Состояние Water Chiller (вкл/выкл, регистр 1541)
+        # Старая переменная для обратной совместимости
+        self._water_chiller_temperature = 0.0  # Текущая температура Water Chiller (регистр 1511) - использует inlet temp
         self._water_chiller_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._water_chiller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
         self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._autoUpdateWaterChillerSetpoint)
         self._water_chiller_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._seop_cell_temperature = 0.0  # Температура SEOP Cell (регистр 1411)
         self._seop_cell_setpoint = 0.0  # Заданная температура SEOP Cell (регистр 1421)
+        self._pid_controller_temperature = 0.0  # Температура PID Controller (регистр 1411)
+        self._pid_controller_setpoint = 0.0  # Заданная температура PID Controller (регистр 1421)
+        self._pid_controller_state = False  # Состояние PID Controller (вкл/выкл, регистр 1431)
+        self._pid_controller_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
+        self._pid_controller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
+        self._pid_controller_setpoint_auto_update_timer.timeout.connect(self._autoUpdatePIDControllerSetpoint)
+        self._pid_controller_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._seop_cell_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._seop_cell_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
         self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
@@ -210,6 +233,7 @@ class ModbusManager(QObject):
         self._n2_setpoint_auto_update_timer.timeout.connect(self._autoUpdateN2Setpoint)
         self._n2_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._vacuum_pressure = 0.0  # Давление Vacuum в Torr (регистр 1701)
+        self._vacuum_controller_pressure = 0.0  # Давление Vacuum Controller в mTorr (регистр 1701)
 
         # IR spectrum cache
         self._ir_last = None
@@ -261,11 +285,13 @@ class ModbusManager(QObject):
         self._reading_1511 = False
         self._reading_1411 = False
         self._reading_1341 = False
+        self._reading_power_supply = False
         self._reading_1251 = False
         self._reading_1611 = False
         self._reading_1651 = False
         self._reading_1701 = False
         self._reading_1131 = False
+        self._reading_pid_controller = False
         # Флаги оптимистичных обновлений
         self._fan_optimistic_updates = {}  # Флаги оптимистичных обновлений вентиляторов: fanIndex -> timestamp
         # Список таймеров, которые можно приостанавливать (для быстрой смены экранов)
@@ -281,10 +307,15 @@ class ModbusManager(QObject):
         self._valve_1111_timer.timeout.connect(self._readValve1111)
         self._valve_1111_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
         
-        # Таймер для чтения регистра 1511 (температура Water Chiller) - быстрое обновление
+        # Таймер для чтения регистра 1511 (температура Water Chiller) - быстрое обновление (старый, для обратной совместимости)
         self._water_chiller_temp_timer = QTimer(self)
         self._water_chiller_temp_timer.timeout.connect(self._readWaterChillerTemperature)
         self._water_chiller_temp_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        
+        # Таймер для чтения регистров Water Chiller (1511, 1521, 1531, 1541) - быстрое обновление
+        self._water_chiller_timer = QTimer(self)
+        self._water_chiller_timer.timeout.connect(self._readWaterChiller)
+        self._water_chiller_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
         
         # Таймер для чтения регистра 1411 (температура SEOP Cell) - быстрое обновление
         self._seop_cell_temp_timer = QTimer(self)
@@ -321,6 +352,28 @@ class ModbusManager(QObject):
         self._fan_1131_timer.timeout.connect(self._readFan1131)
         self._fan_1131_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
 
+        # Таймер для чтения регистров Power Supply (Laser PSU и Magnet PSU) - быстрое обновление
+        self._power_supply_timer = QTimer(self)
+        self._power_supply_timer.timeout.connect(self._readPowerSupply)
+        self._power_supply_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+
+        # Таймер для чтения регистров PID Controller (1411, 1421, 1431) - быстрое обновление
+        self._pid_controller_timer = QTimer(self)
+        self._pid_controller_timer.timeout.connect(self._readPIDController)
+        self._pid_controller_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+
+        # Таймер для чтения регистров Alicats (1611, 1621, 1651, 1661) - быстрое обновление
+        self._alicats_timer = QTimer(self)
+        self._alicats_timer.timeout.connect(self._readAlicats)
+        self._alicats_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._reading_alicats = False  # Флаг для предотвращения параллельных чтений
+
+        # Таймер для чтения регистра Vacuum Controller (1701) - быстрое обновление
+        self._vacuum_controller_timer = QTimer(self)
+        self._vacuum_controller_timer.timeout.connect(self._readVacuumController)
+        self._vacuum_controller_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._reading_vacuum_controller = False  # Флаг для предотвращения параллельных чтений
+
         # Список таймеров для паузы/возобновления опросов
         self._polling_timers = [
             self._connection_check_timer,
@@ -328,6 +381,7 @@ class ModbusManager(QObject):
             self._relay_1021_timer,
             self._valve_1111_timer,
             self._water_chiller_temp_timer,
+            self._water_chiller_timer,
             self._seop_cell_temp_timer,
             self._magnet_psu_current_timer,
             self._laser_psu_current_timer,
@@ -335,6 +389,10 @@ class ModbusManager(QObject):
             self._n2_pressure_timer,
             self._vacuum_pressure_timer,
             self._fan_1131_timer,
+            self._power_supply_timer,
+            self._pid_controller_timer,
+            self._alicats_timer,
+            self._vacuum_controller_timer,
         ]
         
         # Worker-поток для Modbus I/O (чтобы UI не подвисал)
@@ -476,6 +534,97 @@ class ModbusManager(QObject):
         if self._fan_1131_timer.isActive():
             self._fan_1131_timer.stop()
             logger.info("⏸ Опрос вентиляторов (регистр 1131) выключен")
+    
+    @Slot()
+    def enablePowerSupplyPolling(self):
+        """Включить чтение регистров Power Supply (Laser PSU и Magnet PSU) по требованию (например, при открытии Power Supply)"""
+        if self._is_connected and not self._polling_paused:
+            if not self._power_supply_timer.isActive():
+                self._power_supply_timer.start()
+                logger.info("▶️ Опрос Power Supply включен")
+    
+    @Slot()
+    def disablePowerSupplyPolling(self):
+        """Выключить чтение регистров Power Supply по требованию (например, при закрытии Power Supply)"""
+        if self._power_supply_timer.isActive():
+            self._power_supply_timer.stop()
+            logger.info("⏸ Опрос Power Supply выключен")
+    
+    @Slot()
+    def enablePIDControllerPolling(self):
+        """Включить чтение регистров PID Controller (1411, 1421, 1431) по требованию (например, при открытии PID Controller)"""
+        if self._is_connected and not self._polling_paused:
+            if not self._pid_controller_timer.isActive():
+                self._pid_controller_timer.start()
+                logger.info("▶️ Опрос PID Controller включен")
+    
+    @Slot()
+    def disablePIDControllerPolling(self):
+        """Выключить чтение регистров PID Controller по требованию (например, при закрытии PID Controller)"""
+        if self._pid_controller_timer.isActive():
+            self._pid_controller_timer.stop()
+            logger.info("⏸ Опрос PID Controller выключен")
+    
+    @Slot()
+    def enableWaterChillerPolling(self):
+        """Включить чтение регистров Water Chiller (1511, 1521, 1531, 1541) по требованию (например, при открытии Water Chiller)"""
+        logger.info(f"enableWaterChillerPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._is_connected and not self._polling_paused:
+            if not self._water_chiller_timer.isActive():
+                self._water_chiller_timer.start()
+                logger.info("▶️ Опрос Water Chiller включен")
+            else:
+                logger.info("⏸ Опрос Water Chiller уже активен")
+        else:
+            logger.warning(f"⏸ Опрос Water Chiller не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+    
+    @Slot()
+    def disableWaterChillerPolling(self):
+        """Выключить чтение регистров Water Chiller по требованию (например, при закрытии Water Chiller)"""
+        if self._water_chiller_timer.isActive():
+            self._water_chiller_timer.stop()
+            logger.info("⏸ Опрос Water Chiller выключен")
+    
+    @Slot()
+    def enableAlicatsPolling(self):
+        """Включить чтение регистров Alicats (1611, 1621, 1651, 1661) по требованию (например, при открытии Alicats)"""
+        logger.info(f"enableAlicatsPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._is_connected and not self._polling_paused:
+            if not self._alicats_timer.isActive():
+                self._alicats_timer.start()
+                logger.info("▶️ Опрос Alicats включен")
+            else:
+                logger.info("⏸ Опрос Alicats уже активен")
+        else:
+            logger.warning(f"⏸ Опрос Alicats не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+    
+    @Slot()
+    def disableAlicatsPolling(self):
+        """Выключить чтение регистров Alicats по требованию (например, при закрытии Alicats)"""
+        if self._alicats_timer.isActive():
+            self._alicats_timer.stop()
+            logger.info("⏸ Опрос Alicats выключен")
+    
+    @Slot()
+    def enableVacuumControllerPolling(self):
+        """Включить чтение регистра Vacuum Controller (1701) по требованию (например, при открытии Vacuum Controller)"""
+        logger.info(f"enableVacuumControllerPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        # Включаем опрос даже если устройство не подключено - поле должно отображаться всегда
+        if not self._polling_paused:
+            if not self._vacuum_controller_timer.isActive():
+                self._vacuum_controller_timer.start()
+                logger.info("▶️ Опрос Vacuum Controller включен")
+            else:
+                logger.info("⏸ Опрос Vacuum Controller уже активен")
+        else:
+            logger.info("⏸ Опрос Vacuum Controller приостановлен (polling paused)")
+    
+    @Slot()
+    def disableVacuumControllerPolling(self):
+        """Выключить чтение регистра Vacuum Controller по требованию (например, при закрытии Vacuum Controller)"""
+        if self._vacuum_controller_timer.isActive():
+            self._vacuum_controller_timer.stop()
+            logger.info("⏸ Опрос Vacuum Controller выключен")
     
     @Slot()
     def refreshUIFromCache(self):
@@ -810,6 +959,7 @@ class ModbusManager(QObject):
         self._magnet_psu_setpoint_auto_update_timer.start()
         self._laser_psu_setpoint_auto_update_timer.start()
         self._seop_cell_setpoint_auto_update_timer.start()
+        self._pid_controller_setpoint_auto_update_timer.start()
         self._xenon_setpoint_auto_update_timer.start()
         self._n2_setpoint_auto_update_timer.start()
 
@@ -848,6 +998,16 @@ class ModbusManager(QObject):
             self._applyVacuumPressureValue(value)
         elif key == "1131":
             self._applyFan1131Value(value)
+        elif key == "power_supply":
+            self._applyPowerSupplyValue(value)
+        elif key == "pid_controller":
+            self._applyPIDControllerValue(value)
+        elif key == "water_chiller":
+            self._applyWaterChillerValue(value)
+        elif key == "alicats":
+            self._applyAlicatsValue(value)
+        elif key == "vacuum_controller":
+            self._applyVacuumControllerValue(value)
         elif key == "1020":
             self._applyExternalRelays1020Value(value)
         elif key == "ir":
@@ -1065,6 +1225,140 @@ class ModbusManager(QObject):
             self._fan_states[10] = laser_fan_state
             self.fanStateChanged.emit(10, laser_fan_state)
 
+    def _applyPowerSupplyValue(self, value: object):
+        """Применение результатов чтения Power Supply (Laser PSU и Magnet PSU)"""
+        self._reading_power_supply = False
+        if value is None or not isinstance(value, dict):
+            return
+        
+        # Laser PSU
+        if 'laser_voltage' in value:
+            self.laserPSUVoltageChanged.emit(float(value['laser_voltage']))
+        if 'laser_current' in value:
+            self.laserPSUCurrentChanged.emit(float(value['laser_current']))
+        if 'laser_voltage_setpoint' in value:
+            self.laserPSUVoltageSetpointChanged.emit(float(value['laser_voltage_setpoint']))
+        if 'laser_current_setpoint' in value:
+            self.laserPSUSetpointChanged.emit(float(value['laser_current_setpoint']))
+        if 'laser_state' in value:
+            self.laserPSUStateChanged.emit(bool(value['laser_state']))
+        
+        # Magnet PSU
+        if 'magnet_voltage' in value:
+            self.magnetPSUVoltageChanged.emit(float(value['magnet_voltage']))
+        if 'magnet_current' in value:
+            self.magnetPSUCurrentChanged.emit(float(value['magnet_current']))
+        if 'magnet_voltage_setpoint' in value:
+            self.magnetPSUVoltageSetpointChanged.emit(float(value['magnet_voltage_setpoint']))
+        if 'magnet_current_setpoint' in value:
+            self.magnetPSUSetpointChanged.emit(float(value['magnet_current_setpoint']))
+        if 'magnet_state' in value:
+            self.magnetPSUStateChanged.emit(bool(value['magnet_state']))
+    
+    def _applyPIDControllerValue(self, value: object):
+        """Применение результатов чтения PID Controller (1411, 1421, 1431)"""
+        self._reading_pid_controller = False
+        if value is None or not isinstance(value, dict):
+            return
+        
+        if 'temperature' in value:
+            temp = float(value['temperature'])
+            self._pid_controller_temperature = temp
+            self.pidControllerTemperatureChanged.emit(temp)
+        if 'setpoint' in value:
+            setpoint = float(value['setpoint'])
+            # Обновляем только если пользователь не взаимодействует с полем
+            if not self._pid_controller_setpoint_user_interaction:
+                self._pid_controller_setpoint = setpoint
+                self.pidControllerSetpointChanged.emit(setpoint)
+        if 'state' in value:
+            state = bool(value['state'])
+            self._pid_controller_state = state
+            self.pidControllerStateChanged.emit(state)
+    
+    def _applyWaterChillerValue(self, value: object):
+        """Применение результатов чтения Water Chiller (1511, 1521, 1531, 1541)"""
+        self._reading_water_chiller = False
+        if value is None or not isinstance(value, dict):
+            logger.warning(f"_applyWaterChillerValue: value is None or not dict: {value}")
+            return
+        
+        logger.debug(f"_applyWaterChillerValue: received value={value}")
+        
+        if 'inlet_temperature' in value:
+            temp = float(value['inlet_temperature'])
+            self._water_chiller_inlet_temperature = temp
+            self._water_chiller_temperature = temp  # Для обратной совместимости
+            self.waterChillerInletTemperatureChanged.emit(temp)
+            self.waterChillerTemperatureChanged.emit(temp)  # Старый сигнал для обратной совместимости
+            logger.debug(f"Water Chiller inlet temperature: {temp}°C")
+        if 'outlet_temperature' in value:
+            temp = float(value['outlet_temperature'])
+            self._water_chiller_outlet_temperature = temp
+            self.waterChillerOutletTemperatureChanged.emit(temp)
+            logger.debug(f"Water Chiller outlet temperature: {temp}°C")
+        if 'setpoint' in value:
+            setpoint = float(value['setpoint'])
+            # Обновляем только если пользователь не взаимодействует с полем
+            if not self._water_chiller_setpoint_user_interaction:
+                self._water_chiller_setpoint = setpoint
+                self.waterChillerSetpointChanged.emit(setpoint)
+                logger.debug(f"Water Chiller setpoint: {setpoint}°C")
+        if 'state' in value:
+            state = bool(value['state'])
+            self._water_chiller_state = state
+            self.waterChillerStateChanged.emit(state)
+            logger.debug(f"Water Chiller state: {state}")
+    
+    def _applyAlicatsValue(self, value: object):
+        """Применение результатов чтения Alicats (1611, 1621, 1651, 1661)"""
+        self._reading_alicats = False
+        if value is None or not isinstance(value, dict):
+            logger.warning(f"_applyAlicatsValue: value is None or not dict: {value}")
+            return
+        
+        logger.debug(f"_applyAlicatsValue: received value={value}")
+        
+        if 'xenon_pressure' in value:
+            pressure = float(value['xenon_pressure'])
+            self._xenon_pressure = pressure
+            self.xenonPressureChanged.emit(pressure)
+            logger.debug(f"Alicat 1 Xenon pressure: {pressure} Torr")
+        if 'xenon_setpoint' in value:
+            setpoint = float(value['xenon_setpoint'])
+            # Обновляем только если пользователь не взаимодействует с полем
+            if not self._xenon_setpoint_user_interaction:
+                self._xenon_setpoint = setpoint
+                self.xenonSetpointChanged.emit(setpoint)
+                logger.debug(f"Alicat 1 Xenon setpoint: {setpoint} Torr")
+        if 'n2_pressure' in value:
+            pressure = float(value['n2_pressure'])
+            self._n2_pressure = pressure
+            self.n2PressureChanged.emit(pressure)
+            logger.debug(f"Alicat 2 N2 pressure: {pressure} Torr")
+        if 'n2_setpoint' in value:
+            setpoint = float(value['n2_setpoint'])
+            # Обновляем только если пользователь не взаимодействует с полем
+            if not self._n2_setpoint_user_interaction:
+                self._n2_setpoint = setpoint
+                self.n2SetpointChanged.emit(setpoint)
+                logger.debug(f"Alicat 2 N2 setpoint: {setpoint} Torr")
+    
+    def _applyVacuumControllerValue(self, value: object):
+        """Применение результатов чтения Vacuum Controller (1701)"""
+        self._reading_vacuum_controller = False
+        if value is None or not isinstance(value, dict):
+            logger.warning(f"_applyVacuumControllerValue: value is None or not dict: {value}")
+            return
+        
+        logger.debug(f"_applyVacuumControllerValue: received value={value}")
+        
+        if 'pressure' in value:
+            pressure_mtorr = float(value['pressure'])
+            self._vacuum_controller_pressure = pressure_mtorr
+            self.vacuumControllerPressureChanged.emit(pressure_mtorr)
+            logger.debug(f"Vacuum Controller pressure: {pressure_mtorr} mTorr")
+    
     def _applyExternalRelays1020Value(self, value: object):
         if value is None:
             return
@@ -1660,6 +1954,49 @@ class ModbusManager(QObject):
             # Сбрасываем флаг взаимодействия для следующего цикла
             self._seop_cell_setpoint_user_interaction = False
     
+    def _autoUpdatePIDControllerSetpoint(self):
+        """
+        Автоматическое обновление setpoint PID Controller из текущей температуры, если пользователь не взаимодействует с полем
+        Вызывается каждые 20 секунд
+        """
+        if not self._is_connected:
+            return
+        
+        # Если пользователь не взаимодействовал с полем, обновляем setpoint из текущей температуры
+        if not self._pid_controller_setpoint_user_interaction:
+            # Не обновляем если текущая температура равна 0.0 или невалидная (устройство только подключено)
+            if self._pid_controller_temperature > 0.1 and abs(self._pid_controller_temperature - self._pid_controller_setpoint) > 0.1:  # Обновляем только если разница > 0.1°C и температура валидная
+                logger.info(f"Автообновление setpoint PID Controller: {self._pid_controller_setpoint}°C -> {self._pid_controller_temperature}°C")
+                self._pid_controller_setpoint = self._pid_controller_temperature
+                self.pidControllerSetpointChanged.emit(self._pid_controller_temperature)
+        else:
+            # Сбрасываем флаг взаимодействия для следующего цикла
+            self._pid_controller_setpoint_user_interaction = False
+    
+    def _autoUpdateXenonSetpoint(self):
+        """Автоматическое обновление setpoint Xenon из устройства (если пользователь не взаимодействует с полем)"""
+        if not self._xenon_setpoint_user_interaction:
+            # Пользователь не взаимодействует с полем - можно обновить из устройства
+            logger.debug("Автообновление setpoint Xenon из устройства")
+            # Чтение будет выполнено через таймер _alicats_timer
+        else:
+            # Пользователь взаимодействует с полем - не обновляем
+            logger.debug("Автообновление setpoint Xenon пропущено (пользователь взаимодействует с полем)")
+        # Сбрасываем флаг взаимодействия пользователя
+        self._xenon_setpoint_user_interaction = False
+    
+    def _autoUpdateN2Setpoint(self):
+        """Автоматическое обновление setpoint N2 из устройства (если пользователь не взаимодействует с полем)"""
+        if not self._n2_setpoint_user_interaction:
+            # Пользователь не взаимодействует с полем - можно обновить из устройства
+            logger.debug("Автообновление setpoint N2 из устройства")
+            # Чтение будет выполнено через таймер _alicats_timer
+        else:
+            # Пользователь взаимодействует с полем - не обновляем
+            logger.debug("Автообновление setpoint N2 пропущено (пользователь взаимодействует с полем)")
+        # Сбрасываем флаг взаимодействия пользователя
+        self._n2_setpoint_user_interaction = False
+    
     @Slot(float, result=bool)
     def setXenonSetpointValue(self, pressure: float) -> bool:
         """
@@ -1918,6 +2255,222 @@ class ModbusManager(QObject):
         self._reading_1131 = True
         client = self._modbus_client
         self._enqueue_read("1131", lambda: client.read_register_1131_direct())
+    
+    def _readPowerSupply(self):
+        """Чтение регистров Power Supply (Laser PSU и Magnet PSU)"""
+        if not self._is_connected or self._modbus_client is None or self._reading_power_supply:
+            return
+
+        self._reading_power_supply = True
+        client = self._modbus_client
+        
+        def task():
+            """Чтение всех регистров Power Supply"""
+            import struct
+            # Laser PSU: Voltage Value (1211), Voltage Setpoint (1221), Current Value (1231), Current Setpoint (1241), On/Off (1251)
+            # Magnet PSU: Voltage Value (1301), Voltage Setpoint (1311), Current Value (1321), Current Setpoint (1331), On/Off (1341)
+            # Читаем по 2 регистра для float значений (Voltage и Current)
+            laser_voltage_regs = client.read_input_registers_direct(1211, 2, max_chunk=2)
+            laser_current_regs = client.read_input_registers_direct(1231, 2, max_chunk=2)
+            laser_voltage_setpoint_regs = client.read_input_registers_direct(1221, 2, max_chunk=2)
+            laser_current_setpoint_regs = client.read_input_registers_direct(1241, 2, max_chunk=2)
+            laser_state_reg = client.read_input_registers_direct(1251, 1, max_chunk=1)
+            
+            magnet_voltage_regs = client.read_input_registers_direct(1301, 2, max_chunk=2)
+            magnet_current_regs = client.read_input_registers_direct(1321, 2, max_chunk=2)
+            magnet_voltage_setpoint_regs = client.read_input_registers_direct(1311, 2, max_chunk=2)
+            magnet_current_setpoint_regs = client.read_input_registers_direct(1331, 2, max_chunk=2)
+            magnet_state_reg = client.read_input_registers_direct(1341, 1, max_chunk=1)
+            
+            # Декодируем float из двух регистров (используем тот же метод, что и для IR)
+            def _registers_to_float(reg1: int, reg2: int) -> float:
+                """Декодируем float из двух uint16 (порядок байт: ABCD)"""
+                try:
+                    byte1 = (reg1 >> 8) & 0xFF
+                    byte2 = reg1 & 0xFF
+                    byte3 = (reg2 >> 8) & 0xFF
+                    byte4 = reg2 & 0xFF
+                    # Попробуем разные варианты порядка байт
+                    variants = [
+                        bytes([byte1, byte2, byte3, byte4]),  # ABCD
+                        bytes([byte2, byte1, byte4, byte3]),  # BADC
+                        bytes([byte3, byte4, byte1, byte2]),  # CDAB
+                        bytes([byte4, byte3, byte2, byte1]),  # DCBA
+                    ]
+                    for bb in variants:
+                        try:
+                            val = float(struct.unpack(">f", bb)[0])
+                            if val != 0.0 and -1000.0 < val < 1000.0:  # Разумный диапазон для напряжения/тока
+                                return val
+                        except:
+                            continue
+                    # Если ничего не подошло, пробуем просто разделить на 100 (как для температуры)
+                    return float((reg1 << 16 | reg2) / 100.0) if (reg1 << 16 | reg2) != 0 else 0.0
+                except Exception:
+                    return 0.0
+            
+            result = {}
+            
+            # Laser PSU
+            if laser_voltage_regs and len(laser_voltage_regs) >= 2:
+                result['laser_voltage'] = _registers_to_float(int(laser_voltage_regs[0]), int(laser_voltage_regs[1]))
+            if laser_current_regs and len(laser_current_regs) >= 2:
+                result['laser_current'] = _registers_to_float(int(laser_current_regs[0]), int(laser_current_regs[1]))
+            if laser_voltage_setpoint_regs and len(laser_voltage_setpoint_regs) >= 2:
+                result['laser_voltage_setpoint'] = _registers_to_float(int(laser_voltage_setpoint_regs[0]), int(laser_voltage_setpoint_regs[1]))
+            if laser_current_setpoint_regs and len(laser_current_setpoint_regs) >= 2:
+                result['laser_current_setpoint'] = _registers_to_float(int(laser_current_setpoint_regs[0]), int(laser_current_setpoint_regs[1]))
+            if laser_state_reg and len(laser_state_reg) >= 1:
+                result['laser_state'] = bool(int(laser_state_reg[0]) & 0x01)
+            
+            # Magnet PSU
+            if magnet_voltage_regs and len(magnet_voltage_regs) >= 2:
+                result['magnet_voltage'] = _registers_to_float(int(magnet_voltage_regs[0]), int(magnet_voltage_regs[1]))
+            if magnet_current_regs and len(magnet_current_regs) >= 2:
+                result['magnet_current'] = _registers_to_float(int(magnet_current_regs[0]), int(magnet_current_regs[1]))
+            if magnet_voltage_setpoint_regs and len(magnet_voltage_setpoint_regs) >= 2:
+                result['magnet_voltage_setpoint'] = _registers_to_float(int(magnet_voltage_setpoint_regs[0]), int(magnet_voltage_setpoint_regs[1]))
+            if magnet_current_setpoint_regs and len(magnet_current_setpoint_regs) >= 2:
+                result['magnet_current_setpoint'] = _registers_to_float(int(magnet_current_setpoint_regs[0]), int(magnet_current_setpoint_regs[1]))
+            if magnet_state_reg and len(magnet_state_reg) >= 1:
+                result['magnet_state'] = bool(int(magnet_state_reg[0]) & 0x01)
+            
+            return result
+        
+        self._enqueue_read("power_supply", task)
+    
+    def _readPIDController(self):
+        """Чтение регистров PID Controller (1411 - температура, 1421 - setpoint, 1431 - on/off)"""
+        if not self._is_connected or self._modbus_client is None or self._reading_pid_controller:
+            return
+
+        self._reading_pid_controller = True
+        client = self._modbus_client
+        
+        def task():
+            """Чтение всех регистров PID Controller"""
+            # Регистр 1411 - температура (value) в градусах Цельсия
+            temp_value = client.read_register_1411_direct()
+            # Регистр 1421 - setpoint в градусах Цельсия
+            setpoint_value = client.read_register_1421_direct()
+            # Регистр 1431 - on/off (1 = вкл, 0 = выкл)
+            state_value = client.read_input_registers_direct(1431, 1, max_chunk=1)
+            
+            result = {}
+            if temp_value is not None:
+                # Преобразуем из int (температура * 100) в float
+                result['temperature'] = float(temp_value) / 100.0
+            if setpoint_value is not None:
+                # Преобразуем из int (температура * 100) в float
+                result['setpoint'] = float(setpoint_value) / 100.0
+            if state_value and len(state_value) >= 1:
+                result['state'] = bool(int(state_value[0]) & 0x01)
+            
+            return result
+        
+        self._enqueue_read("pid_controller", task)
+    
+    def _readWaterChiller(self):
+        """Чтение регистров Water Chiller (1511 - inlet temp, 1521 - outlet temp, 1531 - setpoint, 1541 - on/off)"""
+        if not self._is_connected or self._modbus_client is None or self._reading_water_chiller:
+            return
+
+        self._reading_water_chiller = True
+        client = self._modbus_client
+        
+        def task():
+            """Чтение всех регистров Water Chiller"""
+            # Регистр 1511 - температура на входе (inlet temp) в градусах Цельсия
+            inlet_temp_value = client.read_register_1511_direct()
+            # Регистр 1521 - температура на выходе (outlet temp) в градусах Цельсия
+            outlet_temp_regs = client.read_input_registers_direct(1521, 1, max_chunk=1)
+            # Регистр 1531 - setpoint в градусах Цельсия (holding register, пробуем через read_holding_register)
+            setpoint_value = client.read_holding_register(1531)
+            # Регистр 1541 - on/off (1 = вкл, 0 = выкл)
+            state_regs = client.read_input_registers_direct(1541, 1, max_chunk=1)
+            
+            result = {}
+            if inlet_temp_value is not None:
+                # Преобразуем из int (температура * 100) в float
+                result['inlet_temperature'] = float(inlet_temp_value) / 100.0
+            if outlet_temp_regs and len(outlet_temp_regs) >= 1:
+                # Преобразуем из int (температура * 100) в float
+                result['outlet_temperature'] = float(int(outlet_temp_regs[0])) / 100.0
+            if setpoint_value is not None:
+                # Преобразуем из int (температура * 100) в float
+                result['setpoint'] = float(int(setpoint_value)) / 100.0
+            if state_regs and len(state_regs) >= 1:
+                result['state'] = bool(int(state_regs[0]) & 0x01)
+            
+            return result
+        
+        self._enqueue_read("water_chiller", task)
+    
+    def _readAlicats(self):
+        """Чтение регистров Alicats (1611 - Xenon value, 1621 - Xenon setpoint, 1651 - N2 value, 1661 - N2 setpoint)"""
+        if not self._is_connected or self._modbus_client is None or self._reading_alicats:
+            return
+
+        self._reading_alicats = True
+        client = self._modbus_client
+        
+        def task():
+            """Чтение всех регистров Alicats"""
+            # Alicat 1 Xenon: value Torr (регистр 1611), setpoint Torr (регистр 1621)
+            xenon_value_regs = client.read_input_registers_direct(1611, 1, max_chunk=1)
+            xenon_setpoint_value = client.read_holding_register(1621)
+            
+            # Alicat 2 N2: value Torr (регистр 1651), setpoint Torr (регистр 1661)
+            n2_value_regs = client.read_input_registers_direct(1651, 1, max_chunk=1)
+            n2_setpoint_value = client.read_holding_register(1661)
+            
+            result = {}
+            if xenon_value_regs and len(xenon_value_regs) >= 1:
+                # Преобразуем из int (давление * 100) в float
+                result['xenon_pressure'] = float(int(xenon_value_regs[0])) / 100.0
+            if xenon_setpoint_value is not None:
+                # Преобразуем из int (давление * 100) в float
+                result['xenon_setpoint'] = float(int(xenon_setpoint_value)) / 100.0
+            if n2_value_regs and len(n2_value_regs) >= 1:
+                # Преобразуем из int (давление * 100) в float
+                result['n2_pressure'] = float(int(n2_value_regs[0])) / 100.0
+            if n2_setpoint_value is not None:
+                # Преобразуем из int (давление * 100) в float
+                result['n2_setpoint'] = float(int(n2_setpoint_value)) / 100.0
+            
+            return result
+        
+        self._enqueue_read("alicats", task)
+    
+    def _readVacuumController(self):
+        """Чтение регистра Vacuum Controller (1701 - давление в mTorr)"""
+        # Проверяем только флаг чтения и наличие клиента, но не подключение
+        # Поле должно отображаться всегда, даже если устройство не подключено
+        if self._modbus_client is None or self._reading_vacuum_controller:
+            return
+        
+        # Если устройство не подключено, не пытаемся читать, но таймер продолжает работать
+        if not self._is_connected:
+            logger.debug("Vacuum Controller: устройство не подключено, пропускаем чтение")
+            return
+
+        self._reading_vacuum_controller = True
+        client = self._modbus_client
+        
+        def task():
+            """Чтение регистра Vacuum Controller"""
+            # Регистр 1701 - давление Vacuum (уже в mTorr)
+            value = client.read_register_1701_direct()
+            
+            result = {}
+            if value is not None:
+                # Значение уже в mTorr, просто преобразуем в float
+                pressure_mtorr = float(int(value))
+                result['pressure'] = pressure_mtorr
+            
+            return result
+        
+        self._enqueue_read("vacuum_controller", task)
     
     @Slot(int, bool, result=bool)
     def setFan(self, fanIndex: int, state: bool) -> bool:
@@ -2561,4 +3114,291 @@ class ModbusManager(QObject):
         # Затем отправляем команду на устройство асинхронно через очередь задач
         self._setValveAsync(valveIndex, valve_bit, state)
         return True  # Возвращаем True сразу, так как UI уже обновлен
+    
+    # ===== Power Supply методы записи =====
+    @Slot(float, result=bool)
+    def setLaserPSUVoltageSetpoint(self, voltage: float) -> bool:
+        """Установка заданного напряжения Laser PSU (регистр 1221)"""
+        logger.info(f"🔵 setLaserPSUVoltageSetpoint вызван с напряжением: {voltage} V")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        # Преобразуем напряжение в значение для регистра (умножаем на 100)
+        register_value = int(voltage * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            # TODO: добавить метод write_register_1221_direct в modbus_client.py
+            result = client.write_holding_register(1221, register_value)
+            return bool(result)
+        self._enqueue_write("1221", task, {"voltage": voltage})
+        return True
+    
+    @Slot(float, result=bool)
+    def setLaserPSUCurrentSetpoint(self, current: float) -> bool:
+        """Установка заданного тока Laser PSU (регистр 1241)"""
+        logger.info(f"🔵 setLaserPSUCurrentSetpoint вызван с током: {current} A")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        # Преобразуем ток в значение для регистра (умножаем на 100)
+        register_value = int(current * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_register_1241_direct(register_value)
+            return bool(result)
+        self._enqueue_write("1241", task, {"current": current})
+        return True
+    
+    @Slot(bool, result=bool)
+    def setLaserPSUPower(self, state: bool) -> bool:
+        """Управление Laser PSU (регистр 1251: 1 = вкл, 0 = выкл)"""
+        logger.info(f"🔵 setLaserPSUPower вызван: {state}")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        register_value = 1 if state else 0
+        client = self._modbus_client
+        def task() -> bool:
+            # TODO: добавить метод write_register_1251_direct в modbus_client.py
+            result = client.write_holding_register(1251, register_value)
+            return bool(result)
+        self._enqueue_write("1251", task, {"state": state})
+        # Обновляем UI сразу
+        self.laserPSUStateChanged.emit(state)
+        return True
+    
+    @Slot(float, result=bool)
+    def setMagnetPSUVoltageSetpoint(self, voltage: float) -> bool:
+        """Установка заданного напряжения Magnet PSU (регистр 1311)"""
+        logger.info(f"🔵 setMagnetPSUVoltageSetpoint вызван с напряжением: {voltage} V")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        # Преобразуем напряжение в значение для регистра (умножаем на 100)
+        register_value = int(voltage * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            # TODO: добавить метод write_register_1311_direct в modbus_client.py
+            result = client.write_holding_register(1311, register_value)
+            return bool(result)
+        self._enqueue_write("1311", task, {"voltage": voltage})
+        return True
+    
+    @Slot(float, result=bool)
+    def setMagnetPSUCurrentSetpoint(self, current: float) -> bool:
+        """Установка заданного тока Magnet PSU (регистр 1331)"""
+        logger.info(f"🔵 setMagnetPSUCurrentSetpoint вызван с током: {current} A")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        # Преобразуем ток в значение для регистра (умножаем на 100)
+        register_value = int(current * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_register_1331_direct(register_value)
+            return bool(result)
+        self._enqueue_write("1331", task, {"current": current})
+        return True
+    
+    @Slot(bool, result=bool)
+    def setMagnetPSUPower(self, state: bool) -> bool:
+        """Управление Magnet PSU (регистр 1341: 1 = вкл, 0 = выкл)"""
+        logger.info(f"🔵 setMagnetPSUPower вызван: {state}")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        register_value = 1 if state else 0
+        client = self._modbus_client
+        def task() -> bool:
+            # TODO: добавить метод write_register_1341_direct в modbus_client.py
+            result = client.write_holding_register(1341, register_value)
+            return bool(result)
+        self._enqueue_write("1341", task, {"state": state})
+        # Обновляем UI сразу
+        self.magnetPSUStateChanged.emit(state)
+        return True
+    
+    # ===== PID Controller методы записи =====
+    @Slot(float, result=bool)
+    def setPIDControllerTemperature(self, temperature: float) -> bool:
+        """
+        Установка заданной температуры PID Controller в регистр 1421
+        
+        Args:
+            temperature: Температура в градусах Цельсия (например, 23.0)
+        
+        Returns:
+            True если успешно, False в противном случае
+        """
+        logger.info(f"🔵 setPIDControllerTemperature вызван с температурой: {temperature}°C")
+        
+        # Обновляем статус (даже без подключения)
+        self._updateActionStatus(f"set pid controller to {temperature:.2f}")
+        
+        if not self._is_connected or self._modbus_client is None:
+            logger.warning("Попытка установки температуры PID Controller без подключения")
+            return False
+        
+        # Обновляем внутреннее значение setpoint сразу (до отправки на устройство)
+        logger.info(f"🔵 Обновление _pid_controller_setpoint: {self._pid_controller_setpoint}°C -> {temperature}°C")
+        self._pid_controller_setpoint = temperature
+        # Отправляем сигнал для обновления UI (setpoint)
+        logger.info(f"🔵 Эмитируем сигнал pidControllerSetpointChanged: {temperature}°C")
+        self.pidControllerSetpointChanged.emit(temperature)
+        
+        # Преобразуем температуру в значение для регистра (умножаем на 100)
+        # Например, 23.0°C -> 2300
+        register_value = int(temperature * 100)
+        
+        logger.info(f"Установка температуры PID Controller: {temperature}°C (регистр 1421 = {register_value})")
+        
+        client = self._modbus_client
+
+        def task() -> bool:
+            result = client.write_register_1421_direct(register_value)
+            if result:
+                logger.info(f"✅ Заданная температура PID Controller успешно установлена: {temperature}°C")
+            else:
+                logger.error(f"❌ Не удалось установить заданную температуру PID Controller: {temperature}°C")
+            return bool(result)
+
+        self._enqueue_write("1421_pid", task, {"temperature": temperature})
+        return True
+    
+    @Slot(result=bool)
+    def increasePIDControllerTemperature(self) -> bool:
+        """Увеличение заданной температуры PID Controller на 1°C"""
+        if not self._is_connected:
+            return False
+        logger.debug(f"Увеличение температуры PID Controller: текущее значение = {self._pid_controller_setpoint}°C")
+        new_temp = self._pid_controller_setpoint + 1.0
+        logger.debug(f"Новое значение после увеличения: {new_temp}°C")
+        # Отмечаем, что пользователь взаимодействует с полем
+        self._pid_controller_setpoint_user_interaction = True
+        # Перезапускаем таймер автообновления
+        self._pid_controller_setpoint_auto_update_timer.stop()
+        self._pid_controller_setpoint_auto_update_timer.start()
+        return self.setPIDControllerTemperature(new_temp)
+    
+    @Slot(result=bool)
+    def decreasePIDControllerTemperature(self) -> bool:
+        """Уменьшение заданной температуры PID Controller на 1°C"""
+        if not self._is_connected:
+            return False
+        logger.debug(f"Уменьшение температуры PID Controller: текущее значение = {self._pid_controller_setpoint}°C")
+        new_temp = self._pid_controller_setpoint - 1.0
+        logger.debug(f"Новое значение после уменьшения: {new_temp}°C")
+        # Отмечаем, что пользователь взаимодействует с полем
+        self._pid_controller_setpoint_user_interaction = True
+        # Перезапускаем таймер автообновления
+        self._pid_controller_setpoint_auto_update_timer.stop()
+        self._pid_controller_setpoint_auto_update_timer.start()
+        return self.setPIDControllerTemperature(new_temp)
+    
+    @Slot(bool, result=bool)
+    def setPIDControllerPower(self, state: bool) -> bool:
+        """Управление PID Controller (регистр 1431: 1 = вкл, 0 = выкл)"""
+        logger.info(f"🔵 setPIDControllerPower вызван: {state}")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        register_value = 1 if state else 0
+        client = self._modbus_client
+        def task() -> bool:
+            # TODO: добавить метод write_register_1431_direct в modbus_client.py
+            result = client.write_holding_register(1431, register_value)
+            return bool(result)
+        self._enqueue_write("1431", task, {"state": state})
+        # Обновляем UI сразу
+        self._pid_controller_state = state
+        self.pidControllerStateChanged.emit(state)
+        return True
+    
+    # ===== Water Chiller методы записи =====
+    @Slot(float, result=bool)
+    def setWaterChillerTemperature(self, temperature: float) -> bool:
+        """
+        Установка заданной температуры Water Chiller в регистр 1531
+        
+        Args:
+            temperature: Температура в градусах Цельсия (например, 23.0)
+        
+        Returns:
+            True если успешно, False в противном случае
+        """
+        logger.info(f"🔵 setWaterChillerTemperature вызван с температурой: {temperature}°C")
+        
+        # Обновляем статус (даже без подключения)
+        self._updateActionStatus(f"set water chiller to {temperature:.2f}")
+        
+        if not self._is_connected or self._modbus_client is None:
+            logger.warning("Попытка установки температуры Water Chiller без подключения")
+            return False
+        
+        # Обновляем внутреннее значение setpoint сразу (до отправки на устройство)
+        logger.info(f"🔵 Обновление _water_chiller_setpoint: {self._water_chiller_setpoint}°C -> {temperature}°C")
+        self._water_chiller_setpoint = temperature
+        # Отправляем сигнал для обновления UI (setpoint)
+        logger.info(f"🔵 Эмитируем сигнал waterChillerSetpointChanged: {temperature}°C")
+        self.waterChillerSetpointChanged.emit(temperature)
+        
+        # Преобразуем температуру в значение для регистра (умножаем на 100)
+        # Например, 23.0°C -> 2300
+        register_value = int(temperature * 100)
+        
+        logger.info(f"Установка температуры Water Chiller: {temperature}°C (регистр 1531 = {register_value})")
+        
+        client = self._modbus_client
+
+        def task() -> bool:
+            result = client.write_register_1531_direct(register_value)
+            if result:
+                logger.info(f"✅ Заданная температура Water Chiller успешно установлена: {temperature}°C")
+            else:
+                logger.error(f"❌ Не удалось установить заданную температуру Water Chiller: {temperature}°C")
+            return bool(result)
+
+        self._enqueue_write("1531", task, {"temperature": temperature})
+        return True
+    
+    @Slot(result=bool)
+    def increaseWaterChillerTemperature(self) -> bool:
+        """Увеличение заданной температуры Water Chiller на 1°C"""
+        if not self._is_connected:
+            return False
+        logger.debug(f"Увеличение температуры Water Chiller: текущее значение = {self._water_chiller_setpoint}°C")
+        new_temp = self._water_chiller_setpoint + 1.0
+        logger.debug(f"Новое значение после увеличения: {new_temp}°C")
+        # Отмечаем, что пользователь взаимодействует с полем
+        self._water_chiller_setpoint_user_interaction = True
+        # Перезапускаем таймер автообновления
+        self._water_chiller_setpoint_auto_update_timer.stop()
+        self._water_chiller_setpoint_auto_update_timer.start()
+        return self.setWaterChillerTemperature(new_temp)
+    
+    @Slot(result=bool)
+    def decreaseWaterChillerTemperature(self) -> bool:
+        """Уменьшение заданной температуры Water Chiller на 1°C"""
+        if not self._is_connected:
+            return False
+        logger.debug(f"Уменьшение температуры Water Chiller: текущее значение = {self._water_chiller_setpoint}°C")
+        new_temp = self._water_chiller_setpoint - 1.0
+        logger.debug(f"Новое значение после уменьшения: {new_temp}°C")
+        # Отмечаем, что пользователь взаимодействует с полем
+        self._water_chiller_setpoint_user_interaction = True
+        # Перезапускаем таймер автообновления
+        self._water_chiller_setpoint_auto_update_timer.stop()
+        self._water_chiller_setpoint_auto_update_timer.start()
+        return self.setWaterChillerTemperature(new_temp)
+    
+    @Slot(bool, result=bool)
+    def setWaterChillerPower(self, state: bool) -> bool:
+        """Управление Water Chiller (регистр 1541: 1 = вкл, 0 = выкл)"""
+        logger.info(f"🔵 setWaterChillerPower вызван: {state}")
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        register_value = 1 if state else 0
+        client = self._modbus_client
+        def task() -> bool:
+            # TODO: добавить метод write_register_1541_direct в modbus_client.py
+            result = client.write_holding_register(1541, register_value)
+            return bool(result)
+        self._enqueue_write("1541", task, {"state": state})
+        # Обновляем UI сразу
+        self._water_chiller_state = state
+        self.waterChillerStateChanged.emit(state)
+        return True
 
