@@ -448,7 +448,7 @@ Item {
     property string activeParam: ""
     property string activeParamGroup: ""
 
-    // При смене активного параметра выключаем опрос реле/клапанов/вентиляторов, если закрываем соответствующие меню
+    // При смене активного параметра выключаем опрос реле/клапанов/вентиляторов/Power Supply, если закрываем соответствующие меню
     onActiveParamChanged: {
         if (modbusManager) {
             if (activeParam !== "External Relays") {
@@ -457,6 +457,21 @@ Item {
             if (activeParam !== "Valves and Fans") {
                 modbusManager.disableValvePolling()
                 modbusManager.disableFanPolling()
+            }
+            if (activeParam !== "Power Supply") {
+                modbusManager.disablePowerSupplyPolling()
+            }
+            if (activeParam !== "PID Controller") {
+                modbusManager.disablePIDControllerPolling()
+            }
+            if (activeParam !== "Water Chiller") {
+                modbusManager.disableWaterChillerPolling()
+            }
+            if (activeParam !== "Alicats") {
+                modbusManager.disableAlicatsPolling()
+            }
+            if (activeParam !== "Vacuum Controller") {
+                modbusManager.disableVacuumControllerPolling()
             }
         }
     }
@@ -1469,6 +1484,730 @@ Item {
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 80 - 16; height: 0 }
                         }
                     }
+
+                    // Таблица Power Supply для Power Supply меню
+                    Column {
+                        id: powerSupplyGrid
+                        width: parent.width
+                        spacing: 0
+                        visible: false
+
+                        // Laser PSU
+                        Text {
+                            text: "Laser PSU:"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#666666"
+                            width: parent.width
+                            padding: 4
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#d0d0d0" }
+
+                        // Laser PSU - Voltage Value
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Voltage Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: laserVoltageValue
+                                text: "0.00 V"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Laser PSU - Voltage Setpoint
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Voltage Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: laserVoltageSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "V"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Laser PSU - Current Value
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Current Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: laserCurrentValue
+                                text: "0.00 A"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Laser PSU - Current Setpoint
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Current Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: laserCurrentSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Laser PSU - On/Off
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                Button {
+                                    id: laserPSUPower
+                                    width: 80
+                                    height: 28
+                                    text: laserPSUPower.checked ? "ON" : "OFF"
+                                    font.pixelSize: 11
+                                    checkable: true
+                                    property color normalColor: "#979797"
+                                    property color pressedColor: "#38691e"
+                                    background: Rectangle {
+                                        color: laserPSUPower.checked ? laserPSUPower.pressedColor : laserPSUPower.normalColor
+                                        radius: 3
+                                    }
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.setLaserPSUPower(laserPSUPower.checked)
+                                    }
+                                    Connections {
+                                        target: modbusManager
+                                        function onLaserPSUStateChanged(state) {
+                                            if (laserPSUPower.checked !== state) laserPSUPower.checked = state
+                                        }
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 80 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#d0d0d0" }
+
+                        // Magnet PSU
+                        Text {
+                            text: "Magnet PSU:"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#666666"
+                            width: parent.width
+                            padding: 4
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#d0d0d0" }
+
+                        // Magnet PSU - Voltage Value
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Voltage Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: magnetVoltageValue
+                                text: "0.00 V"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Magnet PSU - Voltage Setpoint
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Voltage Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: magnetVoltageSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "V"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Magnet PSU - Current Value
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Current Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: magnetCurrentValue
+                                text: "0.00 A"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Magnet PSU - Current Setpoint
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Current Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: magnetCurrentSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Magnet PSU - On/Off
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                Button {
+                                    id: magnetPSUPower
+                                    width: 80
+                                    height: 28
+                                    text: magnetPSUPower.checked ? "ON" : "OFF"
+                                    font.pixelSize: 11
+                                    checkable: true
+                                    property color normalColor: "#979797"
+                                    property color pressedColor: "#38691e"
+                                    background: Rectangle {
+                                        color: magnetPSUPower.checked ? magnetPSUPower.pressedColor : magnetPSUPower.normalColor
+                                        radius: 3
+                                    }
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.setMagnetPSUPower(magnetPSUPower.checked)
+                                    }
+                                    Connections {
+                                        target: modbusManager
+                                        function onMagnetPSUStateChanged(state) {
+                                            if (magnetPSUPower.checked !== state) magnetPSUPower.checked = state
+                                        }
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 80 - 16; height: 0 }
+                        }
+
+                        // Connections для обновления значений Laser PSU
+                        Connections {
+                            target: modbusManager
+                            function onLaserPSUVoltageChanged(value) {
+                                laserVoltageValue.text = value.toFixed(2) + " V"
+                            }
+                            function onLaserPSUCurrentChanged(value) {
+                                laserCurrentValue.text = value.toFixed(2) + " A"
+                            }
+                            function onLaserPSUVoltageSetpointChanged(value) {
+                                if (!laserVoltageSetpoint.activeFocus) {
+                                    laserVoltageSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                            function onLaserPSUSetpointChanged(value) {
+                                if (!laserCurrentSetpoint.activeFocus) {
+                                    laserCurrentSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                        }
+
+                        // Connections для обновления значений Magnet PSU
+                        Connections {
+                            target: modbusManager
+                            function onMagnetPSUVoltageChanged(value) {
+                                magnetVoltageValue.text = value.toFixed(2) + " V"
+                            }
+                            function onMagnetPSUCurrentChanged(value) {
+                                magnetCurrentValue.text = value.toFixed(2) + " A"
+                            }
+                            function onMagnetPSUVoltageSetpointChanged(value) {
+                                if (!magnetVoltageSetpoint.activeFocus) {
+                                    magnetVoltageSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                            function onMagnetPSUSetpointChanged(value) {
+                                if (!magnetCurrentSetpoint.activeFocus) {
+                                    magnetCurrentSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                        }
+                    }
+
+                    // Таблица PID Controller для PID Controller меню
+                    Column {
+                        id: pidControllerGrid
+                        width: parent.width
+                        spacing: 0
+                        visible: false
+
+                        // Temperature Value
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Temperature Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: pidControllerTemperatureValue
+                                text: "0.00 °C"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Temperature Setpoint
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Temperature Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: pidControllerSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increasePIDControllerTemperature()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreasePIDControllerTemperature()
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 180 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // On/Off
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                Button {
+                                    id: pidControllerPower
+                                    width: 80
+                                    height: 28
+                                    text: pidControllerPower.checked ? "ON" : "OFF"
+                                    font.pixelSize: 11
+                                    checkable: true
+                                    property color normalColor: "#979797"
+                                    property color pressedColor: "#38691e"
+                                    background: Rectangle {
+                                        color: pidControllerPower.checked ? pidControllerPower.pressedColor : pidControllerPower.normalColor
+                                        radius: 3
+                                    }
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.setPIDControllerPower(pidControllerPower.checked)
+                                    }
+                                    Connections {
+                                        target: modbusManager
+                                        function onPidControllerStateChanged(state) {
+                                            if (pidControllerPower.checked !== state) pidControllerPower.checked = state
+                                        }
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 80 - 16; height: 0 }
+                        }
+
+                        // Connections для обновления значений PID Controller
+                        Connections {
+                            target: modbusManager
+                            function onPidControllerTemperatureChanged(value) {
+                                pidControllerTemperatureValue.text = value.toFixed(2) + " °C"
+                            }
+                            function onPidControllerSetpointChanged(value) {
+                                if (!pidControllerSetpoint.activeFocus) {
+                                    pidControllerSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                        }
+                    }
+
+                    // Таблица Alicats для Alicats меню
+                    Column {
+                        id: alicatsGrid
+                        width: parent.width
+                        spacing: 0
+                        visible: false
+
+                        // Alicat 1 Xenon - Value Torr
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Alicat 1 Xenon Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: xenonPressure
+                                text: "0.00 Torr"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Alicat 1 Xenon - Setpoint Torr
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Alicat 1 Xenon Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: xenonSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "Torr"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseXenonSetpoint()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseXenonSetpoint()
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 180 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Alicat 2 N2 - Value Torr
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Alicat 2 N2 Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: n2Pressure
+                                text: "0.00 Torr"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Alicat 2 N2 - Setpoint Torr
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Alicat 2 N2 Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: n2Setpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "Torr"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseN2Setpoint()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseN2Setpoint()
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 180 - 16; height: 0 }
+                        }
+
+                        // Connections для обновления значений Alicats
+                        Connections {
+                            target: modbusManager
+                            function onXenonPressureChanged(value) {
+                                xenonPressure.text = value.toFixed(2) + " Torr"
+                            }
+                            function onXenonSetpointChanged(value) {
+                                if (!xenonSetpoint.activeFocus) {
+                                    xenonSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                            function onN2PressureChanged(value) {
+                                n2Pressure.text = value.toFixed(2) + " Torr"
+                            }
+                            function onN2SetpointChanged(value) {
+                                if (!n2Setpoint.activeFocus) {
+                                    n2Setpoint.text = value.toFixed(2)
+                                }
+                            }
+                        }
+                    }
+
+                    // Таблица Vacuum Controller для Vacuum Controller меню
+                    Column {
+                        id: vacuumControllerGrid
+                        width: parent.width
+                        spacing: 0
+                        visible: false
+
+                        // Vacuum Pressure Value
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Vacuum Pressure:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: vacuumControllerPressure
+                                text: "0.00 mTorr"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+
+                        // Connections для обновления значений Vacuum Controller
+                        Connections {
+                            target: modbusManager
+                            function onVacuumControllerPressureChanged(value) {
+                                console.log("Vacuum Controller pressure changed:", value)
+                                vacuumControllerPressure.text = value.toFixed(2) + " mTorr"
+                            }
+                        }
+                    }
+
+                    // Таблица Water Chiller для Water Chiller меню
+                    Column {
+                        id: waterChillerGrid
+                        width: parent.width
+                        spacing: 0
+                        visible: false
+
+                        // Inlet Temperature
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Inlet Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: waterChillerInletTemp
+                                text: "0.00 °C"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Outlet Temperature
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Outlet Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { 
+                                id: waterChillerOutletTemp
+                                text: "0.00 °C"
+                                font.pixelSize: 12
+                                color: "#000000"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Temperature Setpoint
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Temperature Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: waterChillerSetpoint
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                }
+                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseWaterChillerTemperature()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseWaterChillerTemperature()
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 180 - 16; height: 0 }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // On/Off
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                Button {
+                                    id: waterChillerPower
+                                    width: 80
+                                    height: 28
+                                    text: waterChillerPower.checked ? "ON" : "OFF"
+                                    font.pixelSize: 11
+                                    checkable: true
+                                    property color normalColor: "#979797"
+                                    property color pressedColor: "#38691e"
+                                    background: Rectangle {
+                                        color: waterChillerPower.checked ? waterChillerPower.pressedColor : waterChillerPower.normalColor
+                                        radius: 3
+                                    }
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.setWaterChillerPower(waterChillerPower.checked)
+                                    }
+                                    Connections {
+                                        target: modbusManager
+                                        function onWaterChillerStateChanged(state) {
+                                            if (waterChillerPower.checked !== state) waterChillerPower.checked = state
+                                        }
+                                    }
+                                }
+                            }
+                            Rectangle { width: parent.width - parent.padding * 2 - 120 - 80 - 16; height: 0 }
+                        }
+
+                        // Connections для обновления значений Water Chiller
+                        Connections {
+                            target: modbusManager
+                            function onWaterChillerInletTemperatureChanged(value) {
+                                waterChillerInletTemp.text = value.toFixed(2) + " °C"
+                            }
+                            function onWaterChillerOutletTemperatureChanged(value) {
+                                waterChillerOutletTemp.text = value.toFixed(2) + " °C"
+                            }
+                            function onWaterChillerSetpointChanged(value) {
+                                if (!waterChillerSetpoint.activeFocus) {
+                                    waterChillerSetpoint.text = value.toFixed(2)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1862,6 +2601,11 @@ Item {
                                                 // Показываем таблицу реле с кнопками on/off справа
                                                 relayTableGrid.visible = true
                                                 valvesFansTableGrid.visible = false
+                                                powerSupplyGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                vacuumControllerGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "External Relays"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
@@ -1875,25 +2619,103 @@ Item {
                                                 // Показываем таблицу клапанов/вентиляторов с кнопками on/off справа
                                                 valvesFansTableGrid.visible = true
                                                 relayTableGrid.visible = false
+                                                powerSupplyGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                vacuumControllerGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "Valves and Fans"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
                                                 infoContent.text = "Control valves (X6-X12) and fans"
                                             } else if (modelData === "Alicats") {
-                                                // Показываем информацию о том, что Alicats еще не реализовано
+                                                console.log("Alicats clicked, enabling polling")
+                                                // Включаем опрос Alicats по требованию
+                                                if (modbusManager) {
+                                                    modbusManager.enableAlicatsPolling()
+                                                }
+                                                // Показываем таблицу Alicats
+                                                alicatsGrid.visible = true
                                                 relayTableGrid.visible = false
                                                 valvesFansTableGrid.visible = false
-                                                paramGrid.visible = true
+                                                powerSupplyGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                vacuumControllerGrid.visible = false
+                                                paramGrid.visible = false
                                                 infoTitle.text = "Alicats"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
-                                                infoContent.text = "Alicats functionality is not yet implemented. See TODO.md for details."
-                                                paramId.text = "—"
-                                                paramType.text = "Not implemented"
-                                                paramUnits.text = "—"
-                                                paramDefault.text = "—"
-                                                paramMin.text = "—"
-                                                paramMax.text = "—"
-                                                paramDtype.text = "—"
+                                                infoContent.text = "Control Alicat flow controllers"
+                                                console.log("Alicats grid visible:", alicatsGrid.visible)
+                                            } else if (modelData === "Vacuum Controller") {
+                                                console.log("Vacuum Controller clicked, enabling polling")
+                                                // Включаем опрос Vacuum Controller по требованию
+                                                if (modbusManager) {
+                                                    modbusManager.enableVacuumControllerPolling()
+                                                }
+                                                // Показываем таблицу Vacuum Controller
+                                                vacuumControllerGrid.visible = true
+                                                relayTableGrid.visible = false
+                                                valvesFansTableGrid.visible = false
+                                                powerSupplyGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                paramGrid.visible = false
+                                                infoTitle.text = "Vacuum Controller"
+                                                infoSubtitle.text = menuItemContainer.groupData.label
+                                                infoContent.text = "Vacuum pressure monitoring"
+                                                console.log("Vacuum Controller grid visible:", vacuumControllerGrid.visible)
+                                            } else if (modelData === "Power Supply") {
+                                                // Включаем опрос Power Supply по требованию
+                                                if (modbusManager) {
+                                                    modbusManager.enablePowerSupplyPolling()
+                                                }
+                                                // Показываем таблицу Power Supply
+                                                powerSupplyGrid.visible = true
+                                                relayTableGrid.visible = false
+                                                valvesFansTableGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                paramGrid.visible = false
+                                                infoTitle.text = "Power Supply"
+                                                infoSubtitle.text = menuItemContainer.groupData.label
+                                                infoContent.text = "Control Laser PSU and Magnet PSU"
+                                            } else if (modelData === "PID Controller") {
+                                                // Включаем опрос PID Controller по требованию
+                                                if (modbusManager) {
+                                                    modbusManager.enablePIDControllerPolling()
+                                                }
+                                                // Показываем таблицу PID Controller
+                                                pidControllerGrid.visible = true
+                                                relayTableGrid.visible = false
+                                                valvesFansTableGrid.visible = false
+                                                powerSupplyGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                paramGrid.visible = false
+                                                infoTitle.text = "PID Controller"
+                                                infoSubtitle.text = menuItemContainer.groupData.label
+                                                infoContent.text = "Control PID Controller temperature"
+                                            } else if (modelData === "Water Chiller") {
+                                                console.log("Water Chiller clicked, enabling polling")
+                                                // Включаем опрос Water Chiller по требованию
+                                                if (modbusManager) {
+                                                    modbusManager.enableWaterChillerPolling()
+                                                }
+                                                // Показываем таблицу Water Chiller
+                                                waterChillerGrid.visible = true
+                                                relayTableGrid.visible = false
+                                                valvesFansTableGrid.visible = false
+                                                powerSupplyGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                paramGrid.visible = false
+                                                infoTitle.text = "Water Chiller"
+                                                infoSubtitle.text = menuItemContainer.groupData.label
+                                                infoContent.text = "Control Water Chiller temperature"
+                                                console.log("Water Chiller grid visible:", waterChillerGrid.visible)
                                             } else {
                                                 // Для остальных параметров - стандартная таблица
                                                 if (modbusManager) {
@@ -1902,10 +2724,25 @@ Item {
                                                     } else if (activeParam === "Valves and Fans") {
                                                         modbusManager.disableValvePolling()
                                                         modbusManager.disableFanPolling()
+                                                    } else if (activeParam === "Power Supply") {
+                                                        modbusManager.disablePowerSupplyPolling()
+                                                    } else if (activeParam === "PID Controller") {
+                                                        modbusManager.disablePIDControllerPolling()
+                                                    } else if (activeParam === "Water Chiller") {
+                                                        modbusManager.disableWaterChillerPolling()
+                                                    } else if (activeParam === "Alicats") {
+                                                        modbusManager.disableAlicatsPolling()
+                                                    } else if (activeParam === "Vacuum Controller") {
+                                                        modbusManager.disableVacuumControllerPolling()
                                                     }
                                                 }
                                                 relayTableGrid.visible = false
                                                 valvesFansTableGrid.visible = false
+                                                powerSupplyGrid.visible = false
+                                                pidControllerGrid.visible = false
+                                                waterChillerGrid.visible = false
+                                                alicatsGrid.visible = false
+                                                vacuumControllerGrid.visible = false
                                                 
                                                 // Получаем данные о параметре
                                                 var paramData = menuData.params[modelData]
