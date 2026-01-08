@@ -475,6 +475,7 @@ Item {
             }
             if (activeParam !== "Laser") {
                 modbusManager.disableLaserPolling()
+                laserGrid.visible = false
             }
             // При изменении активного параметра отключаем опрос SEOP Parameters
             modbusManager.disableSEOPParametersPolling()
@@ -3677,6 +3678,7 @@ Item {
                                                 pidControllerGrid.visible = false
                                                 waterChillerGrid.visible = false
                                                 vacuumControllerGrid.visible = false
+                                                laserGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "Alicats"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
@@ -3696,6 +3698,7 @@ Item {
                                                 pidControllerGrid.visible = false
                                                 waterChillerGrid.visible = false
                                                 alicatsGrid.visible = false
+                                                laserGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "Vacuum Controller"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
@@ -3733,6 +3736,8 @@ Item {
                                                 pidControllerGrid.visible = false
                                                 waterChillerGrid.visible = false
                                                 alicatsGrid.visible = false
+                                                vacuumControllerGrid.visible = false
+                                                laserGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "Power Supply"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
@@ -3749,6 +3754,8 @@ Item {
                                                 powerSupplyGrid.visible = false
                                                 waterChillerGrid.visible = false
                                                 alicatsGrid.visible = false
+                                                vacuumControllerGrid.visible = false
+                                                laserGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "PID Controller"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
@@ -3766,6 +3773,8 @@ Item {
                                                 powerSupplyGrid.visible = false
                                                 pidControllerGrid.visible = false
                                                 alicatsGrid.visible = false
+                                                vacuumControllerGrid.visible = false
+                                                laserGrid.visible = false
                                                 paramGrid.visible = false
                                                 infoTitle.text = "Water Chiller"
                                                 infoSubtitle.text = menuItemContainer.groupData.label
