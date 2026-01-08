@@ -539,6 +539,12 @@ class ModbusManager(QObject):
         self._measured_parameters_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
         self._reading_measured_parameters = False  # Флаг для предотвращения параллельных чтений
 
+        # Таймер для чтения регистров Additional Parameters (6011-6101) - быстрое обновление
+        self._additional_parameters_timer = QTimer(self)
+        self._additional_parameters_timer.timeout.connect(self._readAdditionalParameters)
+        self._additional_parameters_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._reading_additional_parameters = False  # Флаг для предотвращения параллельных чтений
+
         # Список таймеров для паузы/возобновления опросов
         self._polling_timers = [
             self._connection_check_timer,
