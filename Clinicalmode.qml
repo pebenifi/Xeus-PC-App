@@ -487,6 +487,7 @@ Item {
             modbusManager.disableMeasuredParametersPolling()
             modbusManager.disableAdditionalParametersPolling()
             measuredParametersGrid.visible = false
+            additionalParametersGrid.visible = false
         }
     }
 
