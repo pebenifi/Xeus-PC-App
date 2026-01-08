@@ -423,10 +423,6 @@ Item {
             "7 Manual mode settings": { 
                 label: "7 Manual mode settings", 
                 params: [] 
-            },
-            "8 Archives": { 
-                label: "8 Archives", 
-                params: ["Archive View", "Archive To USB", "Archive Reset", "Archive Period", "Archive Period Emergency", "Archive Period Stop", "Archives Save To USB"] 
             }
         })
         
@@ -5644,8 +5640,7 @@ Item {
                         "4 Calculated Parameters",
                         "5 Measured Parameters",
                         "6 Additional Parameters",
-                        "7 Manual mode settings",
-                        "8 Archives"
+                        "7 Manual mode settings"
                     ]
 
                     Column {
