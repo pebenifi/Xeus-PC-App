@@ -220,6 +220,16 @@ class ModbusManager(QObject):
     additional1HCurrentSweepNScansChanged = Signal(float)  # 1H Current Sweep N Scans (регистр 6181) - чтение и запись
     additionalBaselineCorrectionMinFrequencyChanged = Signal(float)  # Baseline correction min frequency в kHz (регистр 6191) - чтение и запись
     additionalBaselineCorrectionMaxFrequencyChanged = Signal(float)  # Baseline correction max frequency в kHz (регистр 6201) - чтение и запись
+    # Manual mode settings signals
+    manualModeRFPulseFrequencyChanged = Signal(float)  # RF pulse frequency в kHz (регистр 6301) - чтение и запись
+    manualModeRFPulsePowerChanged = Signal(float)  # RF pulse power в % (регистр 6311) - чтение и запись
+    manualModeRFPulseDurationChanged = Signal(float)  # RF pulse duration в T/2 (регистр 6321) - чтение и запись
+    manualModePreAcquisitionChanged = Signal(float)  # Pre acquisition в ms (регистр 6331) - чтение и запись
+    manualModeNMRGainChanged = Signal(float)  # NMR gain в dB (регистр 6341) - чтение и запись
+    manualModeNMRNumberOfScansChanged = Signal(float)  # NMR number of scans (регистр 6351) - чтение и запись
+    manualModeNMRRecoveryChanged = Signal(float)  # NMR recovery в ms (регистр 6361) - чтение и запись
+    manualModeCenterFrequencyChanged = Signal(float)  # Center frequency в kHz (регистр 6371) - чтение и запись
+    manualModeFrequencySpanChanged = Signal(float)  # Frequency span в kHz (регистр 6381) - чтение и запись
     externalRelaysChanged = Signal(int, str)  # value, binary_string - для регистра 1020
     opCellHeatingStateChanged = Signal(bool)  # OP cell heating (реле 7)
     # Сигналы для паузы/возобновления опросов (используется при переключении экранов)
@@ -381,6 +391,16 @@ class ModbusManager(QObject):
         self._additional_1h_current_sweep_n_scans_user_interaction = False
         self._additional_baseline_correction_min_frequency_user_interaction = False
         self._additional_baseline_correction_max_frequency_user_interaction = False
+        # Флаги взаимодействия пользователя для Manual mode settings
+        self._manual_mode_rf_pulse_frequency_user_interaction = False
+        self._manual_mode_rf_pulse_power_user_interaction = False
+        self._manual_mode_rf_pulse_duration_user_interaction = False
+        self._manual_mode_pre_acquisition_user_interaction = False
+        self._manual_mode_nmr_gain_user_interaction = False
+        self._manual_mode_nmr_number_of_scans_user_interaction = False
+        self._manual_mode_nmr_recovery_user_interaction = False
+        self._manual_mode_center_frequency_user_interaction = False
+        self._manual_mode_frequency_span_user_interaction = False
         # Флаги взаимодействия пользователя для автообновления
         self._measured_cold_cell_ir_signal_user_interaction = False
         self._measured_hot_cell_ir_signal_user_interaction = False
@@ -574,6 +594,12 @@ class ModbusManager(QObject):
         self._additional_parameters_timer.timeout.connect(self._readAdditionalParameters)
         self._additional_parameters_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
         self._reading_additional_parameters = False  # Флаг для предотвращения параллельных чтений
+        
+        # Таймер для чтения регистров Manual mode settings (6301-6381) - быстрое обновление
+        self._manual_mode_settings_timer = QTimer(self)
+        self._manual_mode_settings_timer.timeout.connect(self._readManualModeSettings)
+        self._manual_mode_settings_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._reading_manual_mode_settings = False  # Флаг для предотвращения параллельных чтений
 
         # Список таймеров для паузы/возобновления опросов
         self._polling_timers = [
@@ -599,6 +625,7 @@ class ModbusManager(QObject):
             self._calculated_parameters_timer,
             self._measured_parameters_timer,
             self._additional_parameters_timer,
+            self._manual_mode_settings_timer,
         ]
         
         # Worker-поток для Modbus I/O (чтобы UI не подвисал)
@@ -931,6 +958,26 @@ class ModbusManager(QObject):
         if self._additional_parameters_timer.isActive():
             self._additional_parameters_timer.stop()
             logger.info("⏸ Опрос Additional Parameters выключен")
+    
+    @Slot()
+    def enableManualModeSettingsPolling(self):
+        """Включить чтение регистров Manual mode settings (6301-6381) по требованию (например, при открытии Manual mode settings)"""
+        logger.info(f"enableManualModeSettingsPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._is_connected and not self._polling_paused:
+            if not self._manual_mode_settings_timer.isActive():
+                self._manual_mode_settings_timer.start()
+                logger.info("▶️ Опрос Manual mode settings включен")
+            else:
+                logger.info("⏸ Опрос Manual mode settings уже активен")
+        else:
+            logger.warning(f"⏸ Опрос Manual mode settings не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+    
+    @Slot()
+    def disableManualModeSettingsPolling(self):
+        """Выключить чтение регистров Manual mode settings (6301-6381)"""
+        if self._manual_mode_settings_timer.isActive():
+            self._manual_mode_settings_timer.stop()
+            logger.info("⏸ Опрос Manual mode settings выключен")
     
     @Slot()
     def refreshUIFromCache(self):
@@ -1324,6 +1371,8 @@ class ModbusManager(QObject):
             self._applyMeasuredParametersValue(value)
         elif key == "additional_parameters":
             self._applyAdditionalParametersValue(value)
+        elif key == "manual_mode_settings":
+            self._applyManualModeSettingsValue(value)
         elif key == "1020":
             self._applyExternalRelays1020Value(value)
         elif key == "ir":
@@ -3498,6 +3547,124 @@ class ModbusManager(QObject):
                 self.additionalBaselineCorrectionMaxFrequencyChanged.emit(val)
                 logger.debug(f"Additional Baseline correction max frequency: {val} kHz")
     
+    def _readManualModeSettings(self):
+        """Чтение регистров Manual mode settings (6301-6381)"""
+        if not self._is_connected or self._modbus_client is None or self._reading_manual_mode_settings:
+            return
+
+        self._reading_manual_mode_settings = True
+        client = self._modbus_client
+        
+        def task():
+            """Чтение всех регистров Manual mode settings"""
+            # Регистры 6301-6381
+            rf_pulse_frequency_regs = client.read_input_registers_direct(6301, 1, max_chunk=1)
+            rf_pulse_power_regs = client.read_input_registers_direct(6311, 1, max_chunk=1)
+            rf_pulse_duration_regs = client.read_input_registers_direct(6321, 1, max_chunk=1)
+            pre_acquisition_regs = client.read_input_registers_direct(6331, 1, max_chunk=1)
+            nmr_gain_regs = client.read_input_registers_direct(6341, 1, max_chunk=1)
+            nmr_number_of_scans_regs = client.read_input_registers_direct(6351, 1, max_chunk=1)
+            nmr_recovery_regs = client.read_input_registers_direct(6361, 1, max_chunk=1)
+            center_frequency_regs = client.read_input_registers_direct(6371, 1, max_chunk=1)
+            frequency_span_regs = client.read_input_registers_direct(6381, 1, max_chunk=1)
+            
+            result = {}
+            if rf_pulse_frequency_regs and len(rf_pulse_frequency_regs) >= 1:
+                # RF pulse frequency в kHz - преобразуем из int (kHz * 100) в float
+                result['rf_pulse_frequency'] = float(int(rf_pulse_frequency_regs[0])) / 100.0
+            if rf_pulse_power_regs and len(rf_pulse_power_regs) >= 1:
+                # RF pulse power в % - преобразуем из int (% * 100) в float
+                result['rf_pulse_power'] = float(int(rf_pulse_power_regs[0])) / 100.0
+            if rf_pulse_duration_regs and len(rf_pulse_duration_regs) >= 1:
+                # RF pulse duration в T/2 - преобразуем из int (T/2 * 100) в float
+                result['rf_pulse_duration'] = float(int(rf_pulse_duration_regs[0])) / 100.0
+            if pre_acquisition_regs and len(pre_acquisition_regs) >= 1:
+                # Pre acquisition в ms - преобразуем из int (ms * 100) в float
+                result['pre_acquisition'] = float(int(pre_acquisition_regs[0])) / 100.0
+            if nmr_gain_regs and len(nmr_gain_regs) >= 1:
+                # NMR gain в dB - преобразуем из int (dB * 100) в float
+                result['nmr_gain'] = float(int(nmr_gain_regs[0])) / 100.0
+            if nmr_number_of_scans_regs and len(nmr_number_of_scans_regs) >= 1:
+                # NMR number of scans - значение уже в нужных единицах (предполагаем что это int)
+                result['nmr_number_of_scans'] = float(int(nmr_number_of_scans_regs[0]))
+            if nmr_recovery_regs and len(nmr_recovery_regs) >= 1:
+                # NMR recovery в ms - преобразуем из int (ms * 100) в float
+                result['nmr_recovery'] = float(int(nmr_recovery_regs[0])) / 100.0
+            if center_frequency_regs and len(center_frequency_regs) >= 1:
+                # Center frequency в kHz - преобразуем из int (kHz * 100) в float
+                result['center_frequency'] = float(int(center_frequency_regs[0])) / 100.0
+            if frequency_span_regs and len(frequency_span_regs) >= 1:
+                # Frequency span в kHz - преобразуем из int (kHz * 100) в float
+                result['frequency_span'] = float(int(frequency_span_regs[0])) / 100.0
+            
+            return result
+        
+        self._enqueue_read("manual_mode_settings", task)
+    
+    def _applyManualModeSettingsValue(self, value: object):
+        """Применение результатов чтения Manual mode settings (6301-6381)"""
+        self._reading_manual_mode_settings = False
+        if value is None or not isinstance(value, dict):
+            logger.warning(f"_applyManualModeSettingsValue: value is None or not dict: {value}")
+            return
+        
+        logger.debug(f"_applyManualModeSettingsValue: received value={value}")
+        
+        if 'rf_pulse_frequency' in value:
+            val = float(value['rf_pulse_frequency'])
+            if not self._manual_mode_rf_pulse_frequency_user_interaction:
+                self._manual_mode_rf_pulse_frequency = val
+                self.manualModeRFPulseFrequencyChanged.emit(val)
+                logger.debug(f"Manual mode RF pulse frequency: {val} kHz")
+        if 'rf_pulse_power' in value:
+            val = float(value['rf_pulse_power'])
+            if not self._manual_mode_rf_pulse_power_user_interaction:
+                self._manual_mode_rf_pulse_power = val
+                self.manualModeRFPulsePowerChanged.emit(val)
+                logger.debug(f"Manual mode RF pulse power: {val}%")
+        if 'rf_pulse_duration' in value:
+            val = float(value['rf_pulse_duration'])
+            if not self._manual_mode_rf_pulse_duration_user_interaction:
+                self._manual_mode_rf_pulse_duration = val
+                self.manualModeRFPulseDurationChanged.emit(val)
+                logger.debug(f"Manual mode RF pulse duration: {val} T/2")
+        if 'pre_acquisition' in value:
+            val = float(value['pre_acquisition'])
+            if not self._manual_mode_pre_acquisition_user_interaction:
+                self._manual_mode_pre_acquisition = val
+                self.manualModePreAcquisitionChanged.emit(val)
+                logger.debug(f"Manual mode Pre acquisition: {val} ms")
+        if 'nmr_gain' in value:
+            val = float(value['nmr_gain'])
+            if not self._manual_mode_nmr_gain_user_interaction:
+                self._manual_mode_nmr_gain = val
+                self.manualModeNMRGainChanged.emit(val)
+                logger.debug(f"Manual mode NMR gain: {val} dB")
+        if 'nmr_number_of_scans' in value:
+            val = float(value['nmr_number_of_scans'])
+            if not self._manual_mode_nmr_number_of_scans_user_interaction:
+                self._manual_mode_nmr_number_of_scans = val
+                self.manualModeNMRNumberOfScansChanged.emit(val)
+                logger.debug(f"Manual mode NMR number of scans: {val}")
+        if 'nmr_recovery' in value:
+            val = float(value['nmr_recovery'])
+            if not self._manual_mode_nmr_recovery_user_interaction:
+                self._manual_mode_nmr_recovery = val
+                self.manualModeNMRRecoveryChanged.emit(val)
+                logger.debug(f"Manual mode NMR recovery: {val} ms")
+        if 'center_frequency' in value:
+            val = float(value['center_frequency'])
+            if not self._manual_mode_center_frequency_user_interaction:
+                self._manual_mode_center_frequency = val
+                self.manualModeCenterFrequencyChanged.emit(val)
+                logger.debug(f"Manual mode Center frequency: {val} kHz")
+        if 'frequency_span' in value:
+            val = float(value['frequency_span'])
+            if not self._manual_mode_frequency_span_user_interaction:
+                self._manual_mode_frequency_span = val
+                self.manualModeFrequencySpanChanged.emit(val)
+                logger.debug(f"Manual mode Frequency span: {val} kHz")
+    
     # ===== Measured Parameters методы записи =====
     @Slot(float, result=bool)
     def setMeasuredColdCellIRSignal(self, value: float) -> bool:
@@ -4350,6 +4517,314 @@ class ModbusManager(QObject):
         self._additional_baseline_correction_max_frequency = frequency_khz
         self.additionalBaselineCorrectionMaxFrequencyChanged.emit(frequency_khz)
         self._additional_baseline_correction_max_frequency_user_interaction = True
+        return True
+    
+    # ===== Manual mode settings методы записи =====
+    @Slot(float, result=bool)
+    def setManualModeRFPulseFrequency(self, frequency_khz: float) -> bool:
+        """Установка RF pulse frequency в kHz (регистр 6301)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_rf_pulse_frequency = frequency_khz
+        self._manual_mode_rf_pulse_frequency_user_interaction = True
+        self.manualModeRFPulseFrequencyChanged.emit(frequency_khz)
+        register_value = int(frequency_khz * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6301, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_rf_pulse_frequency", task, {"frequency_khz": frequency_khz})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeRFPulseFrequency(self) -> bool:
+        """Увеличение RF pulse frequency на 0.01 kHz"""
+        return self.setManualModeRFPulseFrequency(self._manual_mode_rf_pulse_frequency + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeRFPulseFrequency(self) -> bool:
+        """Уменьшение RF pulse frequency на 0.01 kHz"""
+        return self.setManualModeRFPulseFrequency(self._manual_mode_rf_pulse_frequency - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModeRFPulsePower(self, power_percent: float) -> bool:
+        """Установка RF pulse power в % (регистр 6311)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_rf_pulse_power = power_percent
+        self._manual_mode_rf_pulse_power_user_interaction = True
+        self.manualModeRFPulsePowerChanged.emit(power_percent)
+        register_value = int(power_percent * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6311, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_rf_pulse_power", task, {"power_percent": power_percent})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeRFPulsePower(self) -> bool:
+        """Увеличение RF pulse power на 0.01%"""
+        return self.setManualModeRFPulsePower(self._manual_mode_rf_pulse_power + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeRFPulsePower(self) -> bool:
+        """Уменьшение RF pulse power на 0.01%"""
+        return self.setManualModeRFPulsePower(self._manual_mode_rf_pulse_power - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModeRFPulseDuration(self, duration_t2: float) -> bool:
+        """Установка RF pulse duration в T/2 (регистр 6321)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_rf_pulse_duration = duration_t2
+        self._manual_mode_rf_pulse_duration_user_interaction = True
+        self.manualModeRFPulseDurationChanged.emit(duration_t2)
+        register_value = int(duration_t2 * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6321, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_rf_pulse_duration", task, {"duration_t2": duration_t2})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeRFPulseDuration(self) -> bool:
+        """Увеличение RF pulse duration на 0.01 T/2"""
+        return self.setManualModeRFPulseDuration(self._manual_mode_rf_pulse_duration + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeRFPulseDuration(self) -> bool:
+        """Уменьшение RF pulse duration на 0.01 T/2"""
+        return self.setManualModeRFPulseDuration(self._manual_mode_rf_pulse_duration - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModePreAcquisition(self, duration_ms: float) -> bool:
+        """Установка Pre acquisition в ms (регистр 6331)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_pre_acquisition = duration_ms
+        self._manual_mode_pre_acquisition_user_interaction = True
+        self.manualModePreAcquisitionChanged.emit(duration_ms)
+        register_value = int(duration_ms * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6331, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_pre_acquisition", task, {"duration_ms": duration_ms})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModePreAcquisition(self) -> bool:
+        """Увеличение Pre acquisition на 0.01 ms"""
+        return self.setManualModePreAcquisition(self._manual_mode_pre_acquisition + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModePreAcquisition(self) -> bool:
+        """Уменьшение Pre acquisition на 0.01 ms"""
+        return self.setManualModePreAcquisition(self._manual_mode_pre_acquisition - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModeNMRGain(self, gain_db: float) -> bool:
+        """Установка NMR gain в dB (регистр 6341)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_nmr_gain = gain_db
+        self._manual_mode_nmr_gain_user_interaction = True
+        self.manualModeNMRGainChanged.emit(gain_db)
+        register_value = int(gain_db * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6341, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_nmr_gain", task, {"gain_db": gain_db})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeNMRGain(self) -> bool:
+        """Увеличение NMR gain на 0.01 dB"""
+        return self.setManualModeNMRGain(self._manual_mode_nmr_gain + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeNMRGain(self) -> bool:
+        """Уменьшение NMR gain на 0.01 dB"""
+        return self.setManualModeNMRGain(self._manual_mode_nmr_gain - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModeNMRNumberOfScans(self, num_scans: float) -> bool:
+        """Установка NMR number of scans (регистр 6351)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_nmr_number_of_scans = num_scans
+        self._manual_mode_nmr_number_of_scans_user_interaction = True
+        self.manualModeNMRNumberOfScansChanged.emit(num_scans)
+        register_value = int(num_scans)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6351, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_nmr_number_of_scans", task, {"num_scans": num_scans})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeNMRNumberOfScans(self) -> bool:
+        """Увеличение NMR number of scans на 1"""
+        return self.setManualModeNMRNumberOfScans(self._manual_mode_nmr_number_of_scans + 1.0)
+    
+    @Slot(result=bool)
+    def decreaseManualModeNMRNumberOfScans(self) -> bool:
+        """Уменьшение NMR number of scans на 1"""
+        return self.setManualModeNMRNumberOfScans(self._manual_mode_nmr_number_of_scans - 1.0)
+    
+    @Slot(float, result=bool)
+    def setManualModeNMRRecovery(self, duration_ms: float) -> bool:
+        """Установка NMR recovery в ms (регистр 6361)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_nmr_recovery = duration_ms
+        self._manual_mode_nmr_recovery_user_interaction = True
+        self.manualModeNMRRecoveryChanged.emit(duration_ms)
+        register_value = int(duration_ms * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6361, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_nmr_recovery", task, {"duration_ms": duration_ms})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeNMRRecovery(self) -> bool:
+        """Увеличение NMR recovery на 0.01 ms"""
+        return self.setManualModeNMRRecovery(self._manual_mode_nmr_recovery + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeNMRRecovery(self) -> bool:
+        """Уменьшение NMR recovery на 0.01 ms"""
+        return self.setManualModeNMRRecovery(self._manual_mode_nmr_recovery - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModeCenterFrequency(self, frequency_khz: float) -> bool:
+        """Установка Center frequency в kHz (регистр 6371)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_center_frequency = frequency_khz
+        self._manual_mode_center_frequency_user_interaction = True
+        self.manualModeCenterFrequencyChanged.emit(frequency_khz)
+        register_value = int(frequency_khz * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6371, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_center_frequency", task, {"frequency_khz": frequency_khz})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeCenterFrequency(self) -> bool:
+        """Увеличение Center frequency на 0.01 kHz"""
+        return self.setManualModeCenterFrequency(self._manual_mode_center_frequency + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeCenterFrequency(self) -> bool:
+        """Уменьшение Center frequency на 0.01 kHz"""
+        return self.setManualModeCenterFrequency(self._manual_mode_center_frequency - 0.01)
+    
+    @Slot(float, result=bool)
+    def setManualModeFrequencySpan(self, frequency_khz: float) -> bool:
+        """Установка Frequency span в kHz (регистр 6381)"""
+        if not self._is_connected or self._modbus_client is None:
+            return False
+        self._manual_mode_frequency_span = frequency_khz
+        self._manual_mode_frequency_span_user_interaction = True
+        self.manualModeFrequencySpanChanged.emit(frequency_khz)
+        register_value = int(frequency_khz * 100)
+        client = self._modbus_client
+        def task() -> bool:
+            result = client.write_holding_register(6381, register_value)
+            return bool(result)
+        self._enqueue_write("manual_mode_frequency_span", task, {"frequency_khz": frequency_khz})
+        return True
+    
+    @Slot(result=bool)
+    def increaseManualModeFrequencySpan(self) -> bool:
+        """Увеличение Frequency span на 0.01 kHz"""
+        return self.setManualModeFrequencySpan(self._manual_mode_frequency_span + 0.01)
+    
+    @Slot(result=bool)
+    def decreaseManualModeFrequencySpan(self) -> bool:
+        """Уменьшение Frequency span на 0.01 kHz"""
+        return self.setManualModeFrequencySpan(self._manual_mode_frequency_span - 0.01)
+    
+    # Методы setValue для TextField (ввод с клавиатуры)
+    @Slot(float, result=bool)
+    def setManualModeRFPulseFrequencyValue(self, frequency_khz: float) -> bool:
+        """Обновление внутреннего значения RF pulse frequency без отправки на устройство"""
+        self._manual_mode_rf_pulse_frequency = frequency_khz
+        self.manualModeRFPulseFrequencyChanged.emit(frequency_khz)
+        self._manual_mode_rf_pulse_frequency_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeRFPulsePowerValue(self, power_percent: float) -> bool:
+        """Обновление внутреннего значения RF pulse power без отправки на устройство"""
+        self._manual_mode_rf_pulse_power = power_percent
+        self.manualModeRFPulsePowerChanged.emit(power_percent)
+        self._manual_mode_rf_pulse_power_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeRFPulseDurationValue(self, duration_t2: float) -> bool:
+        """Обновление внутреннего значения RF pulse duration без отправки на устройство"""
+        self._manual_mode_rf_pulse_duration = duration_t2
+        self.manualModeRFPulseDurationChanged.emit(duration_t2)
+        self._manual_mode_rf_pulse_duration_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModePreAcquisitionValue(self, duration_ms: float) -> bool:
+        """Обновление внутреннего значения Pre acquisition без отправки на устройство"""
+        self._manual_mode_pre_acquisition = duration_ms
+        self.manualModePreAcquisitionChanged.emit(duration_ms)
+        self._manual_mode_pre_acquisition_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeNMRGainValue(self, gain_db: float) -> bool:
+        """Обновление внутреннего значения NMR gain без отправки на устройство"""
+        self._manual_mode_nmr_gain = gain_db
+        self.manualModeNMRGainChanged.emit(gain_db)
+        self._manual_mode_nmr_gain_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeNMRNumberOfScansValue(self, num_scans: float) -> bool:
+        """Обновление внутреннего значения NMR number of scans без отправки на устройство"""
+        self._manual_mode_nmr_number_of_scans = num_scans
+        self.manualModeNMRNumberOfScansChanged.emit(num_scans)
+        self._manual_mode_nmr_number_of_scans_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeNMRRecoveryValue(self, duration_ms: float) -> bool:
+        """Обновление внутреннего значения NMR recovery без отправки на устройство"""
+        self._manual_mode_nmr_recovery = duration_ms
+        self.manualModeNMRRecoveryChanged.emit(duration_ms)
+        self._manual_mode_nmr_recovery_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeCenterFrequencyValue(self, frequency_khz: float) -> bool:
+        """Обновление внутреннего значения Center frequency без отправки на устройство"""
+        self._manual_mode_center_frequency = frequency_khz
+        self.manualModeCenterFrequencyChanged.emit(frequency_khz)
+        self._manual_mode_center_frequency_user_interaction = True
+        return True
+    
+    @Slot(float, result=bool)
+    def setManualModeFrequencySpanValue(self, frequency_khz: float) -> bool:
+        """Обновление внутреннего значения Frequency span без отправки на устройство"""
+        self._manual_mode_frequency_span = frequency_khz
+        self.manualModeFrequencySpanChanged.emit(frequency_khz)
+        self._manual_mode_frequency_span_user_interaction = True
         return True
     
     @Slot(int, bool, result=bool)

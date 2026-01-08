@@ -420,9 +420,9 @@ Item {
                 label: "6 Additional Parameters", 
                 params: ["Error Bar For Electron Polarization", "PRB ERR", "Error Bar For 129XE Polarization", "PXE ERR", "Error Bar For Buildup Rate", "G SEOP ERR", "Fitted 129XE Polarization Max", "PXE Max", "Fitted 129XE Polarization Max Error Bar", "PXE Max ERR", "HP 129XE T1", "T1 ERR", "Current IR Signal", "IR Hot Field On", "Cold Cell IR Signal", "IR Cold", "Hot Cell IR Signal", "IR Hot Field Off", "Water 1H NMR Ref Signal", "S 1H"] 
             },
-            "7 System Settings": { 
-                label: "7 System Settings", 
-                params: ["Current Datetime", "Driver N", "Language", "Setpoints Save Load", "Setpoints Reset", "Show Hidden Params", "Beep Mode", "Switchboard State", "Fault Code", "Fault Str", "Test"] 
+            "7 Manual mode settings": { 
+                label: "7 Manual mode settings", 
+                params: [] 
             },
             "8 Archives": { 
                 label: "8 Archives", 
@@ -489,6 +489,9 @@ Item {
             // При изменении активного параметра отключаем опрос Additional Parameters
             modbusManager.disableAdditionalParametersPolling()
             additionalParametersGrid.visible = false
+            // При изменении активного параметра отключаем опрос Manual mode settings
+            modbusManager.disableManualModeSettingsPolling()
+            manualModeSettingsGrid.visible = false
         }
     }
 
@@ -4651,6 +4654,485 @@ Item {
                         }
                     }
 
+                    // Таблица Manual mode settings для "7 Manual mode settings" меню
+                    Column {
+                        id: manualModeSettingsGrid
+                        width: parent.width
+                        spacing: 0
+                        visible: false
+
+                        // RF pulse frequency
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "RF pulse frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeRFPulseFrequency
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeRFPulseFrequencyValue(val)
+                                            modbusManager.setManualModeRFPulseFrequency(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeRFPulseFrequency()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeRFPulseFrequency()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // RF pulse power
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "RF pulse power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeRFPulsePower
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeRFPulsePowerValue(val)
+                                            modbusManager.setManualModeRFPulsePower(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeRFPulsePower()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeRFPulsePower()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // RF pulse duration
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "RF pulse duration:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeRFPulseDuration
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeRFPulseDurationValue(val)
+                                            modbusManager.setManualModeRFPulseDuration(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "T/2"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeRFPulseDuration()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeRFPulseDuration()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Pre acquisition
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Pre acquisition:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModePreAcquisition
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModePreAcquisitionValue(val)
+                                            modbusManager.setManualModePreAcquisition(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModePreAcquisition()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModePreAcquisition()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // NMR gain
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "NMR gain:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeNMRGain
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeNMRGainValue(val)
+                                            modbusManager.setManualModeNMRGain(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "dB"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeNMRGain()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeNMRGain()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // NMR number of scans
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "NMR number of scans:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeNMRNumberOfScans
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeNMRNumberOfScansValue(val)
+                                            modbusManager.setManualModeNMRNumberOfScans(val)
+                                        }
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeNMRNumberOfScans()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeNMRNumberOfScans()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // NMR recovery
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "NMR recovery:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeNMRRecovery
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeNMRRecoveryValue(val)
+                                            modbusManager.setManualModeNMRRecovery(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeNMRRecovery()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeNMRRecovery()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Center frequency
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Center frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeCenterFrequency
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeCenterFrequencyValue(val)
+                                            modbusManager.setManualModeCenterFrequency(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeCenterFrequency()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeCenterFrequency()
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
+
+                        // Frequency span
+                        Row {
+                            width: parent.width
+                            spacing: 16
+                            padding: 4
+                            Text { text: "Frequency span:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Item { width: 20; height: 1 } // Spacer
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 8
+                                TextField {
+                                    id: manualModeFrequencySpan
+                                    width: 100
+                                    height: 28
+                                    font.pixelSize: 11
+                                    placeholderText: "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setManualModeFrequencySpanValue(val)
+                                            modbusManager.setManualModeFrequencySpan(val)
+                                        }
+                                    }
+                                }
+                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▲"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.increaseManualModeFrequencySpan()
+                                    }
+                                }
+                                Button {
+                                    width: 30
+                                    height: 28
+                                    text: "▼"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        if (modbusManager) modbusManager.decreaseManualModeFrequencySpan()
+                                    }
+                                }
+                            }
+                        }
+
+                        // Connections для обновления значений Manual mode settings
+                        Connections {
+                            target: modbusManager
+                            function onManualModeRFPulseFrequencyChanged(value) {
+                                if (!manualModeRFPulseFrequency.activeFocus) {
+                                    manualModeRFPulseFrequency.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModeRFPulsePowerChanged(value) {
+                                if (!manualModeRFPulsePower.activeFocus) {
+                                    manualModeRFPulsePower.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModeRFPulseDurationChanged(value) {
+                                if (!manualModeRFPulseDuration.activeFocus) {
+                                    manualModeRFPulseDuration.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModePreAcquisitionChanged(value) {
+                                if (!manualModePreAcquisition.activeFocus) {
+                                    manualModePreAcquisition.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModeNMRGainChanged(value) {
+                                if (!manualModeNMRGain.activeFocus) {
+                                    manualModeNMRGain.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModeNMRNumberOfScansChanged(value) {
+                                if (!manualModeNMRNumberOfScans.activeFocus) {
+                                    manualModeNMRNumberOfScans.text = value.toFixed(0)
+                                }
+                            }
+                            function onManualModeNMRRecoveryChanged(value) {
+                                if (!manualModeNMRRecovery.activeFocus) {
+                                    manualModeNMRRecovery.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModeCenterFrequencyChanged(value) {
+                                if (!manualModeCenterFrequency.activeFocus) {
+                                    manualModeCenterFrequency.text = value.toFixed(2)
+                                }
+                            }
+                            function onManualModeFrequencySpanChanged(value) {
+                                if (!manualModeFrequencySpan.activeFocus) {
+                                    manualModeFrequencySpan.text = value.toFixed(2)
+                                }
+                            }
+                        }
+                    }
+
                     // Таблица Laser для Laser меню
                     Column {
                         id: laserGrid
@@ -5162,7 +5644,7 @@ Item {
                         "4 Calculated Parameters",
                         "5 Measured Parameters",
                         "6 Additional Parameters",
-                        "7 System Settings",
+                        "7 Manual mode settings",
                         "8 Archives"
                     ]
 
@@ -5225,7 +5707,24 @@ Item {
                                         calculatedParametersGrid.visible = false
                                         measuredParametersGrid.visible = false
                                         additionalParametersGrid.visible = false
+                                        manualModeSettingsGrid.visible = false
                                         relayTableGrid.visible = false
+                                        valvesFansTableGrid.visible = false
+                                        powerSupplyGrid.visible = false
+                                        pidControllerGrid.visible = false
+                                        waterChillerGrid.visible = false
+                                        alicatsGrid.visible = false
+                                        vacuumControllerGrid.visible = false
+                                        laserGrid.visible = false
+                                        paramGrid.visible = false
+                                        valvesFansTableGrid.visible = false
+                                        powerSupplyGrid.visible = false
+                                        pidControllerGrid.visible = false
+                                        waterChillerGrid.visible = false
+                                        alicatsGrid.visible = false
+                                        vacuumControllerGrid.visible = false
+                                        laserGrid.visible = false
+                                        paramGrid.visible = false
                                         valvesFansTableGrid.visible = false
                                         powerSupplyGrid.visible = false
                                         pidControllerGrid.visible = false
@@ -5253,7 +5752,16 @@ Item {
                                         seopParametersGrid.visible = false
                                         measuredParametersGrid.visible = false
                                         additionalParametersGrid.visible = false
+                                        manualModeSettingsGrid.visible = false
                                         relayTableGrid.visible = false
+                                        valvesFansTableGrid.visible = false
+                                        powerSupplyGrid.visible = false
+                                        pidControllerGrid.visible = false
+                                        waterChillerGrid.visible = false
+                                        alicatsGrid.visible = false
+                                        vacuumControllerGrid.visible = false
+                                        laserGrid.visible = false
+                                        paramGrid.visible = false
                                         valvesFansTableGrid.visible = false
                                         powerSupplyGrid.visible = false
                                         pidControllerGrid.visible = false
@@ -5281,6 +5789,7 @@ Item {
                                         seopParametersGrid.visible = false
                                         calculatedParametersGrid.visible = false
                                         additionalParametersGrid.visible = false
+                                        manualModeSettingsGrid.visible = false
                                         relayTableGrid.visible = false
                                         valvesFansTableGrid.visible = false
                                         powerSupplyGrid.visible = false
@@ -5309,6 +5818,7 @@ Item {
                                         seopParametersGrid.visible = false
                                         calculatedParametersGrid.visible = false
                                         measuredParametersGrid.visible = false
+                                        manualModeSettingsGrid.visible = false
                                         relayTableGrid.visible = false
                                         valvesFansTableGrid.visible = false
                                         powerSupplyGrid.visible = false
@@ -5323,6 +5833,35 @@ Item {
                                         infoContent.text = "Additional Parameters control"
                                         console.log("Additional Parameters grid visible:", additionalParametersGrid.visible)
                                         // Не раскрываем подменю для Additional Parameters
+                                        if (expandedMenuItem === modelData) {
+                                            expandedMenuItem = ""
+                                        }
+                                    } else if (modelData === "7 Manual mode settings") {
+                                        console.log("Manual mode settings clicked, enabling polling")
+                                        // Включаем опрос Manual mode settings по требованию
+                                        if (modbusManager) {
+                                            modbusManager.enableManualModeSettingsPolling()
+                                        }
+                                        // Показываем таблицу Manual mode settings
+                                        manualModeSettingsGrid.visible = true
+                                        seopParametersGrid.visible = false
+                                        calculatedParametersGrid.visible = false
+                                        measuredParametersGrid.visible = false
+                                        additionalParametersGrid.visible = false
+                                        relayTableGrid.visible = false
+                                        valvesFansTableGrid.visible = false
+                                        powerSupplyGrid.visible = false
+                                        pidControllerGrid.visible = false
+                                        waterChillerGrid.visible = false
+                                        alicatsGrid.visible = false
+                                        vacuumControllerGrid.visible = false
+                                        laserGrid.visible = false
+                                        paramGrid.visible = false
+                                        infoTitle.text = "7 Manual mode settings"
+                                        infoSubtitle.text = menuItemContainer.groupData.label
+                                        infoContent.text = "Manual mode settings control"
+                                        console.log("Manual mode settings grid visible:", manualModeSettingsGrid.visible)
+                                        // Не раскрываем подменю для Manual mode settings
                                         if (expandedMenuItem === modelData) {
                                             expandedMenuItem = ""
                                         }
