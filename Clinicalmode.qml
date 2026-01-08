@@ -2982,9 +2982,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Electron Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Electron Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedElectronPolarization
@@ -2997,7 +2999,6 @@ Item {
                                 }
                                 Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3006,9 +3007,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "129Xe Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "129Xe Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedXePolarization
@@ -3021,7 +3024,6 @@ Item {
                                 }
                                 Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3030,9 +3032,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "The buildup rate:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "The buildup rate:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedBuildupRate
@@ -3045,7 +3049,6 @@ Item {
                                 }
                                 Text { text: "1/min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3054,9 +3057,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for Electron Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Error bar for Electron Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedElectronPolarizationError
@@ -3069,7 +3074,6 @@ Item {
                                 }
                                 Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3078,9 +3082,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for 129Xe Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Error bar for 129Xe Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedXePolarizationError
@@ -3093,7 +3099,6 @@ Item {
                                 }
                                 Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3102,9 +3107,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for the buildup rate:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Error bar for the buildup rate:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedBuildupRateError
@@ -3117,7 +3124,6 @@ Item {
                                 }
                                 Text { text: "1/min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3126,9 +3132,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Fitted 129Xe Polarization maximum:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Fitted 129Xe Polarization maximum:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedFittedXePolarizationMax
@@ -3141,7 +3149,6 @@ Item {
                                 }
                                 Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3150,9 +3157,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Fitted 129Xe Polarization max error bar:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Fitted 129Xe Polarization max error bar:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedFittedXePolarizationMaxError
@@ -3165,7 +3174,6 @@ Item {
                                 }
                                 Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3174,9 +3182,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "HP 129Xe T1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "HP 129Xe T1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedHPXeT1
@@ -3189,7 +3199,6 @@ Item {
                                 }
                                 Text { text: "min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
 
@@ -3198,9 +3207,11 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for 129Xe T1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Error bar for 129Xe T1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 220
                                 spacing: 8
                                 Text {
                                     id: calculatedHPXeT1Error
@@ -3213,7 +3224,6 @@ Item {
                                 }
                                 Text { text: "min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width - parent.padding * 2 - 150 - 180 - 16; height: 0 }
                         }
 
                         // Connections для обновления значений Calculated Parameters
