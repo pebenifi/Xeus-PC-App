@@ -1270,6 +1270,42 @@ class ModbusClient:
         crc_high = (crc >> 8) & 0xFF
         return frame + bytes([crc_low, crc_high])
     
+    def _build_read_frame_1421(self) -> bytes:
+        """Формирование Modbus RTU фрейма для чтения регистра 1421 (функция 04)"""
+        address = 1421
+        addr_high = (address >> 8) & 0xFF
+        addr_low = address & 0xFF
+        
+        frame = bytes([self.unit_id, 4, addr_high, addr_low, 0x00, 0x01])
+        crc = self._crc16_modbus(frame)
+        crc_low = crc & 0xFF
+        crc_high = (crc >> 8) & 0xFF
+        return frame + bytes([crc_low, crc_high])
+    
+    def _parse_read_response_1421(self, resp: bytes) -> Optional[int]:
+        """Расшифровка ответа на запрос чтения регистра 1421"""
+        if len(resp) < 7:
+            logger.debug(f"Регистр 1421: ответ слишком короткий: {len(resp)} байт")
+            return None
+        
+        if resp[0] != self.unit_id or resp[1] != 4:
+            return None
+        
+        value_high = resp[3]
+        value_low = resp[4]
+        value = (value_high << 8) | value_low
+        
+        # Проверяем CRC
+        received_crc = (resp[-1] << 8) | resp[-2]
+        data_for_crc = resp[:-2]
+        calculated_crc = self._crc16_modbus(data_for_crc)
+        
+        if received_crc == calculated_crc:
+            return value
+        else:
+            logger.warning(f"CRC не совпадает для регистра 1421: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
+            return None  # Не возвращаем некорректные данные
+    
     def _parse_read_response_1411(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1411"""
         if len(resp) < 7:
