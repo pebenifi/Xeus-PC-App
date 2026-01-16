@@ -4972,7 +4972,7 @@ class ModbusManager(QObject):
             # Обновляем статус
             self._updateActionStatus(f"set {fan_name_mapping[10]}")
             # Логируем действие
-            self._addLog(f"{fan_name_mapping[10]}: {'включен' if state else 'выключен'}")
+            self._addLog(f"{fan_name_mapping[10]}: {'ON' if state else 'OFF'}")
             # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
             self._fan_states[10] = state
             self.fanStateChanged.emit(10, state)
@@ -4990,11 +4990,11 @@ class ModbusManager(QObject):
             if fanIndex in fan_name_mapping:
                 self._updateActionStatus(f"set {fan_name_mapping[fanIndex]}")
                 # Логируем действие
-                self._addLog(f"{fan_name_mapping[fanIndex]}: {'включен' if state else 'выключен'}")
+                self._addLog(f"{fan_name_mapping[fanIndex]}: {'ON' if state else 'OFF'}")
             else:
                 self._updateActionStatus(f"set fan {fanIndex + 1}")
                 # Логируем действие
-                self._addLog(f"Fan {fanIndex + 1}: {'включен' if state else 'выключен'}")
+                self._addLog(f"Fan {fanIndex + 1}: {'ON' if state else 'OFF'}")
             # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
             self._fan_states[fanIndex] = state
             self.fanStateChanged.emit(fanIndex, state)
@@ -5420,7 +5420,7 @@ class ModbusManager(QObject):
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 3")
         # Логируем действие
-        self._addLog(f"Laser PSU: {'включен' if state else 'выключен'}")
+        self._addLog(f"Laser PSU: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         self._relay_states['laser_psu'] = state
         self.laserPSUStateChanged.emit(state)
@@ -5435,7 +5435,7 @@ class ModbusManager(QObject):
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 2")
         # Логируем действие
-        self._addLog(f"Magnet PSU: {'включен' if state else 'выключен'}")
+        self._addLog(f"Magnet PSU: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         self._relay_states['magnet_psu'] = state
         self.magnetPSUStateChanged.emit(state)
@@ -5450,7 +5450,7 @@ class ModbusManager(QObject):
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 6")
         # Логируем действие
-        self._addLog(f"PID Controller: {'включен' if state else 'выключен'}")
+        self._addLog(f"PID Controller: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         self._relay_states['pid_controller'] = state
         self.pidControllerStateChanged.emit(state)
@@ -5465,7 +5465,7 @@ class ModbusManager(QObject):
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 1")
         # Логируем действие
-        self._addLog(f"Water Chiller: {'включен' if state else 'выключен'}")
+        self._addLog(f"Water Chiller: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         self._relay_states['water_chiller'] = state
         self.waterChillerStateChanged.emit(state)
@@ -5479,7 +5479,7 @@ class ModbusManager(QObject):
     def setLaserBeam(self, state: bool) -> bool:
         """Управление Laser beam (регистр 1810: 0 off, 1 on)"""
         # Логируем действие
-        self._addLog(f"Laser Beam: {'включен' if state else 'выключен'}")
+        self._addLog(f"Laser Beam: {'ON' if state else 'OFF'}")
         # Сначала активируем Control View для Laser (1800 = 1)
         self.writeRegister(1800, 1)
         return self.writeRegister(1810, 1 if state else 0)
@@ -5497,7 +5497,7 @@ class ModbusManager(QObject):
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 4")
         # Логируем действие
-        self._addLog(f"Vacuum Pump: {'включен' if state else 'выключен'}")
+        self._addLog(f"Vacuum Pump: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         self._relay_states['vacuum_pump'] = state
         self.vacuumPumpStateChanged.emit(state)
@@ -5512,7 +5512,7 @@ class ModbusManager(QObject):
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 5")
         # Логируем действие
-        self._addLog(f"Vacuum Gauge: {'включен' if state else 'выключен'}")
+        self._addLog(f"Vacuum Gauge: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         self._relay_states['vacuum_gauge'] = state
         self.vacuumGaugeStateChanged.emit(state)
@@ -5539,7 +5539,7 @@ class ModbusManager(QObject):
         valve_number = valveIndex - 4  # valveIndex 5 -> X6, valveIndex 6 -> X7, и т.д.
         self._updateActionStatus(f"set X{valve_number}")
         # Логируем действие
-        self._addLog(f"Клапан X{valve_number}: {'открыт' if state else 'закрыт'}")
+        self._addLog(f"Valve X{valve_number}: {'OPEN' if state else 'CLOSED'}")
         
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
         # Это обеспечивает мгновенную реакцию кнопок даже при подключенном устройстве
@@ -5627,7 +5627,7 @@ class ModbusManager(QObject):
     def setLaserPSUPower(self, state: bool) -> bool:
         """Управление Laser PSU (регистр 1251: 1 = вкл, 0 = выкл)"""
         # Логируем действие
-        self._addLog(f"Laser PSU Power: {'включен' if state else 'выключен'}")
+        self._addLog(f"Laser PSU Power: {'ON' if state else 'OFF'}")
         logger.info(f"🔵 setLaserPSUPower вызван: {state}")
         if not self._is_connected or self._modbus_client is None:
             return False
@@ -5681,7 +5681,7 @@ class ModbusManager(QObject):
     def setMagnetPSUPower(self, state: bool) -> bool:
         """Управление Magnet PSU (регистр 1341: 1 = вкл, 0 = выкл)"""
         # Логируем действие
-        self._addLog(f"Magnet PSU Power: {'включен' if state else 'выключен'}")
+        self._addLog(f"Magnet PSU Power: {'ON' if state else 'OFF'}")
         logger.info(f"🔵 setMagnetPSUPower вызван: {state}")
         if not self._is_connected or self._modbus_client is None:
             return False
@@ -5779,7 +5779,7 @@ class ModbusManager(QObject):
     def setPIDControllerPower(self, state: bool) -> bool:
         """Управление PID Controller (регистр 1431: 1 = вкл, 0 = выкл)"""
         # Логируем действие
-        self._addLog(f"PID Controller Power: {'включен' if state else 'выключен'}")
+        self._addLog(f"PID Controller Power: {'ON' if state else 'OFF'}")
         logger.info(f"🔵 setPIDControllerPower вызван: {state}")
         if not self._is_connected or self._modbus_client is None:
             return False
@@ -5878,7 +5878,7 @@ class ModbusManager(QObject):
     def setLaserBeam(self, state: bool) -> bool:
         """Управление Beam Laser через регистр 1811 (1 = on, 0 = off)"""
         # Логируем действие
-        self._addLog(f"Laser Beam: {'включен' if state else 'выключен'}")
+        self._addLog(f"Laser Beam: {'ON' if state else 'OFF'}")
         if not self._is_connected or self._modbus_client is None:
             logger.warning("Попытка установить Laser Beam без подключения")
             return False
@@ -6494,7 +6494,7 @@ class ModbusManager(QObject):
     def setWaterChillerPower(self, state: bool) -> bool:
         """Управление Water Chiller (регистр 1541: 1 = вкл, 0 = выкл)"""
         # Логируем действие
-        self._addLog(f"Water Chiller Power: {'включен' if state else 'выключен'}")
+        self._addLog(f"Water Chiller Power: {'ON' if state else 'OFF'}")
         logger.info(f"🔵 setWaterChillerPower вызван: {state}")
         if not self._is_connected or self._modbus_client is None:
             return False

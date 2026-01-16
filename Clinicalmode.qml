@@ -5938,29 +5938,6 @@ Item {
                         color: "#424242"
                     }
                     text: "Logs will appear here..."
-
-                    Component.onCompleted: {
-                        // Подключаем сигнал после создания компонента
-                        if (modbusManager) {
-                            modbusManager.logMessageChanged.connect(function(message) {
-                                if (logsTextArea.text === "Logs will appear here...") {
-                                    logsTextArea.text = message
-                                } else {
-                                    logsTextArea.text += "\n" + message
-                                }
-                                // Автоматически прокручиваем вниз через небольшую задержку
-                                Qt.callLater(function() {
-                                    if (logsScrollView.ScrollBar && logsScrollView.ScrollBar.vertical) {
-                                        logsScrollView.ScrollBar.vertical.position = 1.0
-                                    }
-                                    // Альтернативный способ прокрутки через Flickable
-                                    if (logsScrollView.contentItem) {
-                                        logsScrollView.contentItem.contentY = logsScrollView.contentItem.contentHeight - logsScrollView.height
-                                    }
-                                })
-                            })
-                        }
-                    }
                 }
             }
 
