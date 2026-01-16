@@ -908,8 +908,10 @@ class ModbusManager(QObject):
         logger.info(f"enableCalculatedParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
         if self._is_connected and not self._polling_paused:
             if not self._calculated_parameters_timer.isActive():
+                # Сразу делаем первое чтение, не ждем таймера
+                self._readCalculatedParameters()
                 self._calculated_parameters_timer.start()
-                logger.info("▶️ Опрос Calculated Parameters включен")
+                logger.info("▶️ Опрос Calculated Parameters включен (первое чтение выполнено сразу)")
             else:
                 logger.info("⏸ Опрос Calculated Parameters уже активен")
         else:
@@ -972,8 +974,10 @@ class ModbusManager(QObject):
         logger.info(f"enableManualModeSettingsPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
         if self._is_connected and not self._polling_paused:
             if not self._manual_mode_settings_timer.isActive():
+                # Сразу делаем первое чтение, не ждем таймера
+                self._readManualModeSettings()
                 self._manual_mode_settings_timer.start()
-                logger.info("▶️ Опрос Manual mode settings включен")
+                logger.info("▶️ Опрос Manual mode settings включен (первое чтение выполнено сразу)")
             else:
                 logger.info("⏸ Опрос Manual mode settings уже активен")
         else:
