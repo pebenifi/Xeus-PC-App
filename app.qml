@@ -64,6 +64,15 @@ Window {
         visible: true
         enabled: true
         z: 0
-        onLoaded: { if (item) item.visible = true }
+        onLoaded: { 
+            if (item) {
+                item.visible = true
+                // Когда Clinicalmode загружен и виден, возобновляем опросы для работы вкладок
+                if (clinicalModeLoader.z === 1 && typeof modbusManager !== 'undefined' && modbusManager) {
+                    modbusManager.resumePolling()
+                    console.log("✅ Clinicalmode загружен, опросы возобновлены")
+                }
+            }
+        }
     }
 }
