@@ -2179,28 +2179,6 @@ Item {
                                 spacing: 8
                                 TextField {
                                     id: seopLaserMaxTemp
-
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
-                                    background: Rectangle {
-                                        color: "#979797"
-                                    }
                                     width: 100
                                     height: 28
                                     font.pixelSize: 11
