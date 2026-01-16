@@ -273,6 +273,7 @@ class ModbusManager(QObject):
         self._pid_controller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
         self._pid_controller_setpoint_auto_update_timer.timeout.connect(self._autoUpdatePIDControllerSetpoint)
         self._pid_controller_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
+        self._reading_water_chiller = False  # Флаг для предотвращения параллельного чтения Water Chiller
         self._seop_cell_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._seop_cell_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
         self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
