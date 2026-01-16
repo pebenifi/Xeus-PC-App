@@ -76,13 +76,13 @@ class ModbusClient:
                         logger.info(f"Modbus {direction}: {hex_str}")
                         return packet
                     
-                    # Устанавливаем разумный таймаут для стабильной работы
+                    # Устанавливаем таймаут как в рабочей версии (ноябрь 2024)
                     self.client = ModbusTcpClient(
                         host=self.host, 
                         port=self.port, 
                         framer=actual_framer,
-                        timeout=1.0,  # 1 секунда для стабильной работы
-                        retries=1,     # 1 повтор для надежности
+                        timeout=2.0,  # 2 секунды - компромисс между стабильностью и отзывчивостью
+                        retries=1,    # 1 повтор для надежности
                         trace_packet=trace_packet  # Трассировка пакетов для отладки
                     )
                     
@@ -698,6 +698,12 @@ class ModbusClient:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1111")
                 return None
             
+            # Устанавливаем таймаут на сокет для чтения
+            try:
+                sock.settimeout(2.0)  # 2 секунды таймаут
+            except Exception:
+                pass
+            
             # Отправляем запрос дважды (первый может потеряться)
             read_frame = self._build_read_frame_1111()
             parsed = None
@@ -705,19 +711,19 @@ class ModbusClient:
             for i in range(2):
                 try:
                     sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
+                    time.sleep(0.05)  # Задержка для стабильности (как в рабочей версии)
                     resp = sock.recv(256)
                     if resp:
                         parsed = self._parse_read_response_1111(resp)
                         if parsed is not None:
                             break
-                except (ConnectionError, OSError) as e:
+                except (ConnectionError, OSError, socket.timeout) as e:
                     if i == 0:
                         logger.debug(f"Первая попытка чтения регистра 1111 не удалась (это нормально): {e}")
                     else:
-                        raise
+                        logger.warning(f"Вторая попытка чтения регистра 1111 не удалась: {e}")
                 if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
+                    time.sleep(0.1)  # Задержка между попытками
             
             return parsed
         except Exception as e:
@@ -870,6 +876,12 @@ class ModbusClient:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1511")
                 return None
             
+            # Устанавливаем таймаут на сокет для чтения
+            try:
+                sock.settimeout(2.0)  # 2 секунды таймаут
+            except Exception:
+                pass
+            
             # Отправляем запрос дважды (первый может потеряться)
             read_frame = self._build_read_frame_1511()
             parsed = None
@@ -877,19 +889,19 @@ class ModbusClient:
             for i in range(2):
                 try:
                     sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
+                    time.sleep(0.05)  # Задержка для стабильности (как в рабочей версии)
                     resp = sock.recv(256)
                     if resp:
                         parsed = self._parse_read_response_1511(resp)
                         if parsed is not None:
                             break
-                except (ConnectionError, OSError) as e:
+                except (ConnectionError, OSError, socket.timeout) as e:
                     if i == 0:
                         logger.debug(f"Первая попытка чтения регистра 1511 не удалась (это нормально): {e}")
                     else:
-                        raise
+                        logger.warning(f"Вторая попытка чтения регистра 1511 не удалась: {e}")
                 if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
+                    time.sleep(0.1)  # Задержка между попытками
             
             return parsed
         except Exception as e:
@@ -2066,14 +2078,14 @@ class ModbusClient:
             
             # Устанавливаем таймаут на сокет для чтения
             try:
-                sock.settimeout(1.0)  # 1 секунда таймаут
+                sock.settimeout(2.0)  # 2 секунды таймаут
             except Exception:
                 pass
             
             for i in range(2):
                 try:
                     sock.sendall(read_frame)
-                    time.sleep(0.02)  # Небольшая задержка для стабильности
+                    time.sleep(0.05)  # Задержка для стабильности (как в рабочей версии)
                     resp = sock.recv(256)
                     if resp:
                         parsed = self._parse_read_response_1131(resp)
