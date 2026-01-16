@@ -5932,12 +5932,25 @@ Item {
                     readOnly: true
                     font.pixelSize: 10
                     font.family: "Courier"
-                    color: "#000000"
+                    color: "#ffffff"
                     wrapMode: TextArea.Wrap
                     background: Rectangle {
                         color: "#424242"
                     }
                     text: "Logs will appear here..."
+                }
+
+                Connections {
+                    target: modbusManager
+                    function onLogMessageChanged(message) {
+                        if (logsTextArea.text === "Logs will appear here...") {
+                            logsTextArea.text = message
+                        } else {
+                            logsTextArea.text += "\n" + message
+                        }
+                        // Автоматически прокручиваем вниз
+                        logsScrollView.ScrollBar.vertical.position = 1.0
+                    }
                 }
             }
 
