@@ -1545,6 +1545,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: laserVoltageSetpoint
                                     width: 100
                                     height: 28
@@ -1584,6 +1587,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: laserCurrentSetpoint
                                     width: 100
                                     height: 28
@@ -1671,6 +1677,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: magnetVoltageSetpoint
                                     width: 100
                                     height: 28
@@ -1710,6 +1719,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: magnetCurrentSetpoint
                                     width: 100
                                     height: 28
@@ -1835,6 +1847,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: pidControllerSetpoint
                                     width: 100
                                     height: 28
@@ -1949,6 +1964,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: xenonSetpoint
                                     width: 100
                                     height: 28
@@ -2006,6 +2024,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: n2Setpoint
                                     width: 100
                                     height: 28
@@ -2107,6 +2128,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopLaserMaxTemp
                                     width: 100
                                     height: 28
@@ -2154,6 +2178,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopLaserMinTemp
                                     width: 100
                                     height: 28
@@ -2201,6 +2228,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopCellMaxTemp
                                     width: 100
                                     height: 28
@@ -2248,6 +2278,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopCellMinTemp
                                     width: 100
                                     height: 28
@@ -2295,6 +2328,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopRampTemp
                                     width: 100
                                     height: 28
@@ -2335,6 +2371,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopTemp
                                     width: 100
                                     height: 28
@@ -2382,6 +2421,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopCellRefillTemp
                                     width: 100
                                     height: 28
@@ -2422,6 +2464,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopLoopTime
                                     width: 100
                                     height: 28
@@ -2469,6 +2514,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopProcessDuration
                                     width: 100
                                     height: 28
@@ -2519,6 +2567,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopLaserMaxOutputPower
                                     width: 100
                                     height: 28
@@ -2566,6 +2617,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopLaserPSUMaxCurrent
                                     width: 100
                                     height: 28
@@ -2613,6 +2667,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopWaterChillerMaxTemp
                                     width: 100
                                     height: 28
@@ -2660,6 +2717,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopWaterChillerMinTemp
                                     width: 100
                                     height: 28
@@ -2707,6 +2767,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopXeConcentration
                                     width: 100
                                     height: 28
@@ -2754,6 +2817,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopWaterProtonConcentration
                                     width: 100
                                     height: 28
@@ -2801,6 +2867,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopCellNumber
                                     width: 100
                                     height: 28
@@ -2847,6 +2916,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: seopRefillCycle
                                     width: 100
                                     height: 28
@@ -3298,6 +3370,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: measuredColdCellIRSignal
                                     width: 100
                                     height: 28
@@ -3344,6 +3419,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: measuredHotCellIRSignal
                                     width: 100
                                     height: 28
@@ -3390,6 +3468,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: measuredWater1HNMRReferenceSignal
                                     width: 100
                                     height: 28
@@ -3436,6 +3517,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: measuredWaterT2
                                     width: 100
                                     height: 28
@@ -3506,6 +3590,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: measuredHP129XeT2
                                     width: 100
                                     height: 28
@@ -3622,6 +3709,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalMagnetPSUCurrentProtonNMR
                                     width: 100
                                     height: 28
@@ -3669,6 +3759,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalMagnetPSUCurrent129XeNMR
                                     width: 100
                                     height: 28
@@ -3716,6 +3809,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalOperationalLaserPSUCurrent
                                     width: 100
                                     height: 28
@@ -3763,6 +3859,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalRFPulseDuration
                                     width: 100
                                     height: 28
@@ -3809,6 +3908,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalResonanceFrequency
                                     width: 100
                                     height: 28
@@ -3856,6 +3958,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalProtonRFPulsePower
                                     width: 100
                                     height: 28
@@ -3903,6 +4008,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalHP129XeRFPulsePower
                                     width: 100
                                     height: 28
@@ -3950,6 +4058,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalStepSizeB0SweepHP129Xe
                                     width: 100
                                     height: 28
@@ -3997,6 +4108,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalStepSizeB0SweepProtons
                                     width: 100
                                     height: 28
@@ -4044,6 +4158,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalXeAlicatsPressure
                                     width: 100
                                     height: 28
@@ -4091,6 +4208,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalNitrogenAlicatsPressure
                                     width: 100
                                     height: 28
@@ -4138,6 +4258,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalChillerTempSetpoint
                                     width: 100
                                     height: 28
@@ -4184,6 +4307,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalSEOPResonanceFrequency
                                     width: 100
                                     height: 28
@@ -4231,6 +4357,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalSEOPResonanceFrequencyTolerance
                                     width: 100
                                     height: 28
@@ -4277,6 +4406,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalIRSpectrometerNumberOfScans
                                     width: 100
                                     height: 28
@@ -4323,6 +4455,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalIRSpectrometerExposureDuration
                                     width: 100
                                     height: 28
@@ -4370,6 +4505,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additional1HReferenceNScans
                                     width: 100
                                     height: 28
@@ -4416,6 +4554,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additional1HCurrentSweepNScans
                                     width: 100
                                     height: 28
@@ -4462,6 +4603,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalBaselineCorrectionMinFrequency
                                     width: 100
                                     height: 28
@@ -4509,6 +4653,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: additionalBaselineCorrectionMaxFrequency
                                     width: 100
                                     height: 28
@@ -4668,6 +4815,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeRFPulseFrequency
                                     width: 100
                                     height: 28
@@ -4715,6 +4865,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeRFPulsePower
                                     width: 100
                                     height: 28
@@ -4762,6 +4915,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeRFPulseDuration
                                     width: 100
                                     height: 28
@@ -4809,6 +4965,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModePreAcquisition
                                     width: 100
                                     height: 28
@@ -4856,6 +5015,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeNMRGain
                                     width: 100
                                     height: 28
@@ -4903,6 +5065,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeNMRNumberOfScans
                                     width: 100
                                     height: 28
@@ -4949,6 +5114,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeNMRRecovery
                                     width: 100
                                     height: 28
@@ -4996,6 +5164,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeCenterFrequency
                                     width: 100
                                     height: 28
@@ -5043,6 +5214,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: manualModeFrequencySpan
                                     width: 100
                                     height: 28
@@ -5292,11 +5466,17 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
                                 TextField {
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                     id: waterChillerSetpoint
                                     width: 100
                                     height: 28
                                     font.pixelSize: 11
                                     placeholderText: "0.00"
+                                    background: Rectangle {
+                                        color: "#979797"
+                                    }
                                 }
                                 Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
