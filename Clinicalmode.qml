@@ -5935,7 +5935,7 @@ Item {
                     color: "#000000"
                     wrapMode: TextArea.Wrap
                     background: Rectangle {
-                        color: "#ffffff"
+                        color: "#424242"
                     }
                     text: "Logs will appear here..."
                 }
