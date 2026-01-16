@@ -5923,7 +5923,7 @@ Item {
             ScrollView {
                 id: logsScrollView
                 width: parent.width
-                height: (parent.height - 50) * 0.4
+                height: Math.max(150, (parent.height - 200) * 0.4)
                 clip: true
 
                 TextArea {
@@ -5933,6 +5933,7 @@ Item {
                     font.pixelSize: 10
                     font.family: "Courier"
                     color: "#000000"
+                    wrapMode: TextArea.Wrap
                     background: Rectangle {
                         color: "#ffffff"
                     }
@@ -5962,7 +5963,7 @@ Item {
 
             ScrollView {
                 width: parent.width
-                height: (parent.height - 50) * 0.6 - 40
+                height: Math.max(200, (parent.height - 200) * 0.6)
                 clip: true
 
                 Column {
