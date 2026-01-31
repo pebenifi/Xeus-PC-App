@@ -237,6 +237,8 @@ class ModbusManager(QObject):
     # IR spectrum (Clinicalmode/Screen01 IR graph)
     # Важно: используем QVariantMap, чтобы QML видел обычный JS object/array, а не PyObjectWrapper.
     irSpectrumChanged = Signal('QVariantMap')  # payload map: {x_min,x_max,y_min,y_max,points,data,...}
+    # NMR spectrum (Clinicalmode NMR graph)
+    nmrSpectrumChanged = Signal('QVariantMap')  # payload map: {samples,x_min,x_max,y_min,y_max,freq,ampl,int,t2,points,data,...}
     # Logging signal for Clinicalmode screen
     logMessageChanged = Signal(str)  # log message to display in logs TextArea
 
@@ -432,6 +434,10 @@ class ModbusManager(QObject):
         # IR spectrum cache
         self._ir_last = None
         self._ir_request_in_flight = False
+        
+        # NMR spectrum cache
+        self._nmr_last = None
+        self._nmr_request_in_flight = False
         
         # Буфер состояний устройств для мгновенного отображения при переключении страниц
         # Реле (регистр 1021)
@@ -1461,6 +1467,11 @@ class ModbusManager(QObject):
             if value is None:
                 logger.warning("IR spectrum read returned None")
             self._applyIrSpectrum(value)
+        elif key == "nmr":
+            self._nmr_request_in_flight = False
+            if value is None:
+                logger.warning("NMR spectrum read returned None")
+            self._applyNmrSpectrum(value)
         else:
             # Это могут быть "fire-and-forget" задачи; игнорируем.
             return
@@ -1990,6 +2001,22 @@ class ModbusManager(QObject):
         )
         self._ir_last = value
         self.irSpectrumChanged.emit(value)
+    
+    def _applyNmrSpectrum(self, value: object):
+        """
+        Применяет результат чтения NMR спектра (GUI поток) и дергает сигнал для QML графика.
+        """
+        if not value or not isinstance(value, dict):
+            logger.warning("NMR spectrum: empty/invalid payload (not a dict or None)")
+            return
+        pts = value.get("points")
+        logger.info(
+            f"NMR spectrum: payload received, points={len(pts) if isinstance(pts, list) else 'n/a'} "
+            f"x=[{value.get('x_min')},{value.get('x_max')}] y=[{value.get('y_min')},{value.get('y_max')}] "
+            f"freq={value.get('freq', 'n/a')}"
+        )
+        self._nmr_last = value
+        self.nmrSpectrumChanged.emit(value)
 
     @Slot(result=bool)
     def requestIrSpectrum(self) -> bool:
@@ -2216,15 +2243,54 @@ class ModbusManager(QObject):
                 logger.warning("IR spectrum: y_values empty (no points)")
                 return None
 
-            # Преобразование для отображения:
-            # Значения могут быть отрицательными -> интерпретируем как int16 (two's complement).
-            # => отображаем как int16 / 100.0
-            def _to_int16(u16: int) -> int:
-                return u16 - 65536 if u16 >= 32768 else u16
-
-            y_values_raw_i16 = [_to_int16(v) for v in y_values_raw_u16]
-            scale = 100.0
-            y_values = [float(v) / scale for v in y_values_raw_i16]
+            # Алгоритм обработки IR данных (как на устройстве):
+            # 1. Умножаем на 100 и делим на 65535 - получаем float массив
+            # 2. Вычисляем среднее значение: количество точек делим на 5, 
+            #    суммируем первые n/5 точек, делим на n/5
+            # 3. От каждой точки отнимаем среднее - данные смещаются в ноль
+            
+            # Шаг 1: Преобразуем uint16 в float (умножаем на 100, делим на 65535)
+            points_float = [float(v) * 100.0 / 65535.0 for v in y_values_raw_u16]
+            
+            # Шаг 2: Вычисляем среднее m по первым n*0.2 точкам (20%) - как в устройстве: n = pointsN * 0.2
+            n = len(points_float)
+            n_avg = int(n * 0.2)  # pointsN * 0.2 (как в устройстве)
+            if n_avg == 0:
+                n_avg = 1  # Минимум 1 точка
+            
+            m = 0.0
+            for i in range(n_avg):
+                m += points_float[i]
+            m /= float(n_avg)
+            
+            logger.info(f"IR spectrum: baseline correction - n={n}, n_avg={n_avg}, baseline={m:.6f}")
+            
+            # Шаг 3: От каждой точки отнимаем m и обновляем массив на месте (как в устройстве)
+            # Одновременно ищем максимум max и его индекс imax
+            max_val = 0.0
+            imax = 0
+            for i in range(n):
+                f = points_float[i] - m
+                points_float[i] = f  # Обновляем массив на месте (как pointsAvg[i] = f в устройстве)
+                if f > max_val:
+                    max_val = f
+                    imax = i
+            
+            # Теперь points_float содержит обработанные данные (после baseline correction)
+            # Шаг 4: Масштабирование для отображения (подбираем коэффициент)
+            # На устройстве значения от -40 до 60, у нас после baseline correction примерно -0.1 до 0.13
+            # Если max ≈ 0.13 должен стать ≈ 60, то коэффициент ≈ 60/0.13 ≈ 460-470
+            # Используем коэффициент 460 для получения диапазона примерно -40 до 60
+            scale_factor = 460.0
+            
+            y_values = [v * scale_factor for v in points_float]
+            max_scaled = max_val * scale_factor
+            
+            logger.info(f"IR spectrum: after baseline correction - max={max_val:.6f} at index={imax}")
+            logger.info(f"IR spectrum: after scaling (factor={scale_factor}) - max={max_scaled:.6f}, range=[{min(y_values):.6f}, {max(y_values):.6f}]")
+            
+            # Сохраняем raw значения для диагностики
+            y_values_raw_i16 = y_values_raw_u16  # Для совместимости с существующим кодом
 
             # Убеждаемся, что у нас ровно 58 точек
             if len(y_values) != 58:
@@ -2260,24 +2326,28 @@ class ModbusManager(QObject):
                 for i, y in enumerate(y_values):
                     points.append({"x": float(i), "y": float(y)})
 
-            # Для оси Y используем y_min/y_max из МЕТАДАННЫХ (регистры 405-408),
-            # а не из данных! Это важно для правильного отображения графика.
-            # y_min_meta и y_max_meta - это значения из метаданных устройства.
-            # Проверяем валидность: y_min должен быть < y_max, и оба должны быть разумными значениями
-            y_min = float(y_min_meta) if math.isfinite(y_min_meta) else 0.0
-            y_max = float(y_max_meta) if math.isfinite(y_max_meta) else 1.0
-            
-            # Проверяем, что метаданные валидны и разумны
-            # Если y_min >= y_max или значения выходят за разумные пределы, используем fallback
-            if (not math.isfinite(y_min_meta) or not math.isfinite(y_max_meta) or 
-                y_min >= y_max or y_min < -100 or y_max > 1000):
-                if y_values:
-                    y_min_data = float(min(y_values))
-                    y_max_data = float(max(y_values))
-                    if math.isfinite(y_min_data) and math.isfinite(y_max_data):
-                        y_min = y_min_data
-                        y_max = y_max_data
-                        logger.warning(f"IR spectrum: metadata y_min={y_min_meta:.6f} y_max={y_max_meta:.6f} invalid, using data range [{y_min:.6f}, {y_max:.6f}]")
+            # Для оси Y используем диапазон из обработанных данных (после baseline correction)
+            # После вычитания среднего данные смещены в ноль, поэтому используем min/max из обработанных данных
+            if y_values:
+                y_min_data = float(min(y_values))
+                y_max_data = float(max(y_values))
+                if math.isfinite(y_min_data) and math.isfinite(y_max_data):
+                    y_min = y_min_data
+                    y_max = y_max_data
+                    # Добавляем небольшой отступ для лучшей видимости
+                    y_range = y_max - y_min
+                    if y_range > 0:
+                        pad = y_range * 0.1  # 10% отступ
+                        y_min = y_min - pad
+                        y_max = y_max + pad
+                    logger.info(f"IR spectrum: using processed data range for Y axis: [{y_min:.6f}, {y_max:.6f}] (after baseline correction)")
+                else:
+                    y_min = 0.0
+                    y_max = 1.0
+                    logger.warning(f"IR spectrum: processed data range invalid, using fallback")
+            else:
+                y_min = 0.0
+                y_max = 1.0
 
             for name, val in (
                 ("x_min", x_min),
@@ -2291,9 +2361,9 @@ class ModbusManager(QObject):
                 if not math.isfinite(val):
                     logger.warning(f"IR spectrum: {name} is not finite: {val}")
 
-            # Вычисляем min/max из данных для сравнения
-            y_min_data = float(min(y_values)) if y_values else 0.0
-            y_max_data = float(max(y_values)) if y_values else 1.0
+            # Вычисляем min/max из обработанных данных для логирования
+            y_min_processed = float(min(y_values)) if y_values else 0.0
+            y_max_processed = float(max(y_values)) if y_values else 1.0
             
             # Форматируем метаданные для логирования
             y_min_meta_str = f"{y_min_meta:.6f}" if math.isfinite(y_min_meta) else "nan"
@@ -2301,10 +2371,11 @@ class ModbusManager(QObject):
             
             logger.info(
                 f"IR spectrum decoded: status={status} x=[{x_min:.6f},{x_max:.6f}] "
-                f"y_axis=[{y_min:.6f},{y_max:.6f}] (from metadata) y_data_range=[{y_min_data:.6f},{y_max_data:.6f}] (from data) "
+                f"y_axis=[{y_min:.6f},{y_max:.6f}] (from processed data after baseline correction) "
+                f"y_processed_range=[{y_min_processed:.6f},{y_max_processed:.6f}] "
                 f"y_min_meta={y_min_meta_str} y_max_meta={y_max_meta_str} "
+                f"baseline={m:.6f} "
                 f"points={len(points)} (expected 58) raw_u16_range=[{min(y_values_raw_u16) if y_values_raw_u16 else 'n/a'},{max(y_values_raw_u16) if y_values_raw_u16 else 'n/a'}] "
-                f"raw_i16_range=[{min(y_values_raw_i16) if y_values_raw_i16 else 'n/a'},{max(y_values_raw_i16) if y_values_raw_i16 else 'n/a'}] "
                 f"first10_y_values={y_values[:10]} last10_y_values={y_values[-10:]}"
             )
 
@@ -2358,6 +2429,185 @@ class ModbusManager(QObject):
             return result
 
         self._enqueue_read("ir", task)
+        return True
+
+    @Slot(result=bool)
+    def requestNmrSpectrum(self) -> bool:
+        """
+        Чтение NMR данных как команда `nmr` из test_modbus, но безопасно:
+        отправляем запросы чанками по 10 регистров, иначе устройство может "уронить" сокет.
+
+        Регистры:
+        - 100: samples
+        - 101-102: x_min (float, формат CDAB)
+        - 103-104: x_max (float, формат CDAB)
+        - 105-106: y_min (float, формат CDAB)
+        - 107-108: y_max (float, формат CDAB)
+        - 109-110: freq (float, формат CDAB)
+        - 111-112: ampl (float, формат CDAB)
+        - 113-114: integral (float, формат CDAB)
+        - 115-116: t2 (float, формат CDAB)
+        - 120-375: data (ushort) - 256 регистров
+        """
+        if not self._is_connected or self._modbus_client is None:
+            logger.info("NMR spectrum request ignored: not connected")
+            return False
+        if self._nmr_request_in_flight:
+            logger.info("NMR spectrum request ignored: previous request still in flight")
+            return False
+
+        self._nmr_request_in_flight = True
+        logger.info("NMR spectrum request queued")
+
+        client = self._modbus_client
+
+        def task():
+            import math
+            import struct
+            
+            # Читаем метаданные 100-116 (17 регистров)
+            meta = client.read_input_registers_direct(100, 17, max_chunk=17)
+            if meta is None or len(meta) < 17:
+                logger.warning(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
+                return None
+
+            # Читаем данные 120-375 (256 регистров) частями по 10
+            data_regs = client.read_input_registers_direct(120, 256, max_chunk=10)
+            if data_regs is None or len(data_regs) < 256:
+                logger.warning(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                return None
+
+            logger.info(
+                f"NMR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
+                f"data_length={len(data_regs)} data_first10={data_regs[0:10]} data_last10={data_regs[-10:] if len(data_regs) >= 10 else data_regs}"
+            )
+
+            samples = int(meta[0])
+            
+            # Функция для декодирования float из двух uint16 в формате CDAB
+            def _float_from_regs_cdab(reg1: int, reg2: int) -> float:
+                """Декодируем float из двух uint16 в формате CDAB (swap words)"""
+                C = (reg2 >> 8) & 0xFF
+                D = reg2 & 0xFF
+                A = (reg1 >> 8) & 0xFF
+                B = reg1 & 0xFF
+                bb = bytes([C, D, A, B])
+                try:
+                    return float(struct.unpack(">f", bb)[0])
+                except Exception:
+                    return float("nan")
+
+            # Декодируем все float метаданные в формате CDAB
+            x_min = _float_from_regs_cdab(int(meta[1]), int(meta[2]))
+            x_max = _float_from_regs_cdab(int(meta[3]), int(meta[4]))
+            y_min = _float_from_regs_cdab(int(meta[5]), int(meta[6]))
+            y_max = _float_from_regs_cdab(int(meta[7]), int(meta[8]))
+            freq = _float_from_regs_cdab(int(meta[9]), int(meta[10]))
+            ampl = _float_from_regs_cdab(int(meta[11]), int(meta[12]))
+            integral = _float_from_regs_cdab(int(meta[13]), int(meta[14]))
+            t2 = _float_from_regs_cdab(int(meta[15]), int(meta[16]))
+
+            # Проверяем валидность значений
+            if not math.isfinite(x_min) or not math.isfinite(x_max) or x_max <= x_min:
+                logger.warning(f"NMR spectrum: invalid x range: [{x_min}, {x_max}]")
+                return None
+
+            # Данные - это амплитуды (ampl) в виде uint16 значений (256 регистров)
+            # Ось X: частота (x_min до x_max)
+            # Ось Y: амплитуда (данные из регистров 120-375)
+            # Читаем raw uint16 значения
+            data_values_raw = [int(v) for v in data_regs[:256]]
+            
+            # Логируем для отладки
+            non_zero_count = sum(1 for v in data_values_raw if v != 0)
+            non_zero_indices = [i for i, v in enumerate(data_values_raw) if v != 0]
+            logger.info(f"NMR spectrum: raw data - total={len(data_values_raw)}, non_zero={non_zero_count}, "
+                       f"non_zero_indices_range=[{min(non_zero_indices) if non_zero_indices else 'N/A'}, {max(non_zero_indices) if non_zero_indices else 'N/A'}], "
+                       f"first10={data_values_raw[:10]}, last10={data_values_raw[-10:]}")
+            
+            # Используем raw значения напрямую
+            # Если ampl из метаданных разумный, можно использовать его для проверки масштаба
+            # но пока используем raw значения
+            data_values = data_values_raw
+            
+            # Собираем точки для графика
+            # X координата: частота, равномерно распределена от x_min до x_max
+            # Y координата: амплитуда из данных
+            # Для правильного отображения используем raw значения напрямую
+            points = []
+            if len(data_values) >= 2 and x_max != x_min:
+                step = (x_max - x_min) / float(len(data_values) - 1)
+                for i, ampl_value in enumerate(data_values):
+                    freq_x = x_min + step * i
+                    ampl_y = float(ampl_value)  # Raw uint16 значение амплитуды
+                    points.append({"x": freq_x, "y": ampl_y})
+            else:
+                for i, ampl_value in enumerate(data_values):
+                    points.append({"x": float(i), "y": float(ampl_value)})
+            
+            # Логируем первые несколько точек для отладки
+            if len(points) > 0:
+                logger.info(f"NMR spectrum: first 3 points: {points[0]}, {points[1] if len(points) > 1 else 'N/A'}, {points[2] if len(points) > 2 else 'N/A'}")
+                logger.info(f"NMR spectrum: last 3 points: {points[-3] if len(points) > 2 else 'N/A'}, {points[-2] if len(points) > 1 else 'N/A'}, {points[-1]}")
+                # Проверяем, что X координаты разные
+                if len(points) > 1:
+                    x_first = points[0]['x']
+                    x_last = points[-1]['x']
+                    x_mid = points[len(points) // 2]['x']
+                    logger.info(f"NMR spectrum: X coordinates check - first={x_first:.2f}, mid={x_mid:.2f}, last={x_last:.2f}, range={x_last - x_first:.2f}")
+                    # Проверяем, что Y координаты не все нули
+                    non_zero_y = sum(1 for p in points if p['y'] != 0)
+                    logger.info(f"NMR spectrum: Y coordinates check - non_zero count={non_zero_y} out of {len(points)}, first_y={points[0]['y']}, last_y={points[-1]['y']}")
+
+            # Для оси Y (амплитуда) используем диапазон из данных
+            if data_values:
+                ampl_min = float(min(data_values))
+                ampl_max = float(max(data_values))
+            else:
+                ampl_min = 0.0
+                ampl_max = 1.0
+
+            # Устанавливаем диапазон оси Y на основе данных амплитуды
+            y_axis_min = ampl_min
+            y_axis_max = ampl_max
+            
+            # Добавляем небольшой отступ для лучшей видимости
+            ampl_range = y_axis_max - y_axis_min
+            if ampl_range > 0:
+                pad = ampl_range * 0.05  # 5% отступ
+                y_axis_min = max(0.0, y_axis_min - pad)
+                y_axis_max = y_axis_max + pad
+
+            logger.info(
+                f"NMR spectrum decoded: samples={samples} "
+                f"freq_range=[{x_min:.6f},{x_max:.6f}] (X axis) "
+                f"ampl_range=[{y_axis_min:.6f},{y_axis_max:.6f}] (Y axis) "
+                f"ampl_data_range=[{ampl_min:.6f},{ampl_max:.6f}] "
+                f"freq={freq:.6f} ampl={ampl:.6f} integral={integral:.6f} t2={t2:.6f} "
+                f"points={len(points)}"
+            )
+
+            # Возвращаем результат
+            import json
+            result = {
+                "samples": samples,
+                "x_min": float(x_min),
+                "x_max": float(x_max),
+                "y_min": float(y_axis_min),
+                "y_max": float(y_axis_max),
+                "freq": float(freq) if math.isfinite(freq) else None,
+                "ampl": float(ampl) if math.isfinite(ampl) else None,
+                "integral": float(integral) if math.isfinite(integral) else None,
+                "t2": float(t2) if math.isfinite(t2) else None,
+                "data": data_values,
+                "data_json": json.dumps(data_values),
+                "points": points,
+            }
+            
+            logger.info(f"NMR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
+            return result
+
+        self._enqueue_read("nmr", task)
         return True
 
     def _check_connection(self):
