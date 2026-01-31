@@ -628,16 +628,57 @@ def read_ir_data(sock):
     if not y_values_raw_u16:
         print("⚠️  Предупреждение: y_values пустые")
     
-    # Преобразование для отображения:
-    # Значения могут быть отрицательными -> интерпретируем как int16 (two's complement).
-    # По данным устройства сырые значения ~4200 соответствуют пикам ~85, т.е. шаг ~0.02.
-    # => отображаем как int16 / 50.0 (получим примерно диапазон -10..85).
-    def _to_int16(u16: int) -> int:
-        return u16 - 65536 if u16 >= 32768 else u16
+    # Алгоритм обработки IR данных (как на устройстве):
+    # 1. Умножаем на 100 и делим на 65535 - получаем float массив
+    # 2. Вычисляем среднее значение: количество точек делим на 5, 
+    #    суммируем первые n/5 точек, делим на n/5
+    # 3. От каждой точки отнимаем среднее - данные смещаются в ноль
     
-    y_values_raw_i16 = [_to_int16(v) for v in y_values_raw_u16]
-    scale = 100.0
-    y_values = [float(v) / scale for v in y_values_raw_i16]
+    # Шаг 1: Преобразуем uint16 в float (умножаем на 100, делим на 65535)
+    points_float = [float(v) * 100.0 / 65535.0 for v in y_values_raw_u16]
+    
+    # Шаг 2: Вычисляем среднее m по первым n*0.2 точкам (20%) - как в устройстве: n = pointsN * 0.2
+    n = len(points_float)
+    n_avg = int(n * 0.2)  # pointsN * 0.2 (как в устройстве)
+    if n_avg == 0:
+        n_avg = 1  # Минимум 1 точка
+    
+    m = 0.0
+    for i in range(n_avg):
+        m += points_float[i]
+    m /= float(n_avg)
+    
+    print(f"  Baseline correction: n={n}, n_avg={n_avg}, baseline={m:.6f}")
+    
+    # Шаг 3: От каждой точки отнимаем m и обновляем массив на месте (как в устройстве)
+    # Одновременно ищем максимум max и его индекс imax
+    max_val = 0.0
+    imax = 0
+    for i in range(n):
+        f = points_float[i] - m
+        points_float[i] = f  # Обновляем массив на месте (как pointsAvg[i] = f в устройстве)
+        if f > max_val:
+            max_val = f
+            imax = i
+    
+    # Теперь points_float содержит обработанные данные (после baseline correction)
+    # Шаг 4: Масштабирование для отображения (подбираем коэффициент)
+    # На устройстве значения от -40 до 60, у нас после baseline correction примерно -0.1 до 0.13
+    # Если max ≈ 0.13 должен стать ≈ 60, то коэффициент ≈ 60/0.13 ≈ 460-470
+    # Пробуем разные коэффициенты:
+    # - 500: для max=0.13 получим 65 (близко к 60)
+    # - 470: для max=0.13 получим 61 (еще ближе)
+    # - 460: для max=0.13 получим 60 (точно)
+    scale_factor = 460.0  # Подбираем для получения диапазона -40 до 60
+    
+    y_values = [v * scale_factor for v in points_float]
+    max_scaled = max_val * scale_factor
+    
+    print(f"  After baseline correction: max={max_val:.6f} at index={imax}")
+    print(f"  After scaling (factor={scale_factor}): max={max_scaled:.6f}, range=[{min(y_values):.6f}, {max(y_values):.6f}]")
+    
+    # Для совместимости с существующим кодом
+    y_values_raw_i16 = y_values_raw_u16
     
     # Для отображения используем диапазон из преобразованных данных
     if y_values:
@@ -667,7 +708,7 @@ def read_ir_data(sock):
     print(f"  Scaled y диапазон: [{y_min:.6f}, {y_max:.6f}]")
     print(f"  Первые 10 значений данных: {y_values[:10]}")
     print(f"  Последние 10 значений данных: {y_values[-10:]}")
-    print(f"\n  Все 58 значений Y (после деления на 100.0):")
+    print(f"\n  Все 58 значений Y (после baseline correction):")
     for i, y_val in enumerate(y_values):
         print(f"    [{i:2d}] = {y_val:.6f}")
     print()
@@ -688,6 +729,193 @@ def read_ir_data(sock):
         "points": points,
     }
 
+def read_ir_data_int(sock):
+    """
+    Чтение IR данных как int значений (использует те же регистры, что и read_ir_data):
+    - Регистры 400-414: метаданные (15 регистров)
+    - Регистры 420-477: данные (58 регистров)
+    
+    Отличие от read_ir_data: данные преобразуются в int16 напрямую, без деления на 100.0
+    """
+    import math
+    import struct
+    
+    print(f"\n=== Чтение IR данных как int (регистры 400-414, 420-477) ===")
+    
+    # Варианты для проверки (если первый не сработает)
+    address_variants = [400, 399, 0]  # 400, 399 (0-based), 0 (относительная адресация)
+    
+    # Читаем регистры частями (те же, что и в read_ir_data)
+    read_ranges = [
+        (0, 15),      # 0-14 (15 регистров) - метаданные (400-414)
+        (20, 58),     # 20-77 (58 регистров) - данные (420-477)
+    ]
+    
+    # Пробуем первый вариант адресации
+    address_base = address_variants[0]
+    print(f"Попытка чтения с базовым адресом {address_base}...")
+    
+    # Словарь для хранения прочитанных регистров по их реальным адресам
+    registers_dict = {}
+    
+    for start_offset, quantity in read_ranges:
+        start_addr = address_base + start_offset
+        print(f"Чтение регистров {start_addr}-{start_addr + quantity - 1} ({quantity} регистров)...")
+        
+        frame = build_read_multiple_registers_frame(4, start_addr, quantity)
+        
+        try:
+            hex_dump("TX", frame)
+            sock.sendall(frame)
+            
+            time.sleep(0.1)
+            
+            # Читаем ответ с таймаутом
+            resp = b''
+            try:
+                sock.settimeout(0.5)
+                while True:
+                    chunk = sock.recv(512)
+                    if not chunk:
+                        break
+                    resp += chunk
+                    if len(resp) >= 5:
+                        start_idx = find_modbus_frame_start(resp)
+                        if start_idx >= 0:
+                            frame_start = resp[start_idx:]
+                            if len(frame_start) >= 3:
+                                byte_count = frame_start[2]
+                                expected_length = 3 + byte_count + 2
+                                if len(frame_start) >= expected_length:
+                                    break
+            except socket.timeout:
+                pass
+            finally:
+                sock.settimeout(2.0)
+            
+            if resp:
+                hex_dump("RX", resp)
+                
+                parsed = parse_multiple_registers_response(resp)
+                if not parsed:
+                    print("Ошибка: не удалось распарсить ответ")
+                    return None
+                
+                # Проверяем на ошибку Modbus
+                if parsed.get('is_error'):
+                    error_msg = parsed['error_message']
+                    error_code = parsed['error_code']
+                    print(f"❌ Ошибка Modbus: {error_msg} (код {error_code})")
+                    print(f"   Функция: {parsed['function']:02d}")
+                    print(f"   Адрес: {start_addr}")
+                    
+                    # Если это ошибка адреса, пробуем другие варианты
+                    if error_code == 2 and address_base == address_variants[0]:
+                        print(f"\n⚠️  Пробуем альтернативный адрес...")
+                        address_base = address_variants[1]
+                        print(f"Повторная попытка с базовым адресом {address_base}...")
+                        registers_dict = {}
+                        for retry_offset, retry_quantity in read_ranges:
+                            retry_addr = address_base + retry_offset
+                            print(f"Чтение регистров {retry_addr}-{retry_addr + retry_quantity - 1} ({retry_quantity} регистров)...")
+                            retry_frame = build_read_multiple_registers_frame(4, retry_addr, retry_quantity)
+                            hex_dump("TX", retry_frame)
+                            sock.sendall(retry_frame)
+                            time.sleep(0.1)
+                            retry_resp = sock.recv(512)
+                            if retry_resp:
+                                hex_dump("RX", retry_resp)
+                                retry_parsed = parse_multiple_registers_response(retry_resp)
+                                if retry_parsed and not retry_parsed.get('is_error'):
+                                    retry_registers = retry_parsed.get('registers', [])
+                                    for j, reg_value in enumerate(retry_registers):
+                                        real_addr = retry_addr + j
+                                        registers_dict[real_addr] = reg_value
+                                    print(f"✓ Прочитано {len(retry_registers)} регистров")
+                                else:
+                                    print(f"❌ Ошибка при чтении регистров {retry_addr}")
+                                    return None
+                        break
+                    else:
+                        return None
+                
+                if not parsed.get('crc_valid', True):
+                    print(f"⚠️  Предупреждение: CRC не валиден!")
+                
+                registers = parsed.get('registers', [])
+                if len(registers) < quantity:
+                    print(f"⚠️  Предупреждение: получено только {len(registers)} регистров вместо {quantity}")
+                    return None
+                
+                # Сохраняем регистры в словарь по их реальным адресам
+                for i, reg_value in enumerate(registers):
+                    real_addr = start_addr + i
+                    registers_dict[real_addr] = reg_value
+                
+                print(f"✓ Прочитано {len(registers)} регистров")
+                
+            else:
+                print("RX: (empty)")
+                return None
+        except socket.timeout:
+            print("RX: (timeout)")
+            return None
+        except (ConnectionError, OSError) as e:
+            print(f"Ошибка соединения: {e}")
+            return None
+    
+    # Проверяем, что получили все необходимые регистры
+    expected_count = 15 + 58  # 73 регистра
+    if len(registers_dict) < expected_count:
+        print(f"❌ Ошибка: получено только {len(registers_dict)} регистров вместо {expected_count}")
+        return None
+    
+    # Создаем полный массив с пропуском между 414 и 420
+    full_registers = [0] * 78  # 400-477 включительно = 78 регистров
+    for i in range(400, 415):
+        if i in registers_dict:
+            full_registers[i - 400] = registers_dict[i]
+    for i in range(420, 478):
+        if i in registers_dict:
+            full_registers[i - 400] = registers_dict[i]
+    
+    all_registers = full_registers
+    meta = all_registers[0:15]  # Метаданные (400-414)
+    data_regs = all_registers[20:78]  # Данные (420-477)
+    
+    print(f"Метаданные [0..4]: {meta[0:5]} (hex: {[hex(int(x)) for x in meta[0:5]]})")
+    print(f"Данные первые 10: {data_regs[0:10]}, последние 3: {data_regs[-3:]}")
+    
+    status = int(meta[0])
+    
+    # Преобразуем данные из uint16 в int16 (two's complement) БЕЗ деления на 100.0
+    def _to_int16(u16: int) -> int:
+        return u16 - 65536 if u16 >= 32768 else u16
+    
+    int_values = [_to_int16(int(v)) for v in data_regs[:58]]
+    
+    print(f"\n✓ IR данные прочитаны как int:")
+    print(f"  Статус: {status}")
+    print(f"  Всего значений данных: {len(int_values)}")
+    print(f"  Диапазон значений: [{min(int_values)}, {max(int_values)}]")
+    print(f"  Первые 10 значений: {int_values[:10]}")
+    print(f"  Последние 10 значений: {int_values[-10:]}")
+    print(f"\n  Все {len(int_values)} значений int (регистры 420-477):")
+    for i, val in enumerate(int_values):
+        addr = 420 + i
+        print(f"    Регистр {addr:4d} [{i:2d}]: {val:6d}")
+    print()
+    
+    return {
+        "status": status,
+        "start_address": 420,
+        "end_address": 477,
+        "total_registers": len(int_values),
+        "values": int_values,
+        "min_value": min(int_values),
+        "max_value": max(int_values),
+    }
+
 def read_nmr_data(sock):
     """Чтение всех NMR данных за один раз
     
@@ -705,6 +933,9 @@ def read_nmr_data(sock):
     
     Всего: 100-116 (17 регистров) + 120-375 (256 регистров) = 273 регистра
     """
+    import math
+    import struct
+    
     print(f"\n=== Чтение NMR данных ===")
     
     # Варианты для проверки (если первый не сработает)
@@ -899,42 +1130,100 @@ def read_nmr_data(sock):
     
     # Используем full_registers
     all_registers = full_registers
+    meta = all_registers[0:17]  # Метаданные (100-116)
+    data_regs = all_registers[20:276]  # Данные (120-375)
     
-    try:
-        # Извлекаем данные
-        result = {
-            'samples': all_registers[0],  # регистр 100
-            'x_min': registers_to_float(all_registers, 1),  # регистры 101-102
-            'x_max': registers_to_float(all_registers, 3),  # регистры 103-104
-            'y_min': registers_to_float(all_registers, 5),  # регистры 105-106
-            'y_max': registers_to_float(all_registers, 7),  # регистры 107-108
-            'freq': registers_to_float(all_registers, 9),  # регистры 109-110
-            'ampl': registers_to_float(all_registers, 11),  # регистры 111-112
-            'int': registers_to_float(all_registers, 13),  # регистры 113-114
-            't2': registers_to_float(all_registers, 15),  # регистры 115-116
-            'data': all_registers[20:276]  # регистры 120-375 (индекс 20-275 в массиве)
+    print(f"Метаданные [0..4]: {meta[0:5]} (hex: {[hex(int(x)) for x in meta[0:5]]})")
+    print(f"Данные первые 10: {data_regs[0:10]}, последние 3: {data_regs[-3:]}")
+    
+    samples = int(meta[0])  # Регистр 100
+    
+    # Функция для декодирования float из двух uint16 во всех вариантах порядка байтов
+    def _float_variants_from_regs(reg1: int, reg2: int) -> dict:
+        """Декодируем float из двух uint16 во всех популярных Modbus byte/word order.
+        A,B = bytes of reg1 (hi,lo); C,D = bytes of reg2 (hi,lo)
+        Variants: ABCD, BADC (swap bytes in words), CDAB (swap words), DCBA (full reverse)
+        """
+        A = (reg1 >> 8) & 0xFF
+        B = reg1 & 0xFF
+        C = (reg2 >> 8) & 0xFF
+        D = reg2 & 0xFF
+        orders = {
+            "ABCD": bytes([A, B, C, D]),
+            "BADC": bytes([B, A, D, C]),
+            "CDAB": bytes([C, D, A, B]),
+            "DCBA": bytes([D, C, B, A]),
         }
-        
-        # Выводим результаты
-        print(f"\n✓ Все данные успешно прочитаны!")
-        print(f"\nРезультаты:")
-        print(f"  Samples (100): {result['samples']} (0x{result['samples']:04X})")
-        print(f"  X min (101-102): {result['x_min']:.6f}")
-        print(f"  X max (103-104): {result['x_max']:.6f}")
-        print(f"  Y min (105-106): {result['y_min']:.6f}")
-        print(f"  Y max (107-108): {result['y_max']:.6f}")
-        print(f"  Freq (109-110): {result['freq']:.6f}")
-        print(f"  Ampl (111-112): {result['ampl']:.6f}")
-        print(f"  Int (113-114): {result['int']:.6f}")
-        print(f"  T2 (115-116): {result['t2']:.6f}")
-        print(f"  Data (120-375): {len(result['data'])} значений")
-        print(f"    Первые 10 значений: {result['data'][:10]}")
-        print(f"    Последние 10 значений: {result['data'][-10:]}")
-        
-        return result
-    except Exception as e:
-        print(f"❌ Ошибка при обработке данных: {e}")
-    return None
+        out: dict[str, float] = {}
+        for k, bb in orders.items():
+            try:
+                v = float(struct.unpack(">f", bb)[0])
+            except Exception:
+                continue
+            if math.isfinite(v):
+                out[k] = v
+        return out
+    
+    def _float_from_regs_with_key(reg1: int, reg2: int, key: str) -> float:
+        vmap = _float_variants_from_regs(reg1, reg2)
+        return float(vmap.get(key, float("nan")))
+    
+    # Используем формат CDAB для всех float значений в NMR данных
+    # Диапазон x_min/x_max и freq: 38000-44000
+    
+    meta_float_key = "CDAB"  # Фиксированный формат для NMR
+    
+    # Извлекаем регистры для всех float полей
+    xmin_r1, xmin_r2 = int(meta[1]), int(meta[2])
+    xmax_r1, xmax_r2 = int(meta[3]), int(meta[4])
+    y_min_r1, y_min_r2 = int(meta[5]), int(meta[6])
+    y_max_r1, y_max_r2 = int(meta[7]), int(meta[8])
+    freq_r1, freq_r2 = int(meta[9]), int(meta[10])
+    ampl_r1, ampl_r2 = int(meta[11]), int(meta[12])
+    int_r1, int_r2 = int(meta[13]), int(meta[14])
+    t2_r1, t2_r2 = int(meta[15]), int(meta[16])
+    
+    # Декодируем все float значения используя формат CDAB
+    x_min = _float_from_regs_with_key(xmin_r1, xmin_r2, meta_float_key)
+    x_max = _float_from_regs_with_key(xmax_r1, xmax_r2, meta_float_key)
+    y_min = _float_from_regs_with_key(y_min_r1, y_min_r2, meta_float_key)
+    y_max = _float_from_regs_with_key(y_max_r1, y_max_r2, meta_float_key)
+    freq = _float_from_regs_with_key(freq_r1, freq_r2, meta_float_key)
+    ampl = _float_from_regs_with_key(ampl_r1, ampl_r2, meta_float_key)
+    integral = _float_from_regs_with_key(int_r1, int_r2, meta_float_key)
+    t2 = _float_from_regs_with_key(t2_r1, t2_r2, meta_float_key)
+    
+    print(f"✓ Используется формат float: {meta_float_key}")
+    
+    # Выводим результаты
+    print(f"\n✓ NMR данные декодированы:")
+    print(f"  Samples (100): {samples} (0x{samples:04X})")
+    print(f"  X min (101-102): {x_min:.6f}")
+    print(f"  X max (103-104): {x_max:.6f}")
+    print(f"  Y min (105-106): {y_min:.6f}")
+    print(f"  Y max (107-108): {y_max:.6f}")
+    print(f"  Freq (109-110): {freq:.6f}")
+    print(f"  Ampl (111-112): {ampl:.6f}")
+    print(f"  Integral (113-114): {integral:.6f}")
+    print(f"  T2 (115-116): {t2:.6f}")
+    print(f"  Data (120-375): {len(data_regs)} значений")
+    if len(data_regs) > 0:
+        print(f"    Первые 10 значений: {data_regs[:10]}")
+        print(f"    Последние 10 значений: {data_regs[-10:]}")
+    
+    return {
+        'samples': samples,
+        'x_min': float(x_min),
+        'x_max': float(x_max),
+        'y_min': float(y_min),
+        'y_max': float(y_max),
+        'freq': float(freq),
+        'ampl': float(ampl),
+        'int': float(integral),
+        't2': float(t2),
+        'meta_float_key': meta_float_key,
+        'data': data_regs
+    }
 
 def parse_write_response(resp: bytes) -> dict:
     """Расшифровка ответа на запрос записи (функция 06)"""
@@ -1060,6 +1349,95 @@ def read_float_value(sock, address: int):
         print(f"Ошибка соединения: {e}")
     return None
 
+def read_int_value(sock, address: int):
+    """Чтение int значения из одного регистра (16-битное знаковое целое)"""
+    print(f"\n=== Чтение int значения ===")
+    print(f"Чтение регистра {address}...")
+    
+    # Читаем один регистр
+    frame = build_read_frame(4, address)
+    
+    try:
+        hex_dump("TX", frame)
+        sock.sendall(frame)
+        
+        time.sleep(0.1)
+        
+        # Читаем ответ
+        resp = b''
+        try:
+            sock.settimeout(0.5)
+            while True:
+                chunk = sock.recv(512)
+                if not chunk:
+                    break
+                resp += chunk
+                if len(resp) >= 7:  # Минимальная длина ответа: unit_id(1) + function(1) + byte_count(1) + data(2) + CRC(2) = 7
+                    start_idx = find_modbus_frame_start(resp)
+                    if start_idx >= 0:
+                        frame_start = resp[start_idx:]
+                        if len(frame_start) >= 7:
+                            break
+        except socket.timeout:
+            pass
+        finally:
+            sock.settimeout(2.0)
+        
+        if resp:
+            hex_dump("RX", resp)
+            
+            # Находим начало фрейма (может быть мусор в начале)
+            start_idx = find_modbus_frame_start(resp)
+            if start_idx > 0:
+                print(f"⚠️  Найден мусор в начале ответа ({start_idx} байт), пропускаем...")
+                resp = resp[start_idx:]
+            
+            # Сначала проверяем на ошибку Modbus
+            error = parse_modbus_error(resp)
+            if error:
+                error_msg = error.get('error_message', 'Unknown error')
+                error_code = error.get('error_code', 0)
+                print(f"❌ Ошибка Modbus: {error_msg} (код {error_code})")
+                return None
+            
+            parsed = parse_read_response(resp)
+            if not parsed:
+                print("Ошибка: не удалось распарсить ответ")
+                return None
+            
+            # Проверяем CRC
+            if not parsed.get('crc_valid', False):
+                print(f"⚠️  Предупреждение: CRC не совпадает!")
+                print(f"   Получен CRC: {parsed.get('received_crc')}")
+                print(f"   Вычислен CRC: {parsed.get('calculated_crc')}")
+            
+            # Получаем значение как uint16
+            uint16_value = parsed.get('value', 0)
+            
+            # Преобразуем uint16 в int16 (two's complement)
+            # Если значение >= 32768, это отрицательное число
+            if uint16_value >= 32768:
+                int16_value = uint16_value - 65536
+            else:
+                int16_value = uint16_value
+            
+            print(f"\n✓ Данные успешно прочитаны!")
+            print(f"\nРезультаты:")
+            print(f"  Регистр {address}: {uint16_value} (0x{uint16_value:04X})")
+            print(f"  Int значение (int16): {int16_value}")
+            print(f"  Uint значение (uint16): {uint16_value}")
+            
+            return int16_value
+        else:
+            print("RX: (empty)")
+            return None
+    except socket.timeout:
+        print("RX: (timeout)")
+        return None
+    except (ConnectionError, OSError) as e:
+        print(f"Ошибка соединения: {e}")
+    return None
+
 def send_frame(sock, frame: bytes, is_write: bool = False, return_parsed: bool = False):
     """Отправка фрейма и получение ответа
     
@@ -1172,6 +1550,11 @@ def main():
                 if cmd.lower() in ['quit', 'q', 'exit']:
                     break
                 
+                # Специальная команда для чтения IR данных как int (регистры 4201-4701)
+                if cmd.lower() in ['ir int', 'ir_int', 'read_ir_int']:
+                    read_ir_data_int(sock)
+                    continue
+                
                 # Специальная команда для чтения IR данных
                 if cmd.lower() in ['ir', 'read_ir']:
                     read_ir_data(sock)
@@ -1192,19 +1575,48 @@ def main():
                         print("Ошибка: неверный адрес. Использование: float <адрес>")
                     continue
                 
+                # Команда для чтения int значения
+                if len(parts) >= 2 and parts[0].lower() == 'int':
+                    try:
+                        address = int(parts[1])
+                        read_int_value(sock, address)
+                    except ValueError:
+                        print("Ошибка: неверный адрес. Использование: int <адрес>")
+                    continue
+                
+                # Команда для чтения регистров 4201 и 4701 как int
+                if cmd.lower() in ['read_int_regs', 'int_regs']:
+                    print("\n=== Чтение регистров 4201 и 4701 как int ===")
+                    print("\nРегистр 4201:")
+                    val1 = read_int_value(sock, 4201)
+                    time.sleep(0.2)
+                    print("\nРегистр 4701:")
+                    val2 = read_int_value(sock, 4701)
+                    if val1 is not None and val2 is not None:
+                        print(f"\n=== Итоговые результаты ===")
+                        print(f"  Регистр 4201: {val1}")
+                        print(f"  Регистр 4701: {val2}")
+                    continue
+                
                 # Парсим команду: функция адрес [реле]
                 if len(parts) < 2:
                     print("Использование:")
                     print("  Чтение: 04 <адрес>")
                     print("  Запись: 06 <адрес> <номер_реле>")
                     print("  Float: float <адрес>  - прочитать float из двух регистров")
-                    print("  IR данные: ir  или  read_ir")
+                    print("  Int: int <адрес>  - прочитать int (16-битное знаковое) из одного регистра")
+                    print("  IR данные: ir  или  read_ir  - прочитать IR данные как float (регистры 400-414, 420-477)")
+                    print("  IR данные int: ir int  или  ir_int  - прочитать IR данные как int (регистры 4201-4701)")
                     print("  NMR данные: nmr  или  read_nmr")
+                    print("  Int регистры: int_regs  или  read_int_regs  - прочитать регистры 4201 и 4701")
                     print("Примеры:")
                     print("  04 1021  - прочитать регистр 1021")
                     print("  06 1021 2  - включить реле номер 2 в регистре 1021")
                     print("  float 401  - прочитать float из регистров 401-402")
-                    print("  ir  - прочитать все IR данные (регистры 400-414, 420-477)")
+                    print("  int 4201  - прочитать int из регистра 4201")
+                    print("  int_regs  - прочитать регистры 4201 и 4701 как int")
+                    print("  ir  - прочитать все IR данные как float (регистры 400-414, 420-477)")
+                    print("  ir int  - прочитать все IR данные как int (регистры 4201-4701)")
                     print("  nmr  - прочитать все NMR данные (регистры 100-116, 120-375)")
                     continue
                 

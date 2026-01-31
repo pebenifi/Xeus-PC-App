@@ -159,7 +159,7 @@ Rectangle {
         } catch (e) {
             console.log("[IR] Screen01: splineSeries1.clear() failed:", e)
         }
-        
+
         // Добавляем все точки быстро в одном блоке
         // QtGraphs будет пересчитывать сплайн только после завершения функции
         var added = 0

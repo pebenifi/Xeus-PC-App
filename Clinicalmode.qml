@@ -39,6 +39,110 @@ Item {
         }
     }
 
+    function updateNmrGraph(payload) {
+        console.log("[NMR] Clinicalmode updateNmrGraph payload=", payload)
+        if (!payload) {
+            console.log("[NMR] Clinicalmode: payload is null/undefined")
+            return
+        }
+        
+        // Используем тот же подход, что и для IR - через data_json (самый надежный способ)
+        var data = null
+        if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
+            try {
+                data = JSON.parse(payload.data_json)
+                console.log("[NMR] Clinicalmode: parsed data_json, length:", data ? data.length : "null")
+            } catch (ejson) {
+                console.log("[NMR] Clinicalmode: JSON.parse(data_json) failed:", ejson, "data_json length:", payload.data_json ? payload.data_json.length : "null")
+                data = payload.data
+            }
+        } else {
+            console.log("[NMR] Clinicalmode: data_json not found, using payload.data")
+            data = payload.data
+        }
+        
+        if (!data || data.length === 0) {
+            console.log("[NMR] Clinicalmode: no data to draw, data:", data, "data_json:", payload.data_json ? (payload.data_json.substring(0, 100) + "...") : "null")
+            return
+        }
+        
+        var n = data.length
+        console.log("[NMR] Clinicalmode: data length:", n, "first 5 values:", data.slice(0, 5), "last 5 values:", data.slice(-5))
+        var x0 = payload.x_min
+        var x1 = payload.x_max
+        var y0 = payload.y_min
+        var y1 = payload.y_max
+        
+        if (x0 === undefined || x1 === undefined || y0 === undefined || y1 === undefined) {
+            console.log("[NMR] Clinicalmode: missing axis ranges")
+            return
+        }
+        
+        // Обновляем оси
+        // Ось X: частота (freq) - диапазон 38500-43000 с шагом 500 (как на устройстве)
+        nmrAxisX.min = x0
+        nmrAxisX.max = x1
+        nmrAxisX.tickAnchor = x0
+        nmrAxisX.tickInterval = 500  // Шаг 500 как на устройстве
+        
+        // Ось Y: амплитуда (ampl) - используем диапазон из данных
+        nmrAxisY.min = y0
+        nmrAxisY.max = y1
+        
+        console.log("[NMR] Clinicalmode: axes updated - X:", nmrAxisX.min, "-", nmrAxisX.max, "Y:", nmrAxisY.min, "-", nmrAxisY.max)
+        
+        // Создаем точки из data (как в IR графике) - равномерно распределяем по диапазону X
+        var pointsToAdd = []
+        var validPoints = 0
+        for (var i = 0; i < n; i++) {
+            // Формула: x[i] = x0 + (x1 - x0) * i / (n-1) - растягивает на весь диапазон
+            var x = (n > 1) ? (x0 + (x1 - x0) * i / (n - 1)) : x0
+            var y = Number(data[i])
+            if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
+                pointsToAdd.push({x: x, y: y})
+                validPoints++
+            }
+        }
+        
+        // Проверяем, что X координаты разные
+        var xFirst = pointsToAdd.length > 0 ? pointsToAdd[0].x : null
+        var xLast = pointsToAdd.length > 0 ? pointsToAdd[pointsToAdd.length-1].x : null
+        var xMid = pointsToAdd.length > 1 ? pointsToAdd[Math.floor(pointsToAdd.length / 2)].x : null
+        console.log("[NMR] Clinicalmode: prepared", validPoints, "valid points out of", n, "total")
+        console.log("[NMR] Clinicalmode: X coordinates - first:", xFirst, "mid:", xMid, "last:", xLast, "range:", (xLast - xFirst))
+        console.log("[NMR] Clinicalmode: Y coordinates - first:", pointsToAdd[0].y, "mid:", pointsToAdd[Math.floor(pointsToAdd.length / 2)].y, "last:", pointsToAdd[pointsToAdd.length-1].y)
+        
+        if (pointsToAdd.length === 0) {
+            console.log("[NMR] Clinicalmode: no valid points to add")
+            return
+        }
+        
+        // Очищаем серию перед добавлением новых точек
+        try {
+            if (nmrLineSeries.clear) {
+                nmrLineSeries.clear()
+            }
+        } catch (e) {
+            console.log("[NMR] Clinicalmode: nmrLineSeries.clear() failed:", e)
+        }
+        
+        // Добавляем все точки быстро в одном блоке
+        // QtGraphs будет пересчитывать сплайн только после завершения функции
+        var added = 0
+        for (var j = 0; j < pointsToAdd.length; j++) {
+            try {
+                if (nmrLineSeries.append) {
+                    nmrLineSeries.append(pointsToAdd[j].x, pointsToAdd[j].y)
+                    added++
+                }
+            } catch (e2) {
+                console.log("[NMR] Clinicalmode: append failed at", j, pointsToAdd[j].x, pointsToAdd[j].y, e2)
+            }
+        }
+        
+        console.log("[NMR] Clinicalmode: added", added, "points out of", pointsToAdd.length, "prepared, series count=", (nmrLineSeries.count !== undefined ? nmrLineSeries.count : "unknown"))
+    }
+
     function updateIrGraph(payload) {
         console.log("[IR] Clinicalmode updateIrGraph payload=", payload)
         if (!payload) {
@@ -144,7 +248,7 @@ Item {
         } catch (e) {
             console.log("[IR] Clinicalmode: splineSeries.clear() failed:", e)
         }
-        
+
         // Добавляем все точки быстро в одном блоке
         // QtGraphs будет пересчитывать сплайн только после завершения функции
         var added = 0
@@ -193,7 +297,10 @@ Item {
         repeat: true
         running: root.cachedIsConnected
         onTriggered: {
-            if (modbusManager) modbusManager.requestIrSpectrum()
+            if (modbusManager) {
+                modbusManager.requestIrSpectrum()
+                modbusManager.requestNmrSpectrum()
+            }
         }
     }
 
@@ -204,13 +311,34 @@ Item {
         }
     }
 
+    // Retry: если NMR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
+    Timer {
+        id: nmrRetryTimer
+        interval: 2000
+        repeat: true
+        running: root.cachedIsConnected
+        onTriggered: {
+            if (modbusManager) modbusManager.requestNmrSpectrum()
+        }
+    }
+
+    Connections {
+        target: modbusManager
+        function onNmrSpectrumChanged(payload) {
+            root.updateNmrGraph(payload)
+        }
+    }
+
     // При подключении дергаем один раз IR спектр
     Connections {
         target: modbusManager
         function onConnectionStatusChanged(connected) {
             root.cachedIsConnected = connected
             if (connected && modbusManager) {
-                Qt.callLater(function() { modbusManager.requestIrSpectrum() })
+                Qt.callLater(function() { 
+                    modbusManager.requestIrSpectrum()
+                    modbusManager.requestNmrSpectrum()
+                })
             }
         }
     }
@@ -6802,6 +6930,18 @@ Item {
     }
 
 
+    // Компонент для маленьких подписей осей
+    Component {
+        id: smallAxisLabel
+        Text {
+            text: modelData !== undefined ? modelData : (value !== undefined ? value : "")
+            color: "#ffffff"
+            font.pixelSize: 6
+            scale: 0.8
+            transformOrigin: Item.Center
+        }
+    }
+
     GraphsView {
         id: spline2
         anchors.right: parent.right
@@ -6810,27 +6950,57 @@ Item {
         anchors.topMargin: 16
         width: 480
         height: 280
-        SplineSeries {
-            id: splineSeries2
-            XYPoint {
-                x: 1
-                y: 1
-            }
+        axisX: nmrAxisX
+        axisY: nmrAxisY
+        marginLeft: -17
+        marginRight: 17
+        marginTop: 10
+        marginBottom: -10
 
-            XYPoint {
-                x: 2
-                y: 4
-            }
+        GraphsTheme { id: nmrTheme }
+        theme: nmrTheme
 
-            XYPoint {
-                x: 4
-                y: 2
-            }
+        Component.onCompleted: {
+            // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
+            try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
+            // Фон области графика (plot area)
+            try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+            try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
+            // Сетка RGB(151, 151, 151) = #979797
+            try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
+            try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
+            try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
+            try { nmrTheme.axisX.subColor = "#979797" } catch (e4) {}
+            try { nmrTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+            try { nmrTheme.axisY.mainColor = "#979797" } catch (e6) {}
+            try { nmrTheme.axisY.subColor = "#979797" } catch (e7) {}
+            try { nmrTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+            // labelDelegate установлен напрямую на оси (nmrAxisX и nmrAxisY)
+        }
 
-            XYPoint {
-                x: 5
-                y: 5
-            }
+        ValueAxis {
+            id: nmrAxisX
+            min: 38000
+            max: 44000
+            tickAnchor: 38000
+            tickInterval: 1000
+            labelsVisible: true
+            labelDelegate: smallAxisLabel
+        }
+        ValueAxis { 
+            id: nmrAxisY
+            min: 0
+            max: 1
+            labelsVisible: true
+            labelDelegate: smallAxisLabel
+        }
+        LineSeries {
+            id: nmrLineSeries
+            // Линия спектра — синяя (как на устройстве)
+            color: "#4a90e2"
+            width: 2
+            axisX: nmrAxisX
+            axisY: nmrAxisY
         }
     }
 
@@ -6844,10 +7014,10 @@ Item {
         height: 280
         axisX: irAxisX
         axisY: irAxisY
-        marginLeft: 0
-        marginRight: 0
-        marginTop: 0
-        marginBottom: 0
+        marginLeft: -17
+        marginRight: 17
+        marginTop: 10
+        marginBottom: -10
 
         GraphsTheme { id: irTheme }
         theme: irTheme
@@ -6864,15 +7034,21 @@ Item {
                 irMarkerFreq0, irMarkerFreq1, irMarkerFreq2, irMarkerFreq3, irMarkerFreq4, irMarkerFreq5,
                 irMarkerFreq6, irMarkerFreq7, irMarkerFreq8, irMarkerFreq9, irMarkerFreq10, irMarkerFreq11
             ]
-            // Сетка тёмно-синяя, подписи/оси — светлые
-            try { irTheme.grid.mainColor = "#102a66" } catch (e1) {}
-            try { irTheme.grid.subColor = "#0b1a3a" } catch (e2) {}
-            try { irTheme.axisX.mainColor = "#102a66" } catch (e3) {}
-            try { irTheme.axisX.subColor = "#0b1a3a" } catch (e4) {}
+            // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
+            try { irTheme.backgroundColor = "#424242" } catch (e0) {}
+            // Фон области графика (plot area)
+            try { irTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+            try { irTheme.plotAreaColor = "#424242" } catch (e0b) {}
+            // Сетка RGB(151, 151, 151) = #979797
+            try { irTheme.grid.mainColor = "#979797" } catch (e1) {}
+            try { irTheme.grid.subColor = "#979797" } catch (e2) {}
+            try { irTheme.axisX.mainColor = "#979797" } catch (e3) {}
+            try { irTheme.axisX.subColor = "#979797" } catch (e4) {}
             try { irTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
-            try { irTheme.axisY.mainColor = "#102a66" } catch (e6) {}
-            try { irTheme.axisY.subColor = "#0b1a3a" } catch (e7) {}
+            try { irTheme.axisY.mainColor = "#979797" } catch (e6) {}
+            try { irTheme.axisY.subColor = "#979797" } catch (e7) {}
             try { irTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+            // labelDelegate установлен напрямую на оси (irAxisX и irAxisY)
         }
 
         ValueAxis {
@@ -6880,9 +7056,17 @@ Item {
             min: 792
             max: 798
             tickAnchor: 792
-            tickInterval: 0.5
+            tickInterval: 1.0
+            labelsVisible: true
+            labelDelegate: smallAxisLabel
         }
-        ValueAxis { id: irAxisY; min: 0; max: 1 }
+        ValueAxis { 
+            id: irAxisY
+            min: 0
+            max: 1
+            labelsVisible: true
+            labelDelegate: smallAxisLabel
+        }
         LineSeries {
             id: splineSeries
             // Линия спектра — красная, без сглаживания
