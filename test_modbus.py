@@ -1225,6 +1225,191 @@ def read_nmr_data(sock):
         'data': data_regs
     }
 
+def read_pxe_data(sock):
+    """Чтение PXE данных
+    
+    Читает регистры:
+    - 500: sample_n (uint16)
+    - 501: fit (uint16)
+    - 520-519+n*2: data x и data y (n*2 регистров, где n = sample_n)
+    
+    Данные читаются попарно: data_x[0], data_y[0], data_x[1], data_y[1], ...
+    """
+    import math
+    import struct
+    
+    print(f"\n=== Чтение PXE данных ===")
+    
+    # Читаем sample_n и fit (регистры 500-501)
+    print(f"Чтение регистров 500-501 (sample_n, fit)...")
+    frame = build_read_multiple_registers_frame(4, 500, 2)
+    
+    try:
+        hex_dump("TX", frame)
+        sock.sendall(frame)
+        time.sleep(0.1)
+        
+        resp = b''
+        try:
+            sock.settimeout(0.5)
+            while True:
+                chunk = sock.recv(512)
+                if not chunk:
+                    break
+                resp += chunk
+                if len(resp) >= 5:
+                    start_idx = find_modbus_frame_start(resp)
+                    if start_idx >= 0:
+                        frame_start = resp[start_idx:]
+                        if len(frame_start) >= 3:
+                            byte_count = frame_start[2]
+                            expected_length = 3 + byte_count + 2
+                            if len(frame_start) >= expected_length:
+                                break
+        except socket.timeout:
+            pass
+        finally:
+            sock.settimeout(2.0)
+        
+        if resp:
+            hex_dump("RX", resp)
+            parsed = parse_multiple_registers_response(resp)
+            if parsed is None:
+                print(f"⚠️  Ошибка: parse_multiple_registers_response вернул None")
+                return None
+            if 'is_error' in parsed and parsed['is_error']:
+                print(f"⚠️  Ошибка Modbus: {parsed.get('error_message', 'unknown')}")
+                return None
+            if 'registers' in parsed and len(parsed['registers']) >= 2:
+                sample_n = int(parsed['registers'][0])
+                fit = int(parsed['registers'][1])
+                print(f"✓ sample_n (регистр 500): {sample_n}")
+                print(f"✓ fit (регистр 501): {fit}")
+                
+                if sample_n == 0:
+                    print(f"⚠️  sample_n = 0, возможно регистры пустые или данные еще не записаны")
+                    return {
+                        'sample_n': 0,
+                        'fit': fit,
+                        'array_size': 0,
+                        'data_x': [],
+                        'data_y': [],
+                        'data_raw': []
+                    }
+            else:
+                print(f"⚠️  Ошибка: не удалось прочитать регистры 500-501")
+                print(f"   parsed: {parsed}")
+                if parsed and 'registers' in parsed:
+                    print(f"   registers length: {len(parsed['registers'])}")
+                return None
+        else:
+            print(f"⚠️  Ошибка: нет ответа от устройства")
+            return None
+    except Exception as e:
+        print(f"⚠️  Ошибка при чтении регистров 500-501: {e}")
+        return None
+    
+    if sample_n <= 0:
+        print(f"⚠️  Предупреждение: sample_n = {sample_n}, должно быть > 0")
+        return None
+    
+    # Вычисляем размер массива данных: n * 2
+    array_size = sample_n * 2
+    print(f"✓ array_size: {array_size} (sample_n * 2)")
+    
+    # Читаем данные начиная с регистра 520
+    # Читаем частями по 30 регистров для надежности
+    print(f"Чтение данных (регистры 520-{519+array_size})...")
+    registers_dict = {}
+    
+    # Разбиваем на части по 30 регистров
+    for offset in range(0, array_size, 30):
+        chunk_size = min(30, array_size - offset)
+        start_addr = 520 + offset
+        print(f"  Чтение регистров {start_addr}-{start_addr + chunk_size - 1} ({chunk_size} регистров)...")
+        
+        frame = build_read_multiple_registers_frame(4, start_addr, chunk_size)
+        
+        try:
+            hex_dump("TX", frame)
+            sock.sendall(frame)
+            time.sleep(0.1)
+            
+            resp = b''
+            try:
+                sock.settimeout(0.5)
+                while True:
+                    chunk = sock.recv(512)
+                    if not chunk:
+                        break
+                    resp += chunk
+                    if len(resp) >= 5:
+                        start_idx = find_modbus_frame_start(resp)
+                        if start_idx >= 0:
+                            frame_start = resp[start_idx:]
+                            if len(frame_start) >= 3:
+                                byte_count = frame_start[2]
+                                expected_length = 3 + byte_count + 2
+                                if len(frame_start) >= expected_length:
+                                    break
+            except socket.timeout:
+                pass
+            finally:
+                sock.settimeout(2.0)
+            
+            if resp:
+                hex_dump("RX", resp)
+                parsed = parse_multiple_registers_response(resp)
+                if parsed and 'values' in parsed:
+                    for i, val in enumerate(parsed['values']):
+                        registers_dict[start_addr + i] = val
+        except Exception as e:
+            print(f"  ⚠️  Ошибка при чтении регистров {start_addr}-{start_addr + chunk_size - 1}: {e}")
+    
+    # Собираем данные в массив
+    data_regs = []
+    for addr in range(520, 520 + array_size):
+        if addr in registers_dict:
+            data_regs.append(registers_dict[addr])
+        else:
+            print(f"⚠️  Предупреждение: регистр {addr} не прочитан")
+            data_regs.append(0)
+    
+    if len(data_regs) < array_size:
+        print(f"⚠️  Ошибка: не удалось прочитать все данные (регистры 520-{519+array_size})")
+        print(f"   Ожидалось: {array_size} регистров, получено: {len(data_regs)}")
+        return None
+    
+    print(f"✓ Прочитано {len(data_regs)} регистров данных (регистры 520-{519+array_size})")
+    
+    # Разделяем данные на data_x и data_y
+    # Данные идут попарно: data_x[0], data_y[0], data_x[1], data_y[1], ...
+    data_x = []
+    data_y = []
+    for i in range(sample_n):
+        if i * 2 + 1 < len(data_regs):
+            data_x.append(int(data_regs[i * 2]))
+            data_y.append(int(data_regs[i * 2 + 1]))
+        else:
+            print(f"⚠️  Предупреждение: недостаточно данных для пары {i}")
+            break
+    
+    print(f"✓ Разделено на data_x и data_y: {len(data_x)} пар")
+    if len(data_x) > 0:
+        print(f"  data_x первые 5: {data_x[:5]}")
+        print(f"  data_x последние 5: {data_x[-5:]}")
+        print(f"  data_y первые 5: {data_y[:5]}")
+        print(f"  data_y последние 5: {data_y[-5:]}")
+    
+    return {
+        'sample_n': sample_n,
+        'fit': fit,
+        'array_size': array_size,
+        'data_x': data_x,
+        'data_y': data_y,
+        'data_raw': data_regs[:array_size]  # Raw данные для отладки
+    }
+
 def parse_write_response(resp: bytes) -> dict:
     """Расшифровка ответа на запрос записи (функция 06)"""
     if len(resp) < 8:
@@ -1565,6 +1750,11 @@ def main():
                     read_nmr_data(sock)
                     continue
                 
+                # Специальная команда для чтения PXE данных
+                if cmd.lower() in ['pxe', 'read_pxe']:
+                    read_pxe_data(sock)
+                    continue
+                
                 # Команда для чтения float значения
                 parts = cmd.split()
                 if len(parts) >= 2 and parts[0].lower() == 'float':
@@ -1608,6 +1798,7 @@ def main():
                     print("  IR данные: ir  или  read_ir  - прочитать IR данные как float (регистры 400-414, 420-477)")
                     print("  IR данные int: ir int  или  ir_int  - прочитать IR данные как int (регистры 4201-4701)")
                     print("  NMR данные: nmr  или  read_nmr")
+                    print("  PXE данные: pxe  или  read_pxe  - прочитать PXE данные (регистры 500-501, 520-519+n*2)")
                     print("  Int регистры: int_regs  или  read_int_regs  - прочитать регистры 4201 и 4701")
                     print("Примеры:")
                     print("  04 1021  - прочитать регистр 1021")
@@ -1618,6 +1809,7 @@ def main():
                     print("  ir  - прочитать все IR данные как float (регистры 400-414, 420-477)")
                     print("  ir int  - прочитать все IR данные как int (регистры 4201-4701)")
                     print("  nmr  - прочитать все NMR данные (регистры 100-116, 120-375)")
+                    print("  pxe  - прочитать все PXE данные (регистры 500-501, 520-519+n*2)")
                     continue
                 
                 function = int(parts[0])

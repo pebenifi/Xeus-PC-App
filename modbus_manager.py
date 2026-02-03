@@ -2559,7 +2559,8 @@ class ModbusManager(QObject):
                     non_zero_y = sum(1 for p in points if p['y'] != 0)
                     logger.info(f"NMR spectrum: Y coordinates check - non_zero count={non_zero_y} out of {len(points)}, first_y={points[0]['y']}, last_y={points[-1]['y']}")
 
-            # Для оси Y (амплитуда) используем диапазон из данных
+            # Для оси Y (амплитуда) используем метаданные y_min и y_max, если они валидны
+            # Иначе используем диапазон из данных
             if data_values:
                 ampl_min = float(min(data_values))
                 ampl_max = float(max(data_values))
@@ -2567,9 +2568,17 @@ class ModbusManager(QObject):
                 ampl_min = 0.0
                 ampl_max = 1.0
 
-            # Устанавливаем диапазон оси Y на основе данных амплитуды
-            y_axis_min = ampl_min
-            y_axis_max = ampl_max
+            # Используем метаданные y_min и y_max для оси Y, если они валидны
+            if math.isfinite(y_min) and math.isfinite(y_max) and y_max > y_min:
+                # Используем метаданные для оси Y
+                y_axis_min = float(y_min)
+                y_axis_max = float(y_max)
+                logger.info(f"NMR spectrum: using metadata y_min={y_min:.6f}, y_max={y_max:.6f} for Y axis")
+            else:
+                # Fallback: используем диапазон из данных
+                y_axis_min = ampl_min
+                y_axis_max = ampl_max
+                logger.info(f"NMR spectrum: using data range y_min={ampl_min:.6f}, y_max={ampl_max:.6f} for Y axis (metadata invalid)")
             
             # Добавляем небольшой отступ для лучшей видимости
             ampl_range = y_axis_max - y_axis_min
