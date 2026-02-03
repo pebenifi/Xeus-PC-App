@@ -6104,7 +6104,8 @@ Item {
                     width: valuesPanel.width - 32
                     readOnly: true
                     font.pixelSize: 10
-                    font.family: "monospace"
+                    // Используем системный моноширинный шрифт по умолчанию (без указания family)
+                    // Это избегает проблем с отсутствующими шрифтами на разных платформах
                     color: "#ffffff"
                     wrapMode: TextArea.Wrap
                     background: Rectangle {
@@ -6934,7 +6935,7 @@ Item {
     Component {
         id: smallAxisLabel
         Text {
-            text: modelData !== undefined ? modelData : (value !== undefined ? value : "")
+            text: value !== undefined ? value.toFixed(1) : ""
             color: "#ffffff"
             font.pixelSize: 6
             scale: 0.8
