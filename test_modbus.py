@@ -97,6 +97,37 @@ def parse_read_response(resp: bytes) -> dict:
     
     unit_id = resp[0]
     function = resp[1]
+    
+    # Проверяем на ошибку Modbus (функция с установленным битом 0x80)
+    if function & 0x80:
+        error_code = resp[2] if len(resp) > 2 else 0
+        error_messages = {
+            1: "Illegal Function",
+            2: "Illegal Data Address",
+            3: "Illegal Data Value",
+            4: "Slave Device Failure",
+            5: "Acknowledge",
+            6: "Slave Device Busy",
+            8: "Memory Parity Error"
+        }
+        error_msg = error_messages.get(error_code, f"Unknown error ({error_code})")
+        
+        # Проверяем CRC
+        if len(resp) >= 5:
+            received_crc = (resp[-1] << 8) | resp[-2]
+            data_for_crc = resp[:-2]
+            calculated_crc = crc16_modbus(data_for_crc)
+            
+            return {
+                'is_error': True,
+                'unit_id': unit_id,
+                'function': function & 0x7F,  # Убираем бит ошибки
+                'error_code': error_code,
+                'error_message': error_msg,
+                'crc_valid': received_crc == calculated_crc
+            }
+        return None
+    
     byte_count = resp[2]
     
     if function != 4:
@@ -1637,12 +1668,44 @@ def send_frame(sock, frame: bytes, is_write: bool = False, return_parsed: bool =
     """
     try:
         hex_dump("TX", frame)
-        sock.sendall(frame)
+        try:
+            sock.sendall(frame)
+        except (ConnectionError, OSError) as e:
+            # Если соединение разорвано, пробрасываем исключение наверх
+            if return_parsed:
+                raise
+            else:
+                raise
         
         time.sleep(0.1)
         
         try:
-            resp = sock.recv(256)
+            # Пробуем читать ответ с несколькими попытками и увеличенным таймаутом
+            resp = b''
+            sock.settimeout(1.0)  # Увеличиваем таймаут до 1 секунды
+            try:
+                # Читаем все доступные данные
+                while True:
+                    chunk = sock.recv(256)
+                    if not chunk:
+                        break
+                    resp += chunk
+                    # Если получили достаточно данных, проверяем, не закончился ли фрейм
+                    if len(resp) >= 5:
+                        # Проверяем, есть ли полный фрейм (минимум 7 байт для ответа на чтение)
+                        if len(resp) >= 7:
+                            # Проверяем, может быть это полный фрейм
+                            byte_count = resp[2] if len(resp) > 2 else 0
+                            expected_length = 3 + byte_count + 2  # unit_id + function + byte_count + data + CRC
+                            if len(resp) >= expected_length:
+                                # Полный фрейм получен
+                                break
+            except socket.timeout:
+                # Таймаут - возможно, все данные уже получены
+                pass
+            finally:
+                sock.settimeout(2.0)  # Возвращаем обычный таймаут
+            
             if resp:
                 hex_dump("RX", resp)
                 
@@ -1680,33 +1743,63 @@ def send_frame(sock, frame: bytes, is_write: bool = False, return_parsed: bool =
                     if return_parsed:
                         return parsed
                     if parsed:
-                        print(f"\n  Расшифровка ответа:")
-                        print(f"    Unit ID: {parsed['unit_id']}")
-                        print(f"    Функция: {parsed['function']:02d} (Read Input Registers)")
-                        print(f"    Количество байт данных: {parsed['byte_count']}")
-                        print(f"    Значение регистра: {parsed['value']} (десятичное)")
-                        print(f"    Значение регистра: {parsed['value_hex']} (шестнадцатеричное)")
-                        
-                        # Бинарное представление
-                        low_byte = parsed['value'] & 0xFF
-                        high_byte = (parsed['value'] >> 8) & 0xFF
-                        binary_low = format(low_byte, '08b')
-                        binary_high = format(high_byte, '08b')
-                        print(f"    Младший байт: {low_byte} (0x{low_byte:02X}) = {binary_low}")
-                        print(f"    Старший байт: {high_byte} (0x{high_byte:02X}) = {binary_high}")
-                        
-                        # Проверка CRC
-                        if parsed['crc_valid']:
-                            print(f"    CRC: ✓ Валиден ({parsed['received_crc']})")
+                        # Проверяем на ошибку Modbus
+                        if parsed.get('is_error'):
+                            error_msg = parsed.get('error_message', 'Unknown error')
+                            error_code = parsed.get('error_code', 0)
+                            print(f"\n  ❌ Ошибка Modbus:")
+                            print(f"    Код ошибки: {error_code}")
+                            print(f"    Сообщение: {error_msg}")
+                            if parsed.get('crc_valid'):
+                                print(f"    CRC: ✓ Валиден")
+                            else:
+                                print(f"    CRC: ✗ Ошибка!")
                         else:
-                            print(f"    CRC: ✗ Ошибка! Получен {parsed['received_crc']}, ожидался {parsed['calculated_crc']}")
+                            print(f"\n  Расшифровка ответа:")
+                            print(f"    Unit ID: {parsed['unit_id']}")
+                            print(f"    Функция: {parsed['function']:02d} (Read Input Registers)")
+                            print(f"    Количество байт данных: {parsed['byte_count']}")
+                            print(f"    Значение регистра: {parsed['value']} (десятичное)")
+                            print(f"    Значение регистра: {parsed['value_hex']} (шестнадцатеричное)")
+                            
+                            # Предупреждение, если значение 0 (может быть признаком несуществующего регистра)
+                            if parsed['value'] == 0:
+                                print(f"    ⚠️  Предупреждение: значение регистра равно 0. Возможно, регистр не существует.")
+                            
+                            # Бинарное представление
+                            low_byte = parsed['value'] & 0xFF
+                            high_byte = (parsed['value'] >> 8) & 0xFF
+                            binary_low = format(low_byte, '08b')
+                            binary_high = format(high_byte, '08b')
+                            print(f"    Младший байт: {low_byte} (0x{low_byte:02X}) = {binary_low}")
+                            print(f"    Старший байт: {high_byte} (0x{high_byte:02X}) = {binary_high}")
+                            
+                            # Проверка CRC
+                            if parsed['crc_valid']:
+                                print(f"    CRC: ✓ Валиден ({parsed['received_crc']})")
+                            else:
+                                print(f"    CRC: ✗ Ошибка! Получен {parsed['received_crc']}, ожидался {parsed['calculated_crc']}")
                     else:
                         print("  Не удалось расшифровать ответ")
+                        print(f"  Сырые данные ответа: {resp.hex(' ').upper()}")
+                        print(f"  Длина ответа: {len(resp)} байт")
+                        # Пробуем найти начало фрейма
+                        start_idx = find_modbus_frame_start(resp)
+                        if start_idx > 0:
+                            print(f"  ⚠️  Найден мусор в начале ответа ({start_idx} байт)")
+                            print(f"  Данные после мусора: {resp[start_idx:].hex(' ').upper()}")
             else:
                 print("RX: (empty)")
+                print("  ⚠️  Нет ответа от устройства. Возможные причины:")
+                print("     - Устройство не отвечает на этот адрес")
+                print("     - Таймаут слишком короткий")
+                print("     - Проблема с соединением")
                 return None
         except socket.timeout:
             print("RX: (timeout)")
+            print("  ⚠️  Таймаут при чтении ответа. Возможные причины:")
+            print("     - Устройство не отвечает на этот адрес")
+            print("     - Таймаут слишком короткий")
             return None
     except (ConnectionError, OSError) as e:
         # Ошибки соединения (Connection reset by peer и т.д.)
@@ -1791,7 +1884,8 @@ def main():
                 # Парсим команду: функция адрес [реле]
                 if len(parts) < 2:
                     print("Использование:")
-                    print("  Чтение: 04 <адрес>")
+                    print("  Чтение: 03 <адрес>  или  04 <адрес>")
+                    print("    (03 = Read Holding Registers, 04 = Read Input Registers)")
                     print("  Запись: 06 <адрес> <номер_реле>")
                     print("  Float: float <адрес>  - прочитать float из двух регистров")
                     print("  Int: int <адрес>  - прочитать int (16-битное знаковое) из одного регистра")
@@ -1801,8 +1895,9 @@ def main():
                     print("  PXE данные: pxe  или  read_pxe  - прочитать PXE данные (регистры 500-501, 520-519+n*2)")
                     print("  Int регистры: int_regs  или  read_int_regs  - прочитать регистры 4201 и 4701")
                     print("Примеры:")
+                    print("  04 102  - прочитать регистр 102")
                     print("  04 1021  - прочитать регистр 1021")
-                    print("  06 1021 2  - включить реле номер 2 в регистре 1021")
+                    print("  06 102 2  - включить реле номер 2 в регистре 102")
                     print("  float 401  - прочитать float из регистров 401-402")
                     print("  int 4201  - прочитать int из регистра 4201")
                     print("  int_regs  - прочитать регистры 4201 и 4701 как int")
@@ -1815,15 +1910,49 @@ def main():
                 function = int(parts[0])
                 address = int(parts[1])
                 
-                if function == 4:
-                    # Чтение регистра
+                if function == 3 or function == 4:
+                    # Чтение регистра (функция 03 = Read Holding Registers, 04 = Read Input Registers)
                     frame = build_read_frame(function, address)
                     
+                    func_name = "Read Holding Registers" if function == 3 else "Read Input Registers"
                     # Отправляем 2 раза
-                    print(f"\nОтправка запроса (функция {function:02d}, адрес {address})...")
+                    print(f"\nОтправка запроса (функция {function:02d} - {func_name}, адрес {address})...")
+                    print(f"  Адрес в hex: 0x{address:04X} ({address:04d})")
+                    print(f"  Старший байт адреса: 0x{(address >> 8) & 0xFF:02X}, младший байт: 0x{address & 0xFF:02X}")
                     for i in range(2):
                         print(f"\n--- Попытка {i+1} ---")
-                        send_frame(sock, frame, is_write=False)
+                        max_retries = 3
+                        retry_count = 0
+                        success = False
+                        
+                        while retry_count < max_retries and not success:
+                            try:
+                                send_frame(sock, frame, is_write=False)
+                                success = True
+                            except (ConnectionError, OSError) as e:
+                                retry_count += 1
+                                print(f"  ⚠️  Ошибка соединения: {e}")
+                                if retry_count < max_retries:
+                                    print(f"  Переподключение (попытка {retry_count}/{max_retries-1})...")
+                                    try:
+                                        sock.close()
+                                    except:
+                                        pass
+                                    try:
+                                        sock = connect_socket()
+                                        time.sleep(0.3)  # Увеличиваем задержку после переподключения
+                                        print(f"  ✓ Переподключено, повтор запроса...")
+                                    except Exception as e2:
+                                        print(f"  ❌ Ошибка переподключения: {e2}")
+                                        if retry_count >= max_retries:
+                                            raise
+                                else:
+                                    print(f"  ❌ Не удалось переподключиться после {max_retries} попыток")
+                                    raise
+                            except Exception as e:
+                                # Другие ошибки пробрасываем наверх
+                                raise
+                        
                         if i < 1:  # Не ждем после последней отправки
                             time.sleep(0.5)
                 
@@ -1898,12 +2027,42 @@ def main():
                     
                     for i in range(2):
                         print(f"\n--- Попытка записи {i+1} ---")
-                        send_frame(sock, write_frame, is_write=True)
+                        max_retries = 3
+                        retry_count = 0
+                        success = False
+                        
+                        while retry_count < max_retries and not success:
+                            try:
+                                send_frame(sock, write_frame, is_write=True)
+                                success = True
+                            except (ConnectionError, OSError) as e:
+                                retry_count += 1
+                                print(f"  ⚠️  Ошибка соединения: {e}")
+                                if retry_count < max_retries:
+                                    print(f"  Переподключение (попытка {retry_count}/{max_retries-1})...")
+                                    try:
+                                        sock.close()
+                                    except:
+                                        pass
+                                    try:
+                                        sock = connect_socket()
+                                        time.sleep(0.3)
+                                        print(f"  ✓ Переподключено, повтор запроса...")
+                                    except Exception as e2:
+                                        print(f"  ❌ Ошибка переподключения: {e2}")
+                                        if retry_count >= max_retries:
+                                            raise
+                                else:
+                                    print(f"  ❌ Не удалось переподключиться после {max_retries} попыток")
+                                    raise
+                            except Exception as e:
+                                raise
+                        
                         if i < 1:
                             time.sleep(0.5)
                 
                 else:
-                    print(f"Поддерживаются функции: 04 (чтение), 06 (запись)")
+                    print(f"Поддерживаются функции: 03 (Read Holding Registers), 04 (Read Input Registers), 06 (запись)")
                     continue
                 
             except ValueError:
@@ -1911,16 +2070,44 @@ def main():
             except KeyboardInterrupt:
                 print("\nВыход...")
                 break
-            except Exception as e:
-                print(f"Ошибка: {e}")
-                # При ошибке переподключаемся
-                if sock:
-                    sock.close()
+            except (ConnectionError, OSError) as e:
+                print(f"⚠️  Ошибка соединения: {e}")
+                # При ошибке соединения переподключаемся
+                try:
+                    if sock:
+                        sock.close()
+                except:
+                    pass
                 sock = None
                 print("Переподключение...")
-                time.sleep(1)
-                sock = connect_socket()
-                time.sleep(0.2)
+                try:
+                    time.sleep(1)
+                    sock = connect_socket()
+                    time.sleep(0.2)
+                    print("✓ Переподключено успешно!")
+                except Exception as e2:
+                    print(f"❌ Ошибка переподключения: {e2}")
+                    sock = None
+            except Exception as e:
+                print(f"Ошибка: {e}")
+                import traceback
+                traceback.print_exc()
+                # При других ошибках тоже пробуем переподключиться
+                try:
+                    if sock:
+                        sock.close()
+                except:
+                    pass
+                sock = None
+                print("Переподключение...")
+                try:
+                    time.sleep(1)
+                    sock = connect_socket()
+                    time.sleep(0.2)
+                    print("✓ Переподключено успешно!")
+                except Exception as e2:
+                    print(f"❌ Ошибка переподключения: {e2}")
+                    sock = None
     
     finally:
         if sock:
