@@ -6931,24 +6931,6 @@ Item {
     }
 
 
-    // Компонент для маленьких подписей осей
-    // В Qt Charts для ValueAxis labelDelegate получает объект Label со свойством text
-    Component {
-        id: smallAxisLabel
-        Text {
-            // В Qt Charts для ValueAxis labelDelegate получает объект Label
-            // Используем свойство text из контекста Label
-            // Если text не доступен, используем пустую строку
-            Component.onCompleted: {
-                // Qt Charts автоматически установит text через контекст
-            }
-            color: "#ffffff"
-            font.pixelSize: 6
-            scale: 0.8
-            transformOrigin: Item.Center
-        }
-    }
-
     GraphsView {
         id: spline2
         anchors.right: parent.right
