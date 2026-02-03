@@ -660,7 +660,7 @@ class ModbusClient:
                         # При разрыве соединения пробуем переподключиться
                         if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
                             logger.warning(f"Разрыв соединения при чтении регистра 1021: {e}, пробуем переподключиться...")
-                                if self._reconnect():
+                            if self._reconnect():
                                 # После переподключения пробуем повторить запрос
                                 try:
                                     # Получаем новый сокет после переподключения
@@ -736,7 +736,7 @@ class ModbusClient:
                         # При разрыве соединения пробуем переподключиться
                         if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
                             logger.warning(f"Разрыв соединения при записи в регистр 1021: {e}, пробуем переподключиться...")
-                                if self._reconnect():
+                            if self._reconnect():
                                 # После переподключения пробуем повторить запрос
                                 try:
                                     # Получаем новый сокет после переподключения
@@ -865,20 +865,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1111")
                 return None
@@ -911,6 +898,20 @@ class ModbusClient:
                     time.sleep(0.1)  # Задержка между попытками
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра 1111: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения пробуем повторить запрос
+                    try:
+                        return self.read_register_1111_direct()
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+            self._connected = False
+            return None
         except Exception as e:
             logger.error(f"Ошибка при чтении регистра 1111 через прямой сокет: {e}")
             return None
@@ -926,20 +927,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1111")
                 return False
@@ -959,14 +947,45 @@ class ModbusClient:
                             success = True
                             break
                 except (ConnectionError, OSError) as e:
+                    error_code = getattr(e, 'errno', None)
                     if i == 0:
                         logger.debug(f"Первая попытка записи в регистр 1111 не удалась (это нормально): {e}")
                     else:
+                        # При разрыве соединения пробуем переподключиться
+                        if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                            logger.warning(f"Разрыв соединения при записи в регистр 1111: {e}, пробуем переподключиться...")
+                            if self._reconnect():
+                                # После переподключения пробуем повторить запрос
+                                try:
+                                    sock = self._get_socket()
+                                    if sock:
+                                        sock.sendall(write_frame)
+                                        time.sleep(0.01)
+                                        resp = sock.recv(256)
+                                        if resp and len(resp) >= 8:
+                                            if resp[0] == self.unit_id and resp[1] == 6:
+                                                return True
+                                except Exception as e2:
+                                    logger.warning(f"Ошибка при повторной записи после переподключения: {e2}")
                         raise
                 if i < 1:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return success
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при записи в регистр 1111: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения пробуем повторить запрос
+                    try:
+                        return self.write_register_1111_direct(value)
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторной записи после переподключения: {e2}")
+            self._connected = False
+            return False
         except Exception as e:
             logger.error(f"Ошибка при записи в регистр 1111 через прямой сокет: {e}")
             return False
@@ -1043,20 +1062,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1511")
                 return None
@@ -1081,14 +1087,48 @@ class ModbusClient:
                         if parsed is not None:
                             break
                 except (ConnectionError, OSError, socket.timeout) as e:
+                    error_code = getattr(e, 'errno', None)
                     if i == 0:
                         logger.debug(f"Первая попытка чтения регистра 1511 не удалась (это нормально): {e}")
                     else:
-                        logger.warning(f"Вторая попытка чтения регистра 1511 не удалась: {e}")
+                        # При разрыве соединения пробуем переподключиться
+                        if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                            logger.warning(f"Разрыв соединения при чтении регистра 1511: {e}, пробуем переподключиться...")
+                            if self._reconnect():
+                                # После переподключения пробуем повторить запрос
+                                try:
+                                    sock = self._get_socket()
+                                    if sock:
+                                        sock.settimeout(2.0)
+                                        sock.sendall(read_frame)
+                                        time.sleep(0.05)
+                                        resp = sock.recv(256)
+                                        if resp:
+                                            parsed = self._parse_read_response_1511(resp)
+                                            if parsed is not None:
+                                                return parsed
+                                except Exception as e2:
+                                    logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+                        else:
+                            logger.warning(f"Вторая попытка чтения регистра 1511 не удалась: {e}")
                 if i < 1:
                     time.sleep(0.1)  # Задержка между попытками
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра 1511: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения пробуем повторить запрос
+                    try:
+                        return self.read_register_1511_direct()
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+            self._connected = False
+            return None
         except Exception as e:
             logger.error(f"Ошибка при чтении регистра 1511 через прямой сокет: {e}")
             return None
@@ -1118,20 +1158,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1531")
                 return False
@@ -1208,20 +1235,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1331")
                 return False
@@ -1298,20 +1312,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1241")
                 return False
@@ -1535,20 +1536,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1411")
                 return None
@@ -1605,20 +1593,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1421")
                 return None
@@ -1651,6 +1626,20 @@ class ModbusClient:
                     time.sleep(0.1)  # Задержка между попытками
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра 1421: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения пробуем повторить запрос
+                    try:
+                        return self.read_register_1421_direct()
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+            self._connected = False
+            return None
         except Exception as e:
             logger.error(f"Ошибка при чтении регистра 1421 через прямой сокет: {e}")
             return None
@@ -1697,20 +1686,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1341")
                 return None
@@ -1783,20 +1759,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1251")
                 return None
@@ -1874,20 +1837,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1611")
                 return None
@@ -2026,20 +1976,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1661")
                 return False
@@ -2138,20 +2075,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1651")
                 return None
@@ -2232,20 +2156,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1701")
                 return None
@@ -2332,20 +2243,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямого чтения регистра 1131")
                 return None
@@ -2378,6 +2276,20 @@ class ModbusClient:
                     time.sleep(0.1)  # Задержка между попытками
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра 1131: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения пробуем повторить запрос
+                    try:
+                        return self.read_register_1131_direct()
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+            self._connected = False
+            return None
         except Exception as e:
             logger.error(f"Ошибка при чтении регистра 1131 через прямой сокет: {e}")
             return None
@@ -2393,20 +2305,7 @@ class ModbusClient:
         
         try:
             # Получаем сокет из pymodbus клиента
-            sock = None
-            if hasattr(self.client, 'socket') and self.client.socket:
-                sock = self.client.socket
-            elif hasattr(self.client, 'transport'):
-                transport = self.client.transport
-                if hasattr(transport, 'socket') and transport.socket:
-                    sock = transport.socket
-                elif hasattr(transport, '_socket') and transport._socket:
-                    sock = transport._socket
-                elif hasattr(transport, 'sock') and transport.sock:
-                    sock = transport.sock
-                elif hasattr(transport, '_sock') and transport._sock:
-                    sock = transport._sock
-            
+            sock = self._get_socket()
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1131")
                 return False
@@ -2434,6 +2333,20 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return success
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при записи в регистр 1131: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения пробуем повторить запрос
+                    try:
+                        return self.write_register_1131_direct(value)
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторной записи после переподключения: {e2}")
+            self._connected = False
+            return False
         except Exception as e:
             logger.error(f"Ошибка при записи в регистр 1131 через прямой сокет: {e}")
             return False
