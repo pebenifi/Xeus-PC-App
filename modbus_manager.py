@@ -6106,9 +6106,9 @@ class ModbusManager(QObject):
         logger.info(f"🔵 Эмитируем сигнал pidControllerSetpointChanged: {temperature}°C")
         self.pidControllerSetpointChanged.emit(temperature)
         
-        # Преобразуем температуру в значение для регистра (умножаем на 100)
-        # Например, 23.0°C -> 2300
-        register_value = int(temperature * 100)
+        # Преобразуем температуру в значение для регистра (умножаем на 10)
+        # Например, 23.0°C -> 230
+        register_value = int(temperature * 10)
         
         logger.info(f"Установка температуры PID Controller: {temperature}°C (регистр 1421 = {register_value})")
         
