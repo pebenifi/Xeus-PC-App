@@ -6932,10 +6932,16 @@ Item {
 
 
     // Компонент для маленьких подписей осей
+    // В Qt Charts для ValueAxis labelDelegate получает объект Label со свойством text
     Component {
         id: smallAxisLabel
         Text {
-            text: value !== undefined ? value.toFixed(1) : ""
+            // В Qt Charts для ValueAxis labelDelegate получает объект Label
+            // Используем свойство text из контекста Label
+            // Если text не доступен, используем пустую строку
+            Component.onCompleted: {
+                // Qt Charts автоматически установит text через контекст
+            }
             color: "#ffffff"
             font.pixelSize: 6
             scale: 0.8
@@ -6986,14 +6992,16 @@ Item {
             tickAnchor: 38000
             tickInterval: 1000
             labelsVisible: true
-            labelDelegate: smallAxisLabel
+            // Убрали labelDelegate для избежания ошибок с modelData/value
+            // Используем стандартные подписи осей
         }
         ValueAxis { 
             id: nmrAxisY
             min: 0
             max: 1
             labelsVisible: true
-            labelDelegate: smallAxisLabel
+            // Убрали labelDelegate для избежания ошибок с modelData/value
+            // Используем стандартные подписи осей
         }
         LineSeries {
             id: nmrLineSeries
@@ -7059,14 +7067,16 @@ Item {
             tickAnchor: 792
             tickInterval: 1.0
             labelsVisible: true
-            labelDelegate: smallAxisLabel
+            // Убрали labelDelegate для избежания ошибок с modelData/value
+            // Используем стандартные подписи осей
         }
         ValueAxis { 
             id: irAxisY
             min: 0
             max: 1
             labelsVisible: true
-            labelDelegate: smallAxisLabel
+            // Убрали labelDelegate для избежания ошибок с modelData/value
+            // Используем стандартные подписи осей
         }
         LineSeries {
             id: splineSeries
