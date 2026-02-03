@@ -17,6 +17,9 @@ logging.basicConfig(
 
 if __name__ == "__main__":
     os.environ["QT_QUICK_CONTROLS_STYLE"] = "Fusion"
+    # Отключаем логирование Qt (включая qt.graphs2d.critical и qt.qpa.fonts)
+    # Используем правильный формат для QT_LOGGING_RULES - отключаем все логи qt.graphs2d и qt.qpa.fonts
+    os.environ["QT_LOGGING_RULES"] = "qt.graphs2d.*=false;qt.qpa.fonts.*=false"
     app = QGuiApplication(sys.argv)
     engine = QQmlApplicationEngine()
 
