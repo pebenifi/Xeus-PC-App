@@ -6104,7 +6104,7 @@ Item {
                     width: valuesPanel.width - 32
                     readOnly: true
                     font.pixelSize: 10
-                    font.family: "Courier"
+                    font.family: "monospace"
                     color: "#ffffff"
                     wrapMode: TextArea.Wrap
                     background: Rectangle {
