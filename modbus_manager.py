@@ -3270,11 +3270,11 @@ class ModbusManager(QObject):
             
             result = {}
             if temp_value is not None:
-                # Преобразуем из int (температура * 100) в float
-                result['temperature'] = float(temp_value) / 100.0
+                # Преобразуем из int (температура * 10) в float
+                result['temperature'] = float(temp_value) / 10.0
             if setpoint_value is not None:
-                # Преобразуем из int (температура * 100) в float
-                result['setpoint'] = float(setpoint_value) / 100.0
+                # Преобразуем из int (температура * 10) в float
+                result['setpoint'] = float(setpoint_value) / 10.0
             if state_value and len(state_value) >= 1:
                 result['state'] = bool(int(state_value[0]) & 0x01)
             
