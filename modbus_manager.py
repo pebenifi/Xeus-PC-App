@@ -5807,6 +5807,13 @@ class ModbusManager(QObject):
     def _setFanAsync(self, fanIndex: int, fan_bit: int, state: bool):
         """Асинхронная установка состояния вентилятора (не блокирует UI)"""
         client = self._modbus_client
+        
+        # Запоминаем ожидаемое состояние
+        fan_key = f'fan:{fanIndex}'
+        self._expected_states[fan_key] = (state, time.time())
+        # Временно останавливаем чтение регистра 1131 на 500мс после записи
+        self._fan_1131_timer.stop()
+        QTimer.singleShot(500, lambda: self._fan_1131_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5815,9 +5822,17 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Вентилятор {fanIndex} успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} вентилятор {fanIndex}")
+                    # При ошибке удаляем из ожидаемых и возобновляем чтение
+                    self._expected_states.pop(fan_key, None)
+                    if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
+                        self._fan_1131_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке вентилятора {fanIndex}: {e}", exc_info=True)
+                # При ошибке удаляем из ожидаемых и возобновляем чтение
+                self._expected_states.pop(fan_key, None)
+                if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
+                    self._fan_1131_timer.start()
                 return False
 
         self._enqueue_write("fan1131", task, {"fanIndex": fanIndex, "state": state})
@@ -5859,11 +5874,12 @@ class ModbusManager(QObject):
         relay_name = relay_name_map.get(relay_num)
         if relay_name:
             # Запоминаем ожидаемое состояние для этого реле
-            # Это будет использоваться для сравнения с прочитанным значением
             relay_key = f'relay:{relay_name}'
             self._expected_states[relay_key] = (state, time.time())
-            logger.info(f"💾 [1021] Запоминаем ожидаемое состояние для {relay_name}: {state} (relay_num={relay_num}, бит={relay_num-1})")
-            logger.info(f"💾 [1021] Текущие состояния в памяти: {self._relay_states}")
+            logger.info(f"💾 [1021] Запоминаем ожидаемое состояние для {relay_name}: {state}")
+            # Временно останавливаем чтение регистра 1021 на 500мс после записи
+            self._relay_1021_timer.stop()
+            QTimer.singleShot(500, lambda: self._relay_1021_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5872,17 +5888,21 @@ class ModbusManager(QObject):
                     logger.info(f"✅ {name} успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} {name}")
-                    # При ошибке сразу удаляем из ожидаемых состояний
+                    # При ошибке сразу удаляем из ожидаемых состояний и возобновляем чтение
                     if relay_name:
                         relay_key = f'relay:{relay_name}'
                         self._expected_states.pop(relay_key, None)
+                        if not self._relay_1021_timer.isActive() and self._is_connected and not self._polling_paused:
+                            self._relay_1021_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке {name}: {e}", exc_info=True)
-                # При ошибке сразу удаляем из ожидаемых состояний
+                # При ошибке сразу удаляем из ожидаемых состояний и возобновляем чтение
                 if relay_name:
                     relay_key = f'relay:{relay_name}'
                     self._expected_states.pop(relay_key, None)
+                    if not self._relay_1021_timer.isActive() and self._is_connected and not self._polling_paused:
+                        self._relay_1021_timer.start()
                 return False
 
         self._enqueue_write(f"relay:{relay_num}", task, {"relay": relay_num, "state": state, "name": name})
@@ -5890,6 +5910,13 @@ class ModbusManager(QObject):
     def _setValveAsync(self, valveIndex: int, valve_bit: int, state: bool):
         """Асинхронная установка состояния клапана (не блокирует UI)"""
         client = self._modbus_client
+        
+        # Запоминаем ожидаемое состояние
+        valve_key = f'valve:{valveIndex}'
+        self._expected_states[valve_key] = (state, time.time())
+        # Временно останавливаем чтение регистра 1111 на 500мс после записи
+        self._valve_1111_timer.stop()
+        QTimer.singleShot(500, lambda: self._valve_1111_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5898,9 +5925,17 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Клапан {valveIndex} (бит {valve_bit}) успешно {'открыт' if state else 'закрыт'}")
                 else:
                     logger.error(f"❌ Не удалось {'открыть' if state else 'закрыть'} клапан {valveIndex}")
+                    # При ошибке удаляем из ожидаемых и возобновляем чтение
+                    self._expected_states.pop(valve_key, None)
+                    if not self._valve_1111_timer.isActive() and self._is_connected and not self._polling_paused:
+                        self._valve_1111_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке клапана {valveIndex}: {e}", exc_info=True)
+                # При ошибке удаляем из ожидаемых и возобновляем чтение
+                self._expected_states.pop(valve_key, None)
+                if not self._valve_1111_timer.isActive() and self._is_connected and not self._polling_paused:
+                    self._valve_1111_timer.start()
                 return False
 
         self._enqueue_write(f"valve:{valveIndex}", task, {"valveIndex": valveIndex, "state": state})
