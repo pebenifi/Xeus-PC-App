@@ -5840,6 +5840,13 @@ class ModbusManager(QObject):
     def _setLaserFanAsync(self, state: bool):
         """Асинхронная установка состояния Laser Fan (не блокирует UI)"""
         client = self._modbus_client
+        
+        # Запоминаем ожидаемое состояние
+        fan_key = 'fan:10'
+        self._expected_states[fan_key] = (state, time.time())
+        # Временно останавливаем чтение регистра 1131 на 500мс после записи
+        self._fan_1131_timer.stop()
+        QTimer.singleShot(500, lambda: self._fan_1131_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5849,9 +5856,17 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Laser Fan успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} Laser Fan")
+                    # При ошибке удаляем из ожидаемых и возобновляем чтение
+                    self._expected_states.pop(fan_key, None)
+                    if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
+                        self._fan_1131_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке Laser Fan: {e}", exc_info=True)
+                # При ошибке удаляем из ожидаемых и возобновляем чтение
+                self._expected_states.pop(fan_key, None)
+                if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
+                    self._fan_1131_timer.start()
                 return False
 
         self._enqueue_write("laser_fan", task, {"state": state})
