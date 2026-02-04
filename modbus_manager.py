@@ -462,6 +462,8 @@ class ModbusManager(QObject):
         # Вентиляторы (регистр 1131) - индексы 0-10
         self._fan_states = {i: False for i in range(11)}
         self._fan_optimistic_updates = {}  # Флаги оптимистичных обновлений вентиляторов: fanIndex -> timestamp
+        # Время последней записи в регистр 1021 (для предотвращения чтения сразу после записи)
+        self._last_relay_1021_write_time = 0.0
         # Буфер для регистров (для быстрого доступа без блокировки UI)
         self._register_cache = {}  # address -> value
         # Флаг паузы опросов (чтобы при переключении экранов не блокировать UI)
@@ -2767,6 +2769,12 @@ class ModbusManager(QObject):
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
         if "1021" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1021")
+            return
+        
+        # Игнорируем чтение в течение 300мс после записи, чтобы избежать чтения устаревшего значения
+        current_time = time.time()
+        if current_time - self._last_relay_1021_write_time < 0.3:
+            logger.debug("⏸ Пропускаем чтение регистра 1021: недавно была запись")
             return
 
         self._reading_1021 = True
@@ -5651,12 +5659,17 @@ class ModbusManager(QObject):
     def _setRelayAsync(self, relay_num: int, state: bool, name: str):
         """Асинхронная установка состояния реле (не блокирует UI)"""
         client = self._modbus_client
+        
+        # Запоминаем время записи, чтобы временно игнорировать чтения регистра 1021
+        self._last_relay_1021_write_time = time.time()
 
         def task() -> bool:
             try:
                 result = client.set_relay_1021(relay_num, state)
                 if result:
                     logger.info(f"✅ {name} успешно {'включен' if state else 'выключен'}")
+                    # Обновляем время записи после успешной записи
+                    self._last_relay_1021_write_time = time.time()
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} {name}")
                 return bool(result)
