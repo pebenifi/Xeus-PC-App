@@ -1617,66 +1617,6 @@ class ModbusManager(QObject):
         self._expected_states = {k: v for k, v in self._expected_states.items() 
                                 if not k.startswith('relay:') or current_time - v[1] < 2.0}
         
-        # Игнорируем чтение в течение 300мс после удаления ожидаемого состояния
-        # (чтобы не применять временные неправильные значения из регистра)
-        if current_time - self._last_expected_state_removed_time_1021 < 0.3:
-            logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1021:.2f}с назад)")
-            return
-        
-        # Проверяем, есть ли ЛЮБЫЕ ожидаемые состояния для реле
-        relay_expected = {k: v for k, v in self._expected_states.items() 
-                         if k.startswith('relay:')}
-        
-        # Если есть ожидаемые состояния, полностью игнорируем чтение регистра 1021
-        # до тех пор, пока не совпадут ВСЕ ожидаемые состояния
-        if relay_expected:
-            logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: есть ожидаемые состояния {list(relay_expected.keys())}")
-            logger.info(f"⏸ [1021] Прочитанные значения: {new_states}")
-            logger.info(f"⏸ [1021] Текущие состояния в памяти: {self._relay_states}")
-            # Проверяем, совпадают ли прочитанные значения с ожидаемыми - если да, удаляем из ожидаемых
-            # ВАЖНО: применяем ТОЛЬКО те реле, которые совпали с ожидаемыми, остальные игнорируем
-            relay_key_map = {
-                'water_chiller': 'relay:water_chiller',
-                'magnet_psu': 'relay:magnet_psu',
-                'laser_psu': 'relay:laser_psu',
-                'vacuum_pump': 'relay:vacuum_pump',
-                'vacuum_gauge': 'relay:vacuum_gauge',
-                'pid_controller': 'relay:pid_controller',
-                'op_cell_heating': 'relay:op_cell_heating',
-            }
-            for relay_name, new_state in new_states.items():
-                relay_key = relay_key_map[relay_name]
-                expected_info = self._expected_states.get(relay_key)
-                if expected_info is not None:
-                    expected_state, expected_time = expected_info
-                    if new_state == expected_state:
-                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись
-                        logger.info(f"✅ [1021] {relay_name}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
-                        self._expected_states.pop(relay_key, None)
-                        # Запоминаем время удаления, чтобы игнорировать следующее чтение
-                        self._last_expected_state_removed_time_1021 = current_time
-                        # Применяем ТОЛЬКО это реле, остальные игнорируем (чтобы не перезаписать их устаревшими значениями)
-                        current_state = self._relay_states[relay_name]
-                        if new_state != current_state:
-                            logger.info(f"🔄 [1021] Применяем только {relay_name}: {current_state} -> {new_state} (остальные игнорируем)")
-                            self._relay_states[relay_name] = new_state
-                            if relay_name == 'water_chiller':
-                                self.waterChillerStateChanged.emit(new_state)
-                            elif relay_name == 'magnet_psu':
-                                self.magnetPSUStateChanged.emit(new_state)
-                            elif relay_name == 'laser_psu':
-                                self.laserPSUStateChanged.emit(new_state)
-                            elif relay_name == 'vacuum_pump':
-                                self.vacuumPumpStateChanged.emit(new_state)
-                            elif relay_name == 'vacuum_gauge':
-                                self.vacuumGaugeStateChanged.emit(new_state)
-                            elif relay_name == 'pid_controller':
-                                self.pidControllerStateChanged.emit(new_state)
-                            elif relay_name == 'op_cell_heating':
-                                self.opCellHeatingStateChanged.emit(new_state)
-            return  # Не применяем остальные значения из регистра
-        
-        # Нет недавних ожидаемых состояний - применяем значения из регистра нормально
         relay_key_map = {
             'water_chiller': 'relay:water_chiller',
             'magnet_psu': 'relay:magnet_psu',
@@ -1687,16 +1627,69 @@ class ModbusManager(QObject):
             'op_cell_heating': 'relay:op_cell_heating',
         }
         
-        # Логируем прочитанное значение для отладки
-        logger.info(f"📖 [1021] Регистр прочитан: low_byte=0x{low_byte:02X} ({low_byte:08b}), new_states={new_states}")
-        logger.info(f"📖 [1021] Текущие состояния в памяти: {self._relay_states}")
-        logger.info(f"📖 [1021] Ожидаемые состояния: {[(k, v[0], f'{current_time - v[1]:.2f}с назад') for k, v in self._expected_states.items() if k.startswith('relay:')]}")
-        
+        # НОВЫЙ ПОДХОД: применяем значения из регистра ТОЛЬКО если:
+        # 1. Нет ожидаемого состояния для этого реле ИЛИ
+        # 2. Прочитанное значение совпадает с ожидаемым ИЛИ
+        # 3. Прочитанное значение совпадает с текущим в памяти
         for relay_name, new_state in new_states.items():
+            relay_key = relay_key_map[relay_name]
             current_state = self._relay_states[relay_name]
-            if new_state != current_state:
-                # Применяем новое значение
-                logger.info(f"🔄 [1021] Обновление {relay_name}: {current_state} -> {new_state} (эмитим сигнал)")
+            expected_info = self._expected_states.get(relay_key)
+            
+            # Если есть ожидаемое состояние
+            if expected_info is not None:
+                expected_state, expected_time = expected_info
+                time_since_expected = current_time - expected_time
+                
+                # Если прочитанное значение совпадает с ожидаемым - устройство обработало запись
+                if new_state == expected_state:
+                    logger.info(f"✅ [1021] {relay_name}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
+                    self._expected_states.pop(relay_key, None)
+                    # Применяем значение только если оно отличается от текущего
+                    if new_state != current_state:
+                        self._relay_states[relay_name] = new_state
+                        if relay_name == 'water_chiller':
+                            self.waterChillerStateChanged.emit(new_state)
+                        elif relay_name == 'magnet_psu':
+                            self.magnetPSUStateChanged.emit(new_state)
+                        elif relay_name == 'laser_psu':
+                            self.laserPSUStateChanged.emit(new_state)
+                        elif relay_name == 'vacuum_pump':
+                            self.vacuumPumpStateChanged.emit(new_state)
+                        elif relay_name == 'vacuum_gauge':
+                            self.vacuumGaugeStateChanged.emit(new_state)
+                        elif relay_name == 'pid_controller':
+                            self.pidControllerStateChanged.emit(new_state)
+                        elif relay_name == 'op_cell_heating':
+                            self.opCellHeatingStateChanged.emit(new_state)
+                # Если прочитанное значение НЕ совпадает с ожидаемым И прошло мало времени - игнорируем
+                elif time_since_expected < 1.0:
+                    logger.debug(f"⏸ [1021] Игнорируем {relay_name}: прочитано {new_state}, ожидается {expected_state} (прошло {time_since_expected:.2f}с)")
+                    continue
+                # Если прошло много времени, но значение не совпало - возможно устройство не обработало запись, удаляем из ожидаемых
+                else:
+                    logger.info(f"⚠️ [1021] {relay_name}: прошло {time_since_expected:.2f}с, но значение не совпало (прочитано {new_state}, ожидалось {expected_state}), удаляем из ожидаемых")
+                    self._expected_states.pop(relay_key, None)
+                    # Применяем прочитанное значение
+                    if new_state != current_state:
+                        self._relay_states[relay_name] = new_state
+                        if relay_name == 'water_chiller':
+                            self.waterChillerStateChanged.emit(new_state)
+                        elif relay_name == 'magnet_psu':
+                            self.magnetPSUStateChanged.emit(new_state)
+                        elif relay_name == 'laser_psu':
+                            self.laserPSUStateChanged.emit(new_state)
+                        elif relay_name == 'vacuum_pump':
+                            self.vacuumPumpStateChanged.emit(new_state)
+                        elif relay_name == 'vacuum_gauge':
+                            self.vacuumGaugeStateChanged.emit(new_state)
+                        elif relay_name == 'pid_controller':
+                            self.pidControllerStateChanged.emit(new_state)
+                        elif relay_name == 'op_cell_heating':
+                            self.opCellHeatingStateChanged.emit(new_state)
+            # Нет ожидаемого состояния - применяем значение нормально
+            elif new_state != current_state:
+                logger.info(f"🔄 [1021] Обновление {relay_name}: {current_state} -> {new_state}")
                 self._relay_states[relay_name] = new_state
                 if relay_name == 'water_chiller':
                     self.waterChillerStateChanged.emit(new_state)
@@ -1712,8 +1705,6 @@ class ModbusManager(QObject):
                     self.pidControllerStateChanged.emit(new_state)
                 elif relay_name == 'op_cell_heating':
                     self.opCellHeatingStateChanged.emit(new_state)
-            else:
-                logger.debug(f"⏭️ [1021] {relay_name}: значение не изменилось ({current_state})")
 
     def _applyValve1111Value(self, value: object):
         self._reading_1111 = False
@@ -1729,44 +1720,43 @@ class ModbusManager(QObject):
         self._expected_states = {k: v for k, v in self._expected_states.items() 
                                 if not k.startswith('valve:') or current_time - v[1] < 2.0}
         
-        # Игнорируем чтение в течение 300мс после удаления ожидаемого состояния
-        if current_time - self._last_expected_state_removed_time_1111 < 0.3:
-            logger.info(f"⏸ [1111] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1111:.2f}с назад)")
-            return
-        
-        # Проверяем, есть ли ЛЮБЫЕ ожидаемые состояния для клапанов
-        valve_expected = {k: v for k, v in self._expected_states.items() 
-                         if k.startswith('valve:')}
-        
-        # Если есть ожидаемые состояния, проверяем совпадения и применяем только совпавшие
-        if valve_expected:
-            logger.info(f"⏸ [1111] ИГНОРИРУЕМ чтение: есть ожидаемые состояния {list(valve_expected.keys())}")
-            for valve_index in range(5, 12):
-                new_state = bool(value_int & (1 << valve_index))
-                valve_key = f'valve:{valve_index}'
-                expected_info = self._expected_states.get(valve_key)
-                if expected_info is not None:
-                    expected_state, expected_time = expected_info
-                    if new_state == expected_state:
-                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись
-                        logger.info(f"✅ [1111] Клапан {valve_index}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
-                        self._expected_states.pop(valve_key, None)
-                        # Запоминаем время удаления, чтобы игнорировать следующее чтение
-                        self._last_expected_state_removed_time_1111 = current_time
-                        # Применяем ТОЛЬКО этот клапан, остальные игнорируем
-                        current_state = self._valve_states[valve_index]
-                        if new_state != current_state:
-                            logger.info(f"🔄 [1111] Применяем только клапан {valve_index}: {current_state} -> {new_state} (остальные игнорируем)")
-                            self._valve_states[valve_index] = new_state
-                            self.valveStateChanged.emit(valve_index, new_state)
-            return  # Не применяем остальные значения из регистра
-        
-        # Нет недавних ожидаемых состояний - применяем значения из регистра нормально
+        # НОВЫЙ ПОДХОД: применяем значения из регистра ТОЛЬКО если:
+        # 1. Нет ожидаемого состояния для этого клапана ИЛИ
+        # 2. Прочитанное значение совпадает с ожидаемым ИЛИ
+        # 3. Прочитанное значение совпадает с текущим в памяти
         for valve_index in range(5, 12):
             new_state = bool(value_int & (1 << valve_index))
-            if new_state != self._valve_states[valve_index]:
-                # Применяем новое значение
-                logger.info(f"🔄 [1111] Обновление клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state}")
+            valve_key = f'valve:{valve_index}'
+            current_state = self._valve_states[valve_index]
+            expected_info = self._expected_states.get(valve_key)
+            
+            # Если есть ожидаемое состояние
+            if expected_info is not None:
+                expected_state, expected_time = expected_info
+                time_since_expected = current_time - expected_time
+                
+                # Если прочитанное значение совпадает с ожидаемым - устройство обработало запись
+                if new_state == expected_state:
+                    logger.info(f"✅ [1111] Клапан {valve_index}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
+                    self._expected_states.pop(valve_key, None)
+                    # Применяем значение только если оно отличается от текущего
+                    if new_state != current_state:
+                        self._valve_states[valve_index] = new_state
+                        self.valveStateChanged.emit(valve_index, new_state)
+                # Если прочитанное значение НЕ совпадает с ожидаемым И прошло мало времени - игнорируем
+                elif time_since_expected < 1.0:
+                    logger.debug(f"⏸ [1111] Игнорируем клапан {valve_index}: прочитано {new_state}, ожидается {expected_state} (прошло {time_since_expected:.2f}с)")
+                    continue
+                # Если прошло много времени, но значение не совпало - удаляем из ожидаемых и применяем прочитанное
+                else:
+                    logger.info(f"⚠️ [1111] Клапан {valve_index}: прошло {time_since_expected:.2f}с, но значение не совпало, удаляем из ожидаемых")
+                    self._expected_states.pop(valve_key, None)
+                    if new_state != current_state:
+                        self._valve_states[valve_index] = new_state
+                        self.valveStateChanged.emit(valve_index, new_state)
+            # Нет ожидаемого состояния - применяем значение нормально
+            elif new_state != current_state:
+                logger.info(f"🔄 [1111] Обновление клапана {valve_index}: {current_state} -> {new_state}")
                 self._valve_states[valve_index] = new_state
                 self.valveStateChanged.emit(valve_index, new_state)
 
@@ -1881,66 +1871,77 @@ class ModbusManager(QObject):
         self._expected_states = {k: v for k, v in self._expected_states.items() 
                                 if not k.startswith('fan:') or current_time - v[1] < 2.0}
         
-        # Игнорируем чтение в течение 300мс после удаления ожидаемого состояния
-        if current_time - self._last_expected_state_removed_time_1131 < 0.3:
-            logger.info(f"⏸ [1131] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1131:.2f}с назад)")
-            return
-        
-        # Проверяем, есть ли ЛЮБЫЕ ожидаемые состояния для вентиляторов
-        fan_expected = {k: v for k, v in self._expected_states.items() 
-                       if k.startswith('fan:')}
-        
-        # Если есть ожидаемые состояния, проверяем совпадения и применяем только совпавшие
-        if fan_expected:
-            logger.info(f"⏸ [1131] ИГНОРИРУЕМ чтение: есть ожидаемые состояния {list(fan_expected.keys())}")
-            for fan_index, bit_pos in fan_mapping.items():
-                new_state = bool(value_int & (1 << bit_pos))
-                fan_key = f'fan:{fan_index}'
-                expected_info = self._expected_states.get(fan_key)
-                if expected_info is not None:
-                    expected_state, expected_time = expected_info
-                    if new_state == expected_state:
-                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись
-                        logger.info(f"✅ [1131] Вентилятор {fan_index}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
-                        self._expected_states.pop(fan_key, None)
-                        # Запоминаем время удаления, чтобы игнорировать следующее чтение
-                        self._last_expected_state_removed_time_1131 = current_time
-                        # Применяем ТОЛЬКО этот вентилятор, остальные игнорируем
-                        current_state = self._fan_states[fan_index]
-                        if new_state != current_state:
-                            logger.info(f"🔄 [1131] Применяем только вентилятор {fan_index}: {current_state} -> {new_state} (остальные игнорируем)")
-                            self._fan_states[fan_index] = new_state
-                            self.fanStateChanged.emit(fan_index, new_state)
-            
-            # Laser fan: bit 15
-            new_laser_fan_state = bool(value_int & (1 << 15))
-            fan_key = 'fan:10'
-            expected_info = self._expected_states.get(fan_key)
-            if expected_info is not None:
-                expected_state, expected_time = expected_info
-                if new_laser_fan_state == expected_state:
-                    logger.info(f"✅ [1131] Laser Fan: прочитанное значение ({new_laser_fan_state}) совпадает с ожидаемым, удаляем из ожидаемых")
-                    self._expected_states.pop(fan_key, None)
-                    self._last_expected_state_removed_time_1131 = current_time
-                    current_state = self._fan_states[10]
-                    if new_laser_fan_state != current_state:
-                        logger.info(f"🔄 [1131] Применяем только Laser Fan: {current_state} -> {new_laser_fan_state}")
-                        self._fan_states[10] = new_laser_fan_state
-                        self.fanStateChanged.emit(10, new_laser_fan_state)
-            return  # Не применяем остальные значения из регистра
-        
-        # Нет недавних ожидаемых состояний - применяем значения из регистра нормально
+        # НОВЫЙ ПОДХОД: применяем значения из регистра ТОЛЬКО если:
+        # 1. Нет ожидаемого состояния для этого вентилятора ИЛИ
+        # 2. Прочитанное значение совпадает с ожидаемым ИЛИ
+        # 3. Прочитанное значение совпадает с текущим в памяти
         for fan_index, bit_pos in fan_mapping.items():
             new_state = bool(value_int & (1 << bit_pos))
-            if new_state != self._fan_states[fan_index]:
-                logger.info(f"🔄 [1131] Обновление вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state}")
+            fan_key = f'fan:{fan_index}'
+            current_state = self._fan_states[fan_index]
+            expected_info = self._expected_states.get(fan_key)
+            
+            # Если есть ожидаемое состояние
+            if expected_info is not None:
+                expected_state, expected_time = expected_info
+                time_since_expected = current_time - expected_time
+                
+                # Если прочитанное значение совпадает с ожидаемым - устройство обработало запись
+                if new_state == expected_state:
+                    logger.info(f"✅ [1131] Вентилятор {fan_index}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
+                    self._expected_states.pop(fan_key, None)
+                    # Применяем значение только если оно отличается от текущего
+                    if new_state != current_state:
+                        self._fan_states[fan_index] = new_state
+                        self.fanStateChanged.emit(fan_index, new_state)
+                # Если прочитанное значение НЕ совпадает с ожидаемым И прошло мало времени - игнорируем
+                elif time_since_expected < 1.0:
+                    logger.debug(f"⏸ [1131] Игнорируем вентилятор {fan_index}: прочитано {new_state}, ожидается {expected_state} (прошло {time_since_expected:.2f}с)")
+                    continue
+                # Если прошло много времени, но значение не совпало - удаляем из ожидаемых и применяем прочитанное
+                else:
+                    logger.info(f"⚠️ [1131] Вентилятор {fan_index}: прошло {time_since_expected:.2f}с, но значение не совпало, удаляем из ожидаемых")
+                    self._expected_states.pop(fan_key, None)
+                    if new_state != current_state:
+                        self._fan_states[fan_index] = new_state
+                        self.fanStateChanged.emit(fan_index, new_state)
+            # Нет ожидаемого состояния - применяем значение нормально
+            elif new_state != current_state:
+                logger.info(f"🔄 [1131] Обновление вентилятора {fan_index}: {current_state} -> {new_state}")
                 self._fan_states[fan_index] = new_state
                 self.fanStateChanged.emit(fan_index, new_state)
 
-        # laser fan: bit 15
+        # Laser fan: bit 15
         new_laser_fan_state = bool(value_int & (1 << 15))
-        if new_laser_fan_state != self._fan_states[10]:
-            logger.info(f"🔄 [1131] Обновление Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state}")
+        fan_key = 'fan:10'
+        current_state = self._fan_states[10]
+        expected_info = self._expected_states.get(fan_key)
+        
+        # Если есть ожидаемое состояние
+        if expected_info is not None:
+            expected_state, expected_time = expected_info
+            time_since_expected = current_time - expected_time
+            
+            # Если прочитанное значение совпадает с ожидаемым - устройство обработало запись
+            if new_laser_fan_state == expected_state:
+                logger.info(f"✅ [1131] Laser Fan: прочитанное значение ({new_laser_fan_state}) совпадает с ожидаемым, удаляем из ожидаемых")
+                self._expected_states.pop(fan_key, None)
+                if new_laser_fan_state != current_state:
+                    self._fan_states[10] = new_laser_fan_state
+                    self.fanStateChanged.emit(10, new_laser_fan_state)
+            # Если прочитанное значение НЕ совпадает с ожидаемым И прошло мало времени - игнорируем
+            elif time_since_expected < 1.0:
+                logger.debug(f"⏸ [1131] Игнорируем Laser Fan: прочитано {new_laser_fan_state}, ожидается {expected_state} (прошло {time_since_expected:.2f}с)")
+            # Если прошло много времени, но значение не совпало - удаляем из ожидаемых и применяем прочитанное
+            else:
+                logger.info(f"⚠️ [1131] Laser Fan: прошло {time_since_expected:.2f}с, но значение не совпало, удаляем из ожидаемых")
+                self._expected_states.pop(fan_key, None)
+                if new_laser_fan_state != current_state:
+                    self._fan_states[10] = new_laser_fan_state
+                    self.fanStateChanged.emit(10, new_laser_fan_state)
+        # Нет ожидаемого состояния - применяем значение нормально
+        elif new_laser_fan_state != current_state:
+            logger.info(f"🔄 [1131] Обновление Laser Fan: {current_state} -> {new_laser_fan_state}")
             self._fan_states[10] = new_laser_fan_state
             self.fanStateChanged.emit(10, new_laser_fan_state)
 
@@ -5808,12 +5809,9 @@ class ModbusManager(QObject):
         """Асинхронная установка состояния вентилятора (не блокирует UI)"""
         client = self._modbus_client
         
-        # Запоминаем ожидаемое состояние
+        # Запоминаем время оптимистичного обновления
         fan_key = f'fan:{fanIndex}'
         self._expected_states[fan_key] = (state, time.time())
-        # Временно останавливаем чтение регистра 1131 на 500мс после записи
-        self._fan_1131_timer.stop()
-        QTimer.singleShot(500, lambda: self._fan_1131_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5822,17 +5820,13 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Вентилятор {fanIndex} успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} вентилятор {fanIndex}")
-                    # При ошибке удаляем из ожидаемых и возобновляем чтение
+                    # При ошибке удаляем из ожидаемых
                     self._expected_states.pop(fan_key, None)
-                    if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
-                        self._fan_1131_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке вентилятора {fanIndex}: {e}", exc_info=True)
-                # При ошибке удаляем из ожидаемых и возобновляем чтение
+                # При ошибке удаляем из ожидаемых
                 self._expected_states.pop(fan_key, None)
-                if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
-                    self._fan_1131_timer.start()
                 return False
 
         self._enqueue_write("fan1131", task, {"fanIndex": fanIndex, "state": state})
@@ -5841,12 +5835,9 @@ class ModbusManager(QObject):
         """Асинхронная установка состояния Laser Fan (не блокирует UI)"""
         client = self._modbus_client
         
-        # Запоминаем ожидаемое состояние
+        # Запоминаем время оптимистичного обновления
         fan_key = 'fan:10'
         self._expected_states[fan_key] = (state, time.time())
-        # Временно останавливаем чтение регистра 1131 на 500мс после записи
-        self._fan_1131_timer.stop()
-        QTimer.singleShot(500, lambda: self._fan_1131_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5856,17 +5847,13 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Laser Fan успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} Laser Fan")
-                    # При ошибке удаляем из ожидаемых и возобновляем чтение
+                    # При ошибке удаляем из ожидаемых
                     self._expected_states.pop(fan_key, None)
-                    if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
-                        self._fan_1131_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке Laser Fan: {e}", exc_info=True)
-                # При ошибке удаляем из ожидаемых и возобновляем чтение
+                # При ошибке удаляем из ожидаемых
                 self._expected_states.pop(fan_key, None)
-                if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
-                    self._fan_1131_timer.start()
                 return False
 
         self._enqueue_write("laser_fan", task, {"state": state})
@@ -5888,13 +5875,9 @@ class ModbusManager(QObject):
         
         relay_name = relay_name_map.get(relay_num)
         if relay_name:
-            # Запоминаем ожидаемое состояние для этого реле
+            # Запоминаем время оптимистичного обновления
             relay_key = f'relay:{relay_name}'
             self._expected_states[relay_key] = (state, time.time())
-            logger.info(f"💾 [1021] Запоминаем ожидаемое состояние для {relay_name}: {state}")
-            # Временно останавливаем чтение регистра 1021 на 500мс после записи
-            self._relay_1021_timer.stop()
-            QTimer.singleShot(500, lambda: self._relay_1021_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5903,21 +5886,17 @@ class ModbusManager(QObject):
                     logger.info(f"✅ {name} успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} {name}")
-                    # При ошибке сразу удаляем из ожидаемых состояний и возобновляем чтение
+                    # При ошибке удаляем из ожидаемых
                     if relay_name:
                         relay_key = f'relay:{relay_name}'
                         self._expected_states.pop(relay_key, None)
-                        if not self._relay_1021_timer.isActive() and self._is_connected and not self._polling_paused:
-                            self._relay_1021_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке {name}: {e}", exc_info=True)
-                # При ошибке сразу удаляем из ожидаемых состояний и возобновляем чтение
+                # При ошибке удаляем из ожидаемых
                 if relay_name:
                     relay_key = f'relay:{relay_name}'
                     self._expected_states.pop(relay_key, None)
-                    if not self._relay_1021_timer.isActive() and self._is_connected and not self._polling_paused:
-                        self._relay_1021_timer.start()
                 return False
 
         self._enqueue_write(f"relay:{relay_num}", task, {"relay": relay_num, "state": state, "name": name})
@@ -5926,12 +5905,9 @@ class ModbusManager(QObject):
         """Асинхронная установка состояния клапана (не блокирует UI)"""
         client = self._modbus_client
         
-        # Запоминаем ожидаемое состояние
+        # Запоминаем время оптимистичного обновления
         valve_key = f'valve:{valveIndex}'
         self._expected_states[valve_key] = (state, time.time())
-        # Временно останавливаем чтение регистра 1111 на 500мс после записи
-        self._valve_1111_timer.stop()
-        QTimer.singleShot(500, lambda: self._valve_1111_timer.start() if self._is_connected and not self._polling_paused else None)
 
         def task() -> bool:
             try:
@@ -5940,17 +5916,13 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Клапан {valveIndex} (бит {valve_bit}) успешно {'открыт' if state else 'закрыт'}")
                 else:
                     logger.error(f"❌ Не удалось {'открыть' if state else 'закрыть'} клапан {valveIndex}")
-                    # При ошибке удаляем из ожидаемых и возобновляем чтение
+                    # При ошибке удаляем из ожидаемых
                     self._expected_states.pop(valve_key, None)
-                    if not self._valve_1111_timer.isActive() and self._is_connected and not self._polling_paused:
-                        self._valve_1111_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке клапана {valveIndex}: {e}", exc_info=True)
-                # При ошибке удаляем из ожидаемых и возобновляем чтение
+                # При ошибке удаляем из ожидаемых
                 self._expected_states.pop(valve_key, None)
-                if not self._valve_1111_timer.isActive() and self._is_connected and not self._polling_paused:
-                    self._valve_1111_timer.start()
                 return False
 
         self._enqueue_write(f"valve:{valveIndex}", task, {"valveIndex": valveIndex, "state": state})
