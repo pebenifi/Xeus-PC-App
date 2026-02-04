@@ -1465,12 +1465,12 @@ class ModbusManager(QObject):
         elif key == "ir":
             self._ir_request_in_flight = False
             if value is None:
-                logger.warning("IR spectrum read returned None")
+                logger.debug("IR spectrum read returned None")
             self._applyIrSpectrum(value)
         elif key == "nmr":
             self._nmr_request_in_flight = False
             if value is None:
-                logger.warning("NMR spectrum read returned None")
+                logger.debug("NMR spectrum read returned None")
             self._applyNmrSpectrum(value)
         else:
             # Это могут быть "fire-and-forget" задачи; игнорируем.
@@ -1991,10 +1991,10 @@ class ModbusManager(QObject):
         Применяет результат чтения IR спектра (GUI поток) и дергает сигнал для QML графика.
         """
         if not value or not isinstance(value, dict):
-            logger.warning("IR spectrum: empty/invalid payload (not a dict or None)")
+            logger.debug("IR spectrum: empty/invalid payload (not a dict or None)")
             return
         pts = value.get("points")
-        logger.info(
+        logger.debug(
             f"IR spectrum: payload received, points={len(pts) if isinstance(pts, list) else 'n/a'} "
             f"x=[{value.get('x_min')},{value.get('x_max')}] y=[{value.get('y_min')},{value.get('y_max')}] "
             f"status={value.get('status')}"
@@ -2007,10 +2007,10 @@ class ModbusManager(QObject):
         Применяет результат чтения NMR спектра (GUI поток) и дергает сигнал для QML графика.
         """
         if not value or not isinstance(value, dict):
-            logger.warning("NMR spectrum: empty/invalid payload (not a dict or None)")
+            logger.debug("NMR spectrum: empty/invalid payload (not a dict or None)")
             return
         pts = value.get("points")
-        logger.info(
+        logger.debug(
             f"NMR spectrum: payload received, points={len(pts) if isinstance(pts, list) else 'n/a'} "
             f"x=[{value.get('x_min')},{value.get('x_max')}] y=[{value.get('y_min')},{value.get('y_max')}] "
             f"freq={value.get('freq', 'n/a')}"
@@ -2029,14 +2029,14 @@ class ModbusManager(QObject):
         - 420..477 (58) данные
         """
         if not self._is_connected or self._modbus_client is None:
-            logger.info("IR spectrum request ignored: not connected")
+            logger.debug("IR spectrum request ignored: not connected")
             return False
         if self._ir_request_in_flight:
-            logger.info("IR spectrum request ignored: previous request still in flight")
+            logger.debug("IR spectrum request ignored: previous request still in flight")
             return False
 
         self._ir_request_in_flight = True
-        logger.info("IR spectrum request queued")
+        logger.debug("IR spectrum request queued")
 
         client = self._modbus_client
 
@@ -2047,13 +2047,13 @@ class ModbusManager(QObject):
             # Метаданные лучше читать одним блоком (15 регистров) — иначе иногда "плывут" поля.
             meta = client.read_input_registers_direct(400, 15, max_chunk=15)
             if meta is None or len(meta) < 15:
-                logger.warning(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
+                logger.debug(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
             # Основной режим: безопасно по 10 регистров.
             data_regs = client.read_input_registers_direct(420, 58, max_chunk=10)
             if data_regs is None or len(data_regs) < 58:
-                logger.warning(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                logger.debug(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
 
             # Диагностика качества: если почти все значения нулевые (часто это признак, что устройство
@@ -2067,7 +2067,7 @@ class ModbusManager(QObject):
                 nz_count = 0
 
             if last_nz_idx >= 0 and last_nz_idx <= 9:
-                logger.warning(
+                logger.debug(
                     f"IR spectrum: suspicious tail zeros (last_nonzero_idx={last_nz_idx}, nonzero_count={nz_count}). "
                     f"Trying single-block read (58 regs) once."
                 )
@@ -2082,18 +2082,18 @@ class ModbusManager(QObject):
                         nz_count_full = 0
 
                     if last_nz_full > last_nz_idx or nz_count_full > nz_count:
-                        logger.info(
+                        logger.debug(
                             f"IR spectrum: single-block read looks better "
                             f"(last_nonzero_idx {last_nz_idx}->{last_nz_full}, nonzero_count {nz_count}->{nz_count_full})"
                         )
                         data_regs = data_full
                     else:
-                        logger.info(
+                        logger.debug(
                             f"IR spectrum: single-block read did not improve "
                             f"(last_nonzero_idx={last_nz_full}, nonzero_count={nz_count_full}). Keeping chunked."
                         )
 
-            logger.info(
+            logger.debug(
                 f"IR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
                 f"data_length={len(data_regs)} data_first10={data_regs[0:10]} data_last10={data_regs[-10:] if len(data_regs) >= 10 else data_regs} "
                 f"data_nonzero_count={sum(1 for v in data_regs if int(v) != 0)}"
@@ -2238,9 +2238,9 @@ class ModbusManager(QObject):
             # y values (raw uint16 from device) - ВСЕ 58 точек
             y_values_raw_u16 = [int(v) for v in data_regs[:58]]
             if len(y_values_raw_u16) != 58:
-                logger.warning(f"IR spectrum: expected 58 points, got {len(y_values_raw_u16)}")
+                logger.debug(f"IR spectrum: expected 58 points, got {len(y_values_raw_u16)}")
             if not y_values_raw_u16:
-                logger.warning("IR spectrum: y_values empty (no points)")
+                logger.debug("IR spectrum: y_values empty (no points)")
                 return None
 
             # Алгоритм обработки IR данных (как на устройстве):
@@ -2263,7 +2263,7 @@ class ModbusManager(QObject):
                 m += points_float[i]
             m /= float(n_avg)
             
-            logger.info(f"IR spectrum: baseline correction - n={n}, n_avg={n_avg}, baseline={m:.6f}")
+            logger.debug(f"IR spectrum: baseline correction - n={n}, n_avg={n_avg}, baseline={m:.6f}")
             
             # Шаг 3: От каждой точки отнимаем m и обновляем массив на месте (как в устройстве)
             # Одновременно ищем максимум max и его индекс imax
@@ -2286,15 +2286,15 @@ class ModbusManager(QObject):
             y_values = [v * scale_factor for v in points_float]
             max_scaled = max_val * scale_factor
             
-            logger.info(f"IR spectrum: after baseline correction - max={max_val:.6f} at index={imax}")
-            logger.info(f"IR spectrum: after scaling (factor={scale_factor}) - max={max_scaled:.6f}, range=[{min(y_values):.6f}, {max(y_values):.6f}]")
+            logger.debug(f"IR spectrum: after baseline correction - max={max_val:.6f} at index={imax}")
+            logger.debug(f"IR spectrum: after scaling (factor={scale_factor}) - max={max_scaled:.6f}, range=[{min(y_values):.6f}, {max(y_values):.6f}]")
             
             # Сохраняем raw значения для диагностики
             y_values_raw_i16 = y_values_raw_u16  # Для совместимости с существующим кодом
 
             # Убеждаемся, что у нас ровно 58 точек
             if len(y_values) != 58:
-                logger.warning(f"IR spectrum: after conversion expected 58 points, got {len(y_values)}")
+                logger.debug(f"IR spectrum: after conversion expected 58 points, got {len(y_values)}")
                 # Обрезаем или дополняем до 58, если нужно
                 if len(y_values) > 58:
                     y_values = y_values[:58]
@@ -2340,11 +2340,11 @@ class ModbusManager(QObject):
                         pad = y_range * 0.1  # 10% отступ
                         y_min = y_min - pad
                         y_max = y_max + pad
-                    logger.info(f"IR spectrum: using processed data range for Y axis: [{y_min:.6f}, {y_max:.6f}] (after baseline correction)")
+                    logger.debug(f"IR spectrum: using processed data range for Y axis: [{y_min:.6f}, {y_max:.6f}] (after baseline correction)")
                 else:
                     y_min = 0.0
                     y_max = 1.0
-                    logger.warning(f"IR spectrum: processed data range invalid, using fallback")
+                    logger.debug(f"IR spectrum: processed data range invalid, using fallback")
             else:
                 y_min = 0.0
                 y_max = 1.0
@@ -2359,7 +2359,7 @@ class ModbusManager(QObject):
                 ("integral", integral),
             ):
                 if not math.isfinite(val):
-                    logger.warning(f"IR spectrum: {name} is not finite: {val}")
+                    logger.debug(f"IR spectrum: {name} is not finite: {val}")
 
             # Вычисляем min/max из обработанных данных для логирования
             y_min_processed = float(min(y_values)) if y_values else 0.0
@@ -2369,7 +2369,7 @@ class ModbusManager(QObject):
             y_min_meta_str = f"{y_min_meta:.6f}" if math.isfinite(y_min_meta) else "nan"
             y_max_meta_str = f"{y_max_meta:.6f}" if math.isfinite(y_max_meta) else "nan"
             
-            logger.info(
+            logger.debug(
                 f"IR spectrum decoded: status={status} x=[{x_min:.6f},{x_max:.6f}] "
                 f"y_axis=[{y_min:.6f},{y_max:.6f}] (from processed data after baseline correction) "
                 f"y_processed_range=[{y_min_processed:.6f},{y_max_processed:.6f}] "
@@ -2425,7 +2425,7 @@ class ModbusManager(QObject):
             except Exception as e:
                 logger.error(f"IR spectrum: failed to verify data_json: {e}")
             
-            logger.info(f"IR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
+            logger.debug(f"IR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
             return result
 
         self._enqueue_read("ir", task)
@@ -2450,14 +2450,14 @@ class ModbusManager(QObject):
         - 120-375: data (ushort) - 256 регистров
         """
         if not self._is_connected or self._modbus_client is None:
-            logger.info("NMR spectrum request ignored: not connected")
+            logger.debug("NMR spectrum request ignored: not connected")
             return False
         if self._nmr_request_in_flight:
-            logger.info("NMR spectrum request ignored: previous request still in flight")
+            logger.debug("NMR spectrum request ignored: previous request still in flight")
             return False
 
         self._nmr_request_in_flight = True
-        logger.info("NMR spectrum request queued")
+        logger.debug("NMR spectrum request queued")
 
         client = self._modbus_client
 
@@ -2468,16 +2468,16 @@ class ModbusManager(QObject):
             # Читаем метаданные 100-116 (17 регистров)
             meta = client.read_input_registers_direct(100, 17, max_chunk=17)
             if meta is None or len(meta) < 17:
-                logger.warning(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
+                logger.debug(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
             # Читаем данные 120-375 (256 регистров) частями по 10
             data_regs = client.read_input_registers_direct(120, 256, max_chunk=10)
             if data_regs is None or len(data_regs) < 256:
-                logger.warning(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                logger.debug(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
 
-            logger.info(
+            logger.debug(
                 f"NMR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
                 f"data_length={len(data_regs)} data_first10={data_regs[0:10]} data_last10={data_regs[-10:] if len(data_regs) >= 10 else data_regs}"
             )
@@ -2509,7 +2509,7 @@ class ModbusManager(QObject):
 
             # Проверяем валидность значений
             if not math.isfinite(x_min) or not math.isfinite(x_max) or x_max <= x_min:
-                logger.warning(f"NMR spectrum: invalid x range: [{x_min}, {x_max}]")
+                logger.debug(f"NMR spectrum: invalid x range: [{x_min}, {x_max}]")
                 return None
 
             # Данные - это амплитуды (ampl) в виде uint16 значений (256 регистров)
@@ -2521,7 +2521,7 @@ class ModbusManager(QObject):
             # Логируем для отладки
             non_zero_count = sum(1 for v in data_values_raw if v != 0)
             non_zero_indices = [i for i, v in enumerate(data_values_raw) if v != 0]
-            logger.info(f"NMR spectrum: raw data - total={len(data_values_raw)}, non_zero={non_zero_count}, "
+            logger.debug(f"NMR spectrum: raw data - total={len(data_values_raw)}, non_zero={non_zero_count}, "
                        f"non_zero_indices_range=[{min(non_zero_indices) if non_zero_indices else 'N/A'}, {max(non_zero_indices) if non_zero_indices else 'N/A'}], "
                        f"first10={data_values_raw[:10]}, last10={data_values_raw[-10:]}")
             
@@ -2547,17 +2547,17 @@ class ModbusManager(QObject):
             
             # Логируем первые несколько точек для отладки
             if len(points) > 0:
-                logger.info(f"NMR spectrum: first 3 points: {points[0]}, {points[1] if len(points) > 1 else 'N/A'}, {points[2] if len(points) > 2 else 'N/A'}")
-                logger.info(f"NMR spectrum: last 3 points: {points[-3] if len(points) > 2 else 'N/A'}, {points[-2] if len(points) > 1 else 'N/A'}, {points[-1]}")
+                logger.debug(f"NMR spectrum: first 3 points: {points[0]}, {points[1] if len(points) > 1 else 'N/A'}, {points[2] if len(points) > 2 else 'N/A'}")
+                logger.debug(f"NMR spectrum: last 3 points: {points[-3] if len(points) > 2 else 'N/A'}, {points[-2] if len(points) > 1 else 'N/A'}, {points[-1]}")
                 # Проверяем, что X координаты разные
                 if len(points) > 1:
                     x_first = points[0]['x']
                     x_last = points[-1]['x']
                     x_mid = points[len(points) // 2]['x']
-                    logger.info(f"NMR spectrum: X coordinates check - first={x_first:.2f}, mid={x_mid:.2f}, last={x_last:.2f}, range={x_last - x_first:.2f}")
+                    logger.debug(f"NMR spectrum: X coordinates check - first={x_first:.2f}, mid={x_mid:.2f}, last={x_last:.2f}, range={x_last - x_first:.2f}")
                     # Проверяем, что Y координаты не все нули
                     non_zero_y = sum(1 for p in points if p['y'] != 0)
-                    logger.info(f"NMR spectrum: Y coordinates check - non_zero count={non_zero_y} out of {len(points)}, first_y={points[0]['y']}, last_y={points[-1]['y']}")
+                    logger.debug(f"NMR spectrum: Y coordinates check - non_zero count={non_zero_y} out of {len(points)}, first_y={points[0]['y']}, last_y={points[-1]['y']}")
 
             # Для оси Y (амплитуда) используем метаданные y_min и y_max, если они валидны
             # Иначе используем диапазон из данных
@@ -2573,12 +2573,12 @@ class ModbusManager(QObject):
                 # Используем метаданные для оси Y
                 y_axis_min = float(y_min)
                 y_axis_max = float(y_max)
-                logger.info(f"NMR spectrum: using metadata y_min={y_min:.6f}, y_max={y_max:.6f} for Y axis")
+                logger.debug(f"NMR spectrum: using metadata y_min={y_min:.6f}, y_max={y_max:.6f} for Y axis")
             else:
                 # Fallback: используем диапазон из данных
                 y_axis_min = ampl_min
                 y_axis_max = ampl_max
-                logger.info(f"NMR spectrum: using data range y_min={ampl_min:.6f}, y_max={ampl_max:.6f} for Y axis (metadata invalid)")
+                logger.debug(f"NMR spectrum: using data range y_min={ampl_min:.6f}, y_max={ampl_max:.6f} for Y axis (metadata invalid)")
             
             # Добавляем небольшой отступ для лучшей видимости
             ampl_range = y_axis_max - y_axis_min
@@ -2587,7 +2587,7 @@ class ModbusManager(QObject):
                 y_axis_min = max(0.0, y_axis_min - pad)
                 y_axis_max = y_axis_max + pad
 
-            logger.info(
+            logger.debug(
                 f"NMR spectrum decoded: samples={samples} "
                 f"freq_range=[{x_min:.6f},{x_max:.6f}] (X axis) "
                 f"ampl_range=[{y_axis_min:.6f},{y_axis_max:.6f}] (Y axis) "
@@ -2613,7 +2613,7 @@ class ModbusManager(QObject):
                 "points": points,
             }
             
-            logger.info(f"NMR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
+            logger.debug(f"NMR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
             return result
 
         self._enqueue_read("nmr", task)
