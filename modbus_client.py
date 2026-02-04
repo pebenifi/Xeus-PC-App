@@ -168,6 +168,11 @@ class ModbusClient:
                                 logger.warning(f"Не удалось настроить TCP keep-alive: {e}", exc_info=True)
                             
                             self._connected = True
+                            # При успешном переподключении очищаем список проблемных регистров
+                            # чтобы попробовать прочитать их снова
+                            if self._problematic_registers:
+                                logger.info(f"Очищаем список проблемных регистров после переподключения: {sorted(self._problematic_registers)}")
+                                self._problematic_registers.clear()
                             logger.info(f"Успешно подключено к Modbus устройству {self.host}:{self.port} с фреймером '{actual_framer}'")
                             # Добавляем небольшую задержку после подключения, чтобы устройство успело инициализироваться
                             # Первый пакет может теряться, если отправить его сразу после подключения
