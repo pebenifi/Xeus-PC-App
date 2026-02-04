@@ -1139,10 +1139,18 @@ class ModbusClient:
             logger.error(f"Бит клапана должен быть от 5 до 11, получен {valve_bit}")
             return False
         
-        # Читаем текущее состояние
-        current_value = self.read_register_1111_direct()
+        # Читаем текущее состояние с повторными попытками, если нужно
+        # Используем обычный pymodbus для согласованности с остальными операциями
+        current_value = None
+        for attempt in range(3):  # До 3 попыток
+            current_value = self.read_input_register(1111)
+            if current_value is not None:
+                break
+            if attempt < 2:  # Не ждем после последней попытки
+                time.sleep(0.1)  # Небольшая задержка перед повторной попыткой
+        
         if current_value is None:
-            logger.error("Не удалось прочитать текущее состояние регистра 1111")
+            logger.error("Не удалось прочитать текущее состояние регистра 1111 после нескольких попыток")
             return False
         
         if state:
@@ -1152,8 +1160,10 @@ class ModbusClient:
             # Выключаем клапан - сбрасываем бит
             new_value = current_value & ~(1 << valve_bit)
         
-        # Записываем новое значение
-        return self.write_register_1111_direct(new_value)
+        # Записываем новое значение через pymodbus (как для реле)
+        result = self.write_register(1111, new_value)
+        
+        return result
     
     def _build_read_frame_1511(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1511 (функция 04)"""
