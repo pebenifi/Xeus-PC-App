@@ -260,6 +260,11 @@ class ModbusManager(QObject):
         self._connection_button_text = "Connect"  # Текст кнопки подключения: "Connect" или "Disconnect"
         # Список проблемных регистров, которые вызывают разрыв соединения
         self._problematic_registers: set[str] = set()  # Ключи регистров (например, "1021", "1111", "1511")
+        # Таймер для периодической проверки проблемных регистров
+        self._problematic_registers_timer = QTimer(self)
+        self._problematic_registers_timer.timeout.connect(self._checkProblematicRegisters)
+        self._problematic_registers_timer.setInterval(2000)  # Проверка каждые 2 секунды
+        self._checking_problematic_register = False  # Флаг для предотвращения параллельных проверок
         self._water_chiller_inlet_temperature = 0.0  # Температура на входе Water Chiller (регистр 1511)
         self._water_chiller_outlet_temperature = 0.0  # Температура на выходе Water Chiller (регистр 1521)
         self._water_chiller_setpoint = 0.0  # Заданная температура Water Chiller (регистр 1531)
@@ -1482,6 +1487,11 @@ class ModbusManager(QObject):
             elif key == "1131":
                 self._reading_1131 = False
             return
+        
+        # Если регистр успешно прочитан и он был в списке проблемных - удаляем его
+        if key in self._problematic_registers:
+            self._problematic_registers.remove(key)
+            logger.info(f"✅ Регистр {key} успешно прочитан, удален из списка проблемных")
         
         # Любое успешное чтение считаем keep-alive
         if value is not None:
@@ -2775,8 +2785,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1111:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1111" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1111" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1111")
             return
 
@@ -2789,8 +2799,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1511:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1511" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1511" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1511")
             return
 
@@ -3205,8 +3215,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1411:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1411" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1411" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1411")
             return
 
@@ -3219,8 +3229,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1341:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1341" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1341" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1341")
             return
 
@@ -3233,8 +3243,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1251:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1251" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1251" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1251")
             return
 
@@ -3247,8 +3257,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1611:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1611" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1611" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1611")
             return
 
@@ -3261,8 +3271,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1651:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1651" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1651" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1651")
             return
 
@@ -3275,8 +3285,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1701:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1701" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1701" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1701")
             return
 
