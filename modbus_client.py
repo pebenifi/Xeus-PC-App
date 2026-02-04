@@ -58,9 +58,10 @@ class ModbusClient:
             logger.info(f"Попытка подключения к {self.host}:{self.port} с фреймером '{self.framer}'")
             
             # Определяем какой фреймер использовать
+            # В тесте используется framer='rtu', который работает стабильно
             if self.framer == "rtu":
-                # RTU over TCP использует socket фреймер в pymodbus
-                framers_to_try = ["socket", "tcp"]  # Сначала пробуем socket, потом стандартный TCP
+                # Используем 'rtu' напрямую, как в тесте test_pymodbus.py
+                framers_to_try = ["rtu"]  # Используем 'rtu' как в тесте
             elif self.framer == "tcp":
                 framers_to_try = ["tcp"]
             else:
@@ -80,15 +81,13 @@ class ModbusClient:
                         logger.info(f"Modbus {direction}: {hex_str}")
                         return packet
                     
-                    # Устанавливаем таймаут как в рабочей версии (ноябрь 2024)
-                    # Таймаут 0.5 секунды - баланс между скоростью и надежностью
-                    # При несовпадении CRC данные не отображаются (возвращается None)
+                    # Используем настройки как в тесте test_pymodbus.py
+                    # В тесте не указаны timeout и retries, используем значения по умолчанию
+                    # Но добавляем trace_packet для отладки
                     self.client = ModbusTcpClient(
                         host=self.host, 
                         port=self.port, 
                         framer=actual_framer,
-                        timeout=0.5,  # 0.5 секунды - достаточно для ответа устройства, но не слишком долго
-                        retries=1,    # 1 повтор для надежности
                         trace_packet=trace_packet  # Трассировка пакетов для отладки
                     )
                     
@@ -508,43 +507,33 @@ class ModbusClient:
         
         try:
             logger.debug(f"Чтение input регистра {address} (0x{address:04X}), unit_id={self.unit_id}")
-            # Таймаут устанавливается при создании клиента, не передается в read_input_registers
+            # Используем точно такой же вызов, как в test_pymodbus.py
             result = self.client.read_input_registers(
-                address, 
+                address=address, 
                 count=1, 
                 device_id=self.unit_id
             )
             if result.isError():
                 error_str = str(result)
-                if "No response" in error_str or "timeout" in error_str.lower():
-                    logger.debug(f"Таймаут при чтении input регистра {address}")
-                    # При таймауте также добавляем регистр в проблемные
-                    if address not in self._problematic_registers:
-                        self._problematic_registers.add(address)
-                        logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (таймаут при чтении)")
-                else:
-                    logger.error(f"Ошибка чтения input регистра {address}: {result}")
-                return None
-            value = result.registers[0] if result.registers else None
-            logger.info(f"Прочитано из input регистра {address} (0x{address:04X}): значение = {value}")
-            return value
-        except (ConnectionError, OSError) as e:
-            error_str = str(e)
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении input регистра {address}: {e} (errno={error_code})")
-            # При ошибках соединения (Connection reset, Broken pipe и т.д.) пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
+                # В тесте ошибки просто логируются, соединение не разрывается
+                logger.debug(f"Ошибка чтения input регистра {address}: {result}")
+                # Добавляем в проблемные, но НЕ разрываем соединение (как в тесте)
                 if address not in self._problematic_registers:
                     self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После успешного переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    # Просто возвращаем None, чтобы не вызывать повторный разрыв
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
+                    logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
+                return None
+            value = result.registers[0] if result.registers else None
+            logger.debug(f"Прочитано из input регистра {address} (0x{address:04X}): значение = {value}")
+            return value
+        except (ConnectionError, OSError) as e:
+            # В тесте исключения просто логируются, соединение не разрывается
+            error_str = str(e)
+            error_code = getattr(e, 'errno', None)
+            logger.debug(f"Исключение при чтении input регистра {address}: {e} (errno={error_code})")
+            # Добавляем в проблемные, но НЕ разрываем соединение (как в тесте)
+            if address not in self._problematic_registers:
+                self._problematic_registers.add(address)
+                logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
             return None
         except Exception as e:
             # Не логируем таймауты как критические ошибки
