@@ -34,7 +34,7 @@ def test_pymodbus():
         # Читаем регистр 1021 (существующий)
         print("\n2. Чтение регистра 1021 (существующий)...")
         try:
-            result = client.read_input_registers(1021, 1)
+            result = client.read_input_registers(address=1021, count=1, device_id=UNIT_ID)
             if result.isError():
                 print(f"❌ Ошибка чтения: {result}")
             else:
@@ -47,7 +47,7 @@ def test_pymodbus():
         # Читаем регистр 102 (пустой/несуществующий)
         print("\n3. Чтение регистра 102 (пустой/несуществующий)...")
         try:
-            result = client.read_input_registers(102, 1)
+            result = client.read_input_registers(address=102, count=1, device_id=UNIT_ID)
             if result.isError():
                 print(f"❌ Ошибка чтения: {result}")
             else:
@@ -60,7 +60,7 @@ def test_pymodbus():
         # Снова читаем регистр 1021 (проверяем, что соединение не сломалось)
         print("\n4. Повторное чтение регистра 1021 (проверка соединения)...")
         try:
-            result = client.read_input_registers(1021, 1)
+            result = client.read_input_registers(address=1021, count=1, device_id=UNIT_ID)
             if result.isError():
                 print(f"❌ ОШИБКА: Соединение сломалось! {result}")
                 result_ok = False
