@@ -1184,188 +1184,194 @@ Rectangle {
         }
     }
 
-    Rectangle {
-        id: rectangle1
+    // Спектры (IR сверху, NMR снизу) — делаем прокрутку, чтобы нижний график не "уезжал" за край экрана
+    Flickable {
+        id: spectraFlickable
         anchors.right: parent.right
         anchors.rightMargin: 18
         anchors.top: rectangle.bottom
         anchors.topMargin: 308
         width: 480
-        height: 33
-        color: "#979797"
-    }
+        height: Math.max(0, parent.height - y - 18)
+        clip: true
 
-    Text {
-        id: text2
-        anchors.centerIn: rectangle1
-        color: "#ffffff"
-        text: qsTr("IR spectrum")
-        font.pixelSize: 20
-    }
+        contentWidth: width
+        contentHeight: spectraColumn.implicitHeight
 
-    GraphsView {
-        id: spline
-        anchors.right: parent.right
-        anchors.rightMargin: 18
-        anchors.top: rectangle1.bottom
-        anchors.topMargin: 16
-        width: 480
-        height: 280
-        axisX: irAxisXMain
-        axisY: irAxisYMain
-        marginLeft: -17
-        marginRight: 17
-        marginTop: 10
-        marginBottom: -10
+        Column {
+            id: spectraColumn
+            width: parent.width
+            spacing: 16
 
-        GraphsTheme { id: irThemeMain }
-        theme: irThemeMain
+            // IR title
+            Rectangle {
+                id: rectangle1
+                width: 480
+                height: 33
+                color: "#979797"
+            }
+            Text {
+                id: text2
+                anchors.centerIn: rectangle1
+                color: "#ffffff"
+                text: qsTr("IR spectrum")
+                font.pixelSize: 20
+            }
 
-        property var resMarkerSegments: []
-        property var freqMarkerSegments: []
+            // IR graph
+            GraphsView {
+                id: spline
+                width: 480
+                height: 280
+                axisX: irAxisXMain
+                axisY: irAxisYMain
+                marginLeft: -17
+                marginRight: 17
+                marginTop: 10
+                marginBottom: -10
 
-        Component.onCompleted: {
-            resMarkerSegments = [
-                irMarkerResFreqMain0, irMarkerResFreqMain1, irMarkerResFreqMain2, irMarkerResFreqMain3, irMarkerResFreqMain4, irMarkerResFreqMain5,
-                irMarkerResFreqMain6, irMarkerResFreqMain7, irMarkerResFreqMain8, irMarkerResFreqMain9, irMarkerResFreqMain10, irMarkerResFreqMain11
-            ]
-            freqMarkerSegments = [
-                irMarkerFreqMain0, irMarkerFreqMain1, irMarkerFreqMain2, irMarkerFreqMain3, irMarkerFreqMain4, irMarkerFreqMain5,
-                irMarkerFreqMain6, irMarkerFreqMain7, irMarkerFreqMain8, irMarkerFreqMain9, irMarkerFreqMain10, irMarkerFreqMain11
-            ]
-            // Один-в-один как на Clinicalmode
-            // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
-            try { irThemeMain.backgroundColor = "#424242" } catch (e0) {}
-            // Фон области графика (plot area)
-            try { irThemeMain.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
-            try { irThemeMain.plotAreaColor = "#424242" } catch (e0b) {}
-            // Сетка RGB(151, 151, 151) = #979797
-            try { irThemeMain.grid.mainColor = "#979797" } catch (e1) {}
-            try { irThemeMain.grid.subColor = "#979797" } catch (e2) {}
-            try { irThemeMain.axisX.mainColor = "#979797" } catch (e3) {}
-            try { irThemeMain.axisX.subColor = "#979797" } catch (e4) {}
-            try { irThemeMain.axisX.labelTextColor = "#ffffff" } catch (e5) {}
-            try { irThemeMain.axisY.mainColor = "#979797" } catch (e6) {}
-            try { irThemeMain.axisY.subColor = "#979797" } catch (e7) {}
-            try { irThemeMain.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+                GraphsTheme { id: irThemeMain }
+                theme: irThemeMain
+
+                property var resMarkerSegments: []
+                property var freqMarkerSegments: []
+
+                Component.onCompleted: {
+                    resMarkerSegments = [
+                        irMarkerResFreqMain0, irMarkerResFreqMain1, irMarkerResFreqMain2, irMarkerResFreqMain3, irMarkerResFreqMain4, irMarkerResFreqMain5,
+                        irMarkerResFreqMain6, irMarkerResFreqMain7, irMarkerResFreqMain8, irMarkerResFreqMain9, irMarkerResFreqMain10, irMarkerResFreqMain11
+                    ]
+                    freqMarkerSegments = [
+                        irMarkerFreqMain0, irMarkerFreqMain1, irMarkerFreqMain2, irMarkerFreqMain3, irMarkerFreqMain4, irMarkerFreqMain5,
+                        irMarkerFreqMain6, irMarkerFreqMain7, irMarkerFreqMain8, irMarkerFreqMain9, irMarkerFreqMain10, irMarkerFreqMain11
+                    ]
+                    // Один-в-один как на Clinicalmode
+                    // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
+                    try { irThemeMain.backgroundColor = "#424242" } catch (e0) {}
+                    // Фон области графика (plot area)
+                    try { irThemeMain.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+                    try { irThemeMain.plotAreaColor = "#424242" } catch (e0b) {}
+                    // Сетка RGB(151, 151, 151) = #979797
+                    try { irThemeMain.grid.mainColor = "#979797" } catch (e1) {}
+                    try { irThemeMain.grid.subColor = "#979797" } catch (e2) {}
+                    try { irThemeMain.axisX.mainColor = "#979797" } catch (e3) {}
+                    try { irThemeMain.axisX.subColor = "#979797" } catch (e4) {}
+                    try { irThemeMain.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+                    try { irThemeMain.axisY.mainColor = "#979797" } catch (e6) {}
+                    try { irThemeMain.axisY.subColor = "#979797" } catch (e7) {}
+                    try { irThemeMain.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+                }
+
+                ValueAxis {
+                    id: irAxisXMain
+                    min: 792
+                    max: 798
+                    tickAnchor: 792
+                    tickInterval: 1.0
+                    labelsVisible: true
+                }
+                ValueAxis { id: irAxisYMain; min: 0; max: 1; labelsVisible: true }
+                LineSeries { id: splineSeries1; color: "#ff0000"; width: 2 }
+
+                // Пунктирные вертикальные маркеры (делаем набором коротких сегментов)
+                LineSeries { id: irMarkerResFreqMain0; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain1; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain2; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain3; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain4; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain5; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain6; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain7; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain8; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain9; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain10; color: "#ffd400"; width: 2 }
+                LineSeries { id: irMarkerResFreqMain11; color: "#ffd400"; width: 2 }
+
+                LineSeries { id: irMarkerFreqMain0; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain1; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain2; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain3; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain4; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain5; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain6; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain7; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain8; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain9; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain10; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain11; color: "#ffffff"; width: 2 }
+            }
+
+            // NMR title
+            Rectangle {
+                id: rectangle2
+                width: 480
+                height: 33
+                color: "#979797"
+            }
+            Text {
+                id: text3
+                anchors.centerIn: rectangle2
+                color: "#ffffff"
+                text: qsTr("NMR spectrum")
+                font.pixelSize: 20
+            }
+
+            // NMR graph
+            GraphsView {
+                id: spline1
+                width: 480
+                height: 280
+                axisX: nmrAxisX
+                axisY: nmrAxisY
+                marginLeft: -17
+                marginRight: 17
+                marginTop: 10
+                marginBottom: -10
+
+                GraphsTheme { id: nmrTheme }
+                theme: nmrTheme
+
+                Component.onCompleted: {
+                    // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
+                    try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
+                    // Фон области графика (plot area)
+                    try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+                    try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
+                    // Сетка RGB(151, 151, 151) = #979797
+                    try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
+                    try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
+                    try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
+                    try { nmrTheme.axisX.subColor = "#979797" } catch (e4) {}
+                    try { nmrTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+                    try { nmrTheme.axisY.mainColor = "#979797" } catch (e6) {}
+                    try { nmrTheme.axisY.subColor = "#979797" } catch (e7) {}
+                    try { nmrTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+                }
+
+                ValueAxis {
+                    id: nmrAxisX
+                    min: 38000
+                    max: 44000
+                    tickAnchor: 38000
+                    tickInterval: 1000
+                    labelsVisible: true
+                }
+                ValueAxis {
+                    id: nmrAxisY
+                    min: 0
+                    max: 1
+                    labelsVisible: true
+                }
+                LineSeries {
+                    id: nmrLineSeries
+                    // Линия спектра — синяя (как на устройстве)
+                    color: "#4a90e2"
+                    width: 2
+                    axisX: nmrAxisX
+                    axisY: nmrAxisY
+                }
+            }
         }
-
-        ValueAxis {
-            id: irAxisXMain
-            min: 792
-            max: 798
-            tickAnchor: 792
-            tickInterval: 1.0
-            labelsVisible: true
-        }
-        ValueAxis { id: irAxisYMain; min: 0; max: 1; labelsVisible: true }
-        LineSeries { id: splineSeries1; color: "#ff0000"; width: 2 }
-
-        // Пунктирные вертикальные маркеры (делаем набором коротких сегментов)
-        LineSeries { id: irMarkerResFreqMain0; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain1; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain2; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain3; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain4; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain5; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain6; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain7; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain8; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain9; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain10; color: "#ffd400"; width: 2 }
-        LineSeries { id: irMarkerResFreqMain11; color: "#ffd400"; width: 2 }
-
-        LineSeries { id: irMarkerFreqMain0; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain1; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain2; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain3; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain4; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain5; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain6; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain7; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain8; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain9; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain10; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreqMain11; color: "#ffffff"; width: 2 }
-    }
-
-    Rectangle {
-        id: rectangle2
-        anchors.right: parent.right
-        anchors.rightMargin: 18
-        anchors.top: spline.bottom
-        anchors.topMargin: 19
-        width: 480
-        height: 33
-        color: "#979797"
-    }
-
-    GraphsView {
-        id: spline1
-        anchors.right: parent.right
-        anchors.rightMargin: 18
-        anchors.top: rectangle2.bottom
-        anchors.topMargin: 16
-        // Растягиваем график влево и вниз (как на скрине: там есть свободное место)
-        width: 480
-        height: 280
-        axisX: nmrAxisX
-        axisY: nmrAxisY
-        marginLeft: -17
-        marginRight: 17
-        marginTop: 10
-        marginBottom: -10
-
-        GraphsTheme { id: nmrTheme }
-        theme: nmrTheme
-
-        Component.onCompleted: {
-            // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
-            try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
-            // Фон области графика (plot area)
-            try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
-            try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
-            // Сетка RGB(151, 151, 151) = #979797
-            try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
-            try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
-            try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
-            try { nmrTheme.axisX.subColor = "#979797" } catch (e4) {}
-            try { nmrTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
-            try { nmrTheme.axisY.mainColor = "#979797" } catch (e6) {}
-            try { nmrTheme.axisY.subColor = "#979797" } catch (e7) {}
-            try { nmrTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
-        }
-
-        ValueAxis {
-            id: nmrAxisX
-            min: 38000
-            max: 44000
-            tickAnchor: 38000
-            tickInterval: 1000
-            labelsVisible: true
-        }
-        ValueAxis {
-            id: nmrAxisY
-            min: 0
-            max: 1
-            labelsVisible: true
-        }
-        LineSeries {
-            id: nmrLineSeries
-            // Линия спектра — синяя (как на устройстве)
-            color: "#4a90e2"
-            width: 2
-            axisX: nmrAxisX
-            axisY: nmrAxisY
-        }
-    }
-
-    Text {
-        id: text3
-        anchors.centerIn: rectangle2
-        color: "#ffffff"
-        text: qsTr("NMR spectrum")
-        font.pixelSize: 20
     }
 
     Rectangle {
