@@ -1612,12 +1612,36 @@ class ModbusManager(QObject):
         self._expected_states = {k: v for k, v in self._expected_states.items() 
                                 if not k.startswith('relay:') or current_time - v[1] < 2.0}
         
-        # Обновляем состояния и эмитим сигналы только если:
-        # 1. Значение изменилось
-        # 2. И либо нет ожидаемого состояния для этого реле, либо прочитанное значение совпадает с ожидаемым
-        #    (или прошло больше 2 секунд с момента оптимистичного обновления)
-        # Это предотвращает перезапись оптимистичных значений устаревшими данными с устройства
+        # Проверяем, есть ли недавние ожидаемые состояния для реле (в течение 1.5 секунд)
+        recent_relay_expected = {k: v for k, v in self._expected_states.items() 
+                                if k.startswith('relay:') and current_time - v[1] < 1.5}
         
+        # Если есть недавние ожидаемые состояния, полностью игнорируем чтение регистра 1021
+        # чтобы не перезаписывать оптимистичные значения устаревшими данными
+        if recent_relay_expected:
+            logger.debug(f"⏸ Игнорируем чтение регистра 1021: есть недавние ожидаемые состояния {list(recent_relay_expected.keys())}")
+            # Но проверяем, совпадают ли прочитанные значения с ожидаемыми - если да, удаляем из ожидаемых
+            relay_key_map = {
+                'water_chiller': 'relay:water_chiller',
+                'magnet_psu': 'relay:magnet_psu',
+                'laser_psu': 'relay:laser_psu',
+                'vacuum_pump': 'relay:vacuum_pump',
+                'vacuum_gauge': 'relay:vacuum_gauge',
+                'pid_controller': 'relay:pid_controller',
+                'op_cell_heating': 'relay:op_cell_heating',
+            }
+            for relay_name, new_state in new_states.items():
+                relay_key = relay_key_map[relay_name]
+                expected_info = self._expected_states.get(relay_key)
+                if expected_info is not None:
+                    expected_state, expected_time = expected_info
+                    if new_state == expected_state:
+                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись, удаляем из ожидаемых
+                        logger.debug(f"✅ {relay_name}: прочитанное значение совпадает с ожидаемым, удаляем из ожидаемых")
+                        self._expected_states.pop(relay_key, None)
+            return  # Не применяем значения из регистра
+        
+        # Нет недавних ожидаемых состояний - применяем значения из регистра нормально
         relay_key_map = {
             'water_chiller': 'relay:water_chiller',
             'magnet_psu': 'relay:magnet_psu',
@@ -1634,22 +1658,6 @@ class ModbusManager(QObject):
         for relay_name, new_state in new_states.items():
             current_state = self._relay_states[relay_name]
             if new_state != current_state:
-                relay_key = relay_key_map[relay_name]
-                expected_info = self._expected_states.get(relay_key)
-                
-                # Если есть ожидаемое состояние и оно не совпадает с прочитанным, и прошло мало времени - игнорируем
-                if expected_info is not None:
-                    expected_state, expected_time = expected_info
-                    time_since_expected = current_time - expected_time
-                    if time_since_expected < 2.0 and new_state != expected_state:
-                        # Прочитанное значение не совпадает с ожидаемым - это старое значение, игнорируем
-                        logger.debug(f"⏸ Игнорируем чтение {relay_name}: прочитано {new_state}, ожидается {expected_state}, текущее {current_state} (прошло {time_since_expected:.2f}с)")
-                        continue
-                    elif new_state == expected_state:
-                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись, удаляем из ожидаемых
-                        logger.debug(f"✅ {relay_name}: прочитанное значение совпадает с ожидаемым, удаляем из ожидаемых")
-                        self._expected_states.pop(relay_key, None)
-                
                 # Применяем новое значение
                 logger.debug(f"🔄 Обновление {relay_name}: {current_state} -> {new_state}")
                 self._relay_states[relay_name] = new_state
