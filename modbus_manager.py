@@ -6403,12 +6403,10 @@ class ModbusManager(QObject):
         # Попробуем: valve_bit = valveIndex (биты нумеруются с 0)
         valve_bit = valveIndex
         
-        # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
-        self._valve_states[valveIndex] = state
-        self.valveStateChanged.emit(valveIndex, state)
+        # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
         # Затем отправляем команду на устройство асинхронно через очередь задач
         self._setValveAsync(valveIndex, valve_bit, state)
-        return True  # Возвращаем True сразу, так как UI уже обновлен
+        return True
     
     # ===== Power Supply методы записи =====
     @Slot(float, result=bool)
