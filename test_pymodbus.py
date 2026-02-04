@@ -21,6 +21,7 @@ def test_pymodbus():
     print("=" * 60)
     
     client = ModbusTcpClient(host=IP, port=PORT, framer='rtu')
+    result_ok = False
     
     try:
         # Подключаемся
@@ -32,34 +33,46 @@ def test_pymodbus():
         
         # Читаем регистр 1021 (существующий)
         print("\n2. Чтение регистра 1021 (существующий)...")
-        result = client.read_input_registers(1021, 1, unit=UNIT_ID)
-        if result.isError():
-            print(f"❌ Ошибка чтения: {result}")
-        else:
-            print(f"✅ Значение регистра 1021: {result.registers[0]}")
+        try:
+            result = client.read_input_registers(1021, 1)
+            if result.isError():
+                print(f"❌ Ошибка чтения: {result}")
+            else:
+                print(f"✅ Значение регистра 1021: {result.registers[0]}")
+        except Exception as e:
+            print(f"❌ Исключение при чтении: {e}")
         
         time.sleep(0.5)
         
         # Читаем регистр 102 (пустой/несуществующий)
         print("\n3. Чтение регистра 102 (пустой/несуществующий)...")
-        result = client.read_input_registers(102, 1, unit=UNIT_ID)
-        if result.isError():
-            print(f"❌ Ошибка чтения: {result}")
-        else:
-            print(f"✅ Значение регистра 102: {result.registers[0]}")
+        try:
+            result = client.read_input_registers(102, 1)
+            if result.isError():
+                print(f"❌ Ошибка чтения: {result}")
+            else:
+                print(f"✅ Значение регистра 102: {result.registers[0]}")
+        except Exception as e:
+            print(f"❌ Исключение при чтении: {e}")
         
         time.sleep(0.5)
         
         # Снова читаем регистр 1021 (проверяем, что соединение не сломалось)
         print("\n4. Повторное чтение регистра 1021 (проверка соединения)...")
-        result = client.read_input_registers(1021, 1, unit=UNIT_ID)
-        if result.isError():
-            print(f"❌ ОШИБКА: Соединение сломалось! {result}")
-        else:
-            print(f"✅ Соединение работает! Значение регистра 1021: {result.registers[0]}")
+        try:
+            result = client.read_input_registers(1021, 1)
+            if result.isError():
+                print(f"❌ ОШИБКА: Соединение сломалось! {result}")
+                result_ok = False
+            else:
+                print(f"✅ Соединение работает! Значение регистра 1021: {result.registers[0]}")
+                result_ok = True
+        except Exception as e:
+            print(f"❌ ОШИБКА: Соединение сломалось! Исключение: {e}")
+            result_ok = False
         
         print("\n" + "=" * 60)
-        print("РЕЗУЛЬТАТ: pymodbus " + ("✅ НЕ ЛОМАЕТ" if not result.isError() else "❌ ЛОМАЕТ") + " соединение")
+        print("РЕЗУЛЬТАТ: pymodbus " + ("✅ НЕ ЛОМАЕТ" if result_ok else "❌ ЛОМАЕТ") + " соединение")
         print("=" * 60)
         
     except Exception as e:

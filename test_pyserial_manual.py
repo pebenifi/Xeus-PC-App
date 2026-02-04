@@ -46,16 +46,24 @@ def read_register(sock: socket.socket, address: int) -> tuple:
         resp = b''
         sock.settimeout(1.0)
         try:
+            # Читаем все доступные данные
             while True:
                 chunk = sock.recv(256)
                 if not chunk:
                     break
                 resp += chunk
-                if len(resp) >= 7:
-                    byte_count = resp[2] if len(resp) > 2 else 0
-                    expected_length = 3 + byte_count + 2
-                    if len(resp) >= expected_length:
-                        break
+                # Проверяем, не закончился ли фрейм
+                if len(resp) >= 5:
+                    # Проверяем на Modbus exception (3 байта минимум)
+                    if resp[1] & 0x80:
+                        if len(resp) >= 5:  # unit_id + function + error_code + CRC(2)
+                            break
+                    # Проверяем на нормальный ответ
+                    elif len(resp) >= 3:
+                        byte_count = resp[2]
+                        expected_length = 3 + byte_count + 2
+                        if len(resp) >= expected_length:
+                            break
         except socket.timeout:
             pass
         finally:
