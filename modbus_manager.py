@@ -739,7 +739,7 @@ class ModbusManager(QObject):
         self._polling_paused = False
         
         # Запоминаем время возобновления опроса, чтобы игнорировать проверку соединения
-        # в течение 5 секунд после возобновления (время на стабилизацию соединения)
+        # в течение 10 секунд после возобновления (время на стабилизацию соединения)
         self._polling_resumed_time = time.time()
         
         # Обновляем время последнего успешного ответа, чтобы не срабатывала проверка соединения
@@ -1390,6 +1390,8 @@ class ModbusManager(QObject):
         self._connection_fail_count = 0
         self._sync_fail_count = 0
         self._last_modbus_ok_time = time.time()
+        # Обновляем время возобновления опроса, чтобы не срабатывала проверка соединения сразу после переподключения
+        self._polling_resumed_time = time.time()
 
         self.connectionStatusChanged.emit(self._is_connected)
         self.statusTextChanged.emit(self._status_text)
@@ -2656,9 +2658,9 @@ class ModbusManager(QObject):
         if self._polling_paused:
             return
         
-        # Не проверяем соединение в течение 5 секунд после возобновления опроса
+        # Не проверяем соединение в течение 10 секунд после возобновления опроса
         # Это дает время на стабилизацию соединения после переключения экрана
-        if self._polling_resumed_time > 0 and (now - self._polling_resumed_time) < 5.0:
+        if self._polling_resumed_time > 0 and (now - self._polling_resumed_time) < 10.0:
             return
 
         # Если давно не было успешных ответов — считаем соединение "подвисшим"
