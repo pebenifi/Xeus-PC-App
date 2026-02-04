@@ -5756,8 +5756,7 @@ class ModbusManager(QObject):
             10: "laser fan"
         }
         
-        # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
-        # Это обеспечивает мгновенную реакцию кнопок даже при подключенном устройстве
+        # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
         if fanIndex == 10:
             # Laser fan использует бит 15 (считая с 0), что соответствует биту 16 (считая с 1)
             logger.info(f"Установка Laser Fan (бит 15): {state}")
@@ -5785,10 +5784,8 @@ class ModbusManager(QObject):
                 self._updateActionStatus(f"set fan {fanIndex + 1}")
                 # Логируем действие
                 self._addLog(f"Fan {fanIndex + 1}: {'ON' if state else 'OFF'}")
-            # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
-            self._fan_states[fanIndex] = state
-            self.fanStateChanged.emit(fanIndex, state)
-            # Запоминаем ожидаемое состояние для этого вентилятора
+            # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
+            # Запоминаем ожидаемое состояние для этого вентилятора (но не обновляем UI)
             fan_key = f'fan:{fanIndex}'
             self._expected_states[fan_key] = (state, time.time())
             # Затем отправляем команду на устройство асинхронно через очередь задач (только если подключено)
