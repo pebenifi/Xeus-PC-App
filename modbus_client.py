@@ -955,7 +955,7 @@ class ModbusClient:
     
     def read_register_1111_direct(self) -> Optional[int]:
         """Чтение регистра 1111 через прямой сокет (функция 04)"""
-                address = 1111
+        address = 1111
         # Проверяем, не является ли регистр проблемным
         if address in self._problematic_registers:
             logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
