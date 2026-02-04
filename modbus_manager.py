@@ -2775,6 +2775,11 @@ class ModbusManager(QObject):
         """Чтение регистра 1021 (реле) и обновление состояний всех реле"""
         if not self._is_connected or self._modbus_client is None or self._reading_1021:
             return
+        
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1021" in self._problematic_registers and not self._checking_problematic_register:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1021")
+            return
 
         self._reading_1021 = True
         client = self._modbus_client
@@ -3299,8 +3304,8 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._reading_1131:
             return
         
-        # Проверяем, не является ли регистр проблемным
-        if "1131" in self._problematic_registers:
+        # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
+        if "1131" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1131")
             return
 
