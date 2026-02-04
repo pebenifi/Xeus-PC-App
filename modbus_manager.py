@@ -2853,17 +2853,40 @@ class ModbusManager(QObject):
             # но пока используем raw значения
             data_values = data_values_raw
             
-            # Собираем точки для графика
-            # X координата: частота, равномерно распределена от x_min до x_max
-            # Y координата: амплитуда из данных
-            # Для правильного отображения используем raw значения напрямую
+            # Собираем точки для графика.
+            #
+            # Важно: на приборе частота по X должна начинаться с 38000 и идти до 44000,
+            # а метаполе `freq` соответствует частоте ПИКА. На некоторых прошивках x_min/x_max
+            # могут приходить некорректно (или отражать другой диапазон), из-за чего пик
+            # "уезжает" (например, рисуется около 38500 вместо ~42000).
+            #
+            # Поэтому:
+            # - базовый X диапазон фиксируем 38000..44000
+            # - если `freq` валиден, сдвигаем X так, чтобы максимум данных оказался на `freq`
+            X_MIN = 38000.0
+            X_MAX = 44000.0
+
             points = []
-            if len(data_values) >= 2 and x_max != x_min:
-                step = (x_max - x_min) / float(len(data_values) - 1)
+            n = len(data_values)
+            if n >= 2 and X_MAX != X_MIN:
+                # индекс максимума (пика) по данным
+                try:
+                    imax = max(range(n), key=lambda i: int(data_values[i]))
+                except Exception:
+                    imax = 0
+
+                dx = (X_MAX - X_MIN) / float(n - 1)
+                # целевое положение пика по X
+                x_peak_default = X_MIN + dx * float(imax)
+                shift = 0.0
+                if math.isfinite(freq):
+                    # сдвиг так, чтобы x(imax) == freq
+                    shift = float(freq) - x_peak_default
+
                 for i, ampl_value in enumerate(data_values):
-                    freq_x = x_min + step * i
-                    ampl_y = float(ampl_value)  # Raw uint16 значение амплитуды
-                    points.append({"x": freq_x, "y": ampl_y})
+                    x = X_MIN + dx * float(i) + shift
+                    y = float(ampl_value)
+                    points.append({"x": x, "y": y})
             else:
                 for i, ampl_value in enumerate(data_values):
                     points.append({"x": float(i), "y": float(ampl_value)})
@@ -2923,8 +2946,9 @@ class ModbusManager(QObject):
             import json
             result = {
                 "samples": samples,
-                "x_min": float(x_min),
-                "x_max": float(x_max),
+                # UI ось X фиксированная как на приборе
+                "x_min": 38000.0,
+                "x_max": 44000.0,
                 "y_min": float(y_axis_min),
                 "y_max": float(y_axis_max),
                 "freq": float(freq) if math.isfinite(freq) else None,
