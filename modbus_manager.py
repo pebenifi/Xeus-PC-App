@@ -1623,9 +1623,9 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1021:.2f}с назад)")
             return
         
-        # Проверяем, есть ли недавние ожидаемые состояния для реле (в течение 1.5 секунд)
+        # Проверяем, есть ли недавние ожидаемые состояния для реле (в течение 2 секунд)
         recent_relay_expected = {k: v for k, v in self._expected_states.items() 
-                                if k.startswith('relay:') and current_time - v[1] < 1.5}
+                                if k.startswith('relay:') and current_time - v[1] < 2.0}
         
         # Если есть недавние ожидаемые состояния, полностью игнорируем чтение регистра 1021
         # чтобы не перезаписывать оптимистичные значения устаревшими данными
@@ -1734,9 +1734,9 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1111] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1111:.2f}с назад)")
             return
         
-        # Проверяем, есть ли недавние ожидаемые состояния для клапанов (в течение 1.5 секунд)
+        # Проверяем, есть ли недавние ожидаемые состояния для клапанов (в течение 2 секунд)
         recent_valve_expected = {k: v for k, v in self._expected_states.items() 
-                                if k.startswith('valve:') and current_time - v[1] < 1.5}
+                                if k.startswith('valve:') and current_time - v[1] < 2.0}
         
         # Если есть недавние ожидаемые состояния, проверяем совпадения и применяем только совпавшие
         if recent_valve_expected:
@@ -1886,9 +1886,9 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1131] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1131:.2f}с назад)")
             return
         
-        # Проверяем, есть ли недавние ожидаемые состояния для вентиляторов (в течение 1.5 секунд)
+        # Проверяем, есть ли недавние ожидаемые состояния для вентиляторов (в течение 2 секунд)
         recent_fan_expected = {k: v for k, v in self._expected_states.items() 
-                              if k.startswith('fan:') and current_time - v[1] < 1.5}
+                              if k.startswith('fan:') and current_time - v[1] < 2.0}
         
         # Если есть недавние ожидаемые состояния, проверяем совпадения и применяем только совпавшие
         if recent_fan_expected:
@@ -5765,10 +5765,8 @@ class ModbusManager(QObject):
             self._updateActionStatus(f"set {fan_name_mapping[10]}")
             # Логируем действие
             self._addLog(f"{fan_name_mapping[10]}: {'ON' if state else 'OFF'}")
-            # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
-            self._fan_states[10] = state
-            self.fanStateChanged.emit(10, state)
-            # Запоминаем ожидаемое состояние для Laser Fan
+            # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
+            # Запоминаем ожидаемое состояние для Laser Fan (но не обновляем UI)
             fan_key = 'fan:10'
             self._expected_states[fan_key] = (state, time.time())
             # Затем отправляем команду на устройство асинхронно через очередь задач (только если подключено)
@@ -6369,11 +6367,8 @@ class ModbusManager(QObject):
         # Логируем действие
         self._addLog(f"Valve X{valve_number}: {'OPEN' if state else 'CLOSED'}")
         
-        # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
-        # Это обеспечивает мгновенную реакцию кнопок даже при подключенном устройстве
-        self._valve_states[valveIndex] = state
-        self.valveStateChanged.emit(valveIndex, state)
-        # Запоминаем ожидаемое состояние для этого клапана
+        # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
+        # Запоминаем ожидаемое состояние для этого клапана (но не обновляем UI)
         valve_key = f'valve:{valveIndex}'
         self._expected_states[valve_key] = (state, time.time())
         
