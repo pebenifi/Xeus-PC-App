@@ -1623,6 +1623,7 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1021] Прочитанные значения: {new_states}")
             logger.info(f"⏸ [1021] Текущие состояния в памяти: {self._relay_states}")
             # Но проверяем, совпадают ли прочитанные значения с ожидаемыми - если да, удаляем из ожидаемых
+            # ВАЖНО: применяем ТОЛЬКО то реле, которое совпало с ожидаемым, остальные игнорируем
             relay_key_map = {
                 'water_chiller': 'relay:water_chiller',
                 'magnet_psu': 'relay:magnet_psu',
@@ -1638,10 +1639,29 @@ class ModbusManager(QObject):
                 if expected_info is not None:
                     expected_state, expected_time = expected_info
                     if new_state == expected_state:
-                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись, удаляем из ожидаемых
+                        # Прочитанное значение совпадает с ожидаемым - устройство обработало запись
                         logger.info(f"✅ [1021] {relay_name}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
                         self._expected_states.pop(relay_key, None)
-            return  # Не применяем значения из регистра
+                        # Применяем ТОЛЬКО это реле, остальные игнорируем (чтобы не перезаписать их устаревшими значениями)
+                        current_state = self._relay_states[relay_name]
+                        if new_state != current_state:
+                            logger.info(f"🔄 [1021] Применяем только {relay_name}: {current_state} -> {new_state} (остальные игнорируем)")
+                            self._relay_states[relay_name] = new_state
+                            if relay_name == 'water_chiller':
+                                self.waterChillerStateChanged.emit(new_state)
+                            elif relay_name == 'magnet_psu':
+                                self.magnetPSUStateChanged.emit(new_state)
+                            elif relay_name == 'laser_psu':
+                                self.laserPSUStateChanged.emit(new_state)
+                            elif relay_name == 'vacuum_pump':
+                                self.vacuumPumpStateChanged.emit(new_state)
+                            elif relay_name == 'vacuum_gauge':
+                                self.vacuumGaugeStateChanged.emit(new_state)
+                            elif relay_name == 'pid_controller':
+                                self.pidControllerStateChanged.emit(new_state)
+                            elif relay_name == 'op_cell_heating':
+                                self.opCellHeatingStateChanged.emit(new_state)
+            return  # Не применяем остальные значения из регистра
         
         # Нет недавних ожидаемых состояний - применяем значения из регистра нормально
         relay_key_map = {
