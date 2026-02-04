@@ -1184,7 +1184,8 @@ Rectangle {
         }
     }
 
-    // Спектры (IR сверху, NMR снизу) — делаем прокрутку, чтобы нижний график не "уезжал" за край экрана
+    // Спектры (IR сверху, NMR снизу). Если экран невысокий — NMR просто уезжает вниз,
+    // поэтому возвращаем прокрутку (как было), чтобы оба графика всегда были доступны.
     Flickable {
         id: spectraFlickable
         anchors.right: parent.right
@@ -1209,13 +1210,13 @@ Rectangle {
                 width: 480
                 height: 33
                 color: "#979797"
-            }
-            Text {
-                id: text2
-                anchors.centerIn: rectangle1
-                color: "#ffffff"
-                text: qsTr("IR spectrum")
-                font.pixelSize: 20
+                Text {
+                    id: text2
+                    anchors.centerIn: parent
+                    color: "#ffffff"
+                    text: qsTr("IR spectrum")
+                    font.pixelSize: 20
+                }
             }
 
             // IR graph
@@ -1245,13 +1246,9 @@ Rectangle {
                         irMarkerFreqMain0, irMarkerFreqMain1, irMarkerFreqMain2, irMarkerFreqMain3, irMarkerFreqMain4, irMarkerFreqMain5,
                         irMarkerFreqMain6, irMarkerFreqMain7, irMarkerFreqMain8, irMarkerFreqMain9, irMarkerFreqMain10, irMarkerFreqMain11
                     ]
-                    // Один-в-один как на Clinicalmode
-                    // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
                     try { irThemeMain.backgroundColor = "#424242" } catch (e0) {}
-                    // Фон области графика (plot area)
                     try { irThemeMain.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
                     try { irThemeMain.plotAreaColor = "#424242" } catch (e0b) {}
-                    // Сетка RGB(151, 151, 151) = #979797
                     try { irThemeMain.grid.mainColor = "#979797" } catch (e1) {}
                     try { irThemeMain.grid.subColor = "#979797" } catch (e2) {}
                     try { irThemeMain.axisX.mainColor = "#979797" } catch (e3) {}
@@ -1273,7 +1270,6 @@ Rectangle {
                 ValueAxis { id: irAxisYMain; min: 0; max: 1; labelsVisible: true }
                 LineSeries { id: splineSeries1; color: "#ff0000"; width: 2 }
 
-                // Пунктирные вертикальные маркеры (делаем набором коротких сегментов)
                 LineSeries { id: irMarkerResFreqMain0; color: "#ffd400"; width: 2 }
                 LineSeries { id: irMarkerResFreqMain1; color: "#ffd400"; width: 2 }
                 LineSeries { id: irMarkerResFreqMain2; color: "#ffd400"; width: 2 }
@@ -1307,13 +1303,13 @@ Rectangle {
                 width: 480
                 height: 33
                 color: "#979797"
-            }
-            Text {
-                id: text3
-                anchors.centerIn: rectangle2
-                color: "#ffffff"
-                text: qsTr("NMR spectrum")
-                font.pixelSize: 20
+                Text {
+                    id: text3
+                    anchors.centerIn: parent
+                    color: "#ffffff"
+                    text: qsTr("NMR spectrum")
+                    font.pixelSize: 20
+                }
             }
 
             // NMR graph
@@ -1332,12 +1328,9 @@ Rectangle {
                 theme: nmrTheme
 
                 Component.onCompleted: {
-                    // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
                     try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
-                    // Фон области графика (plot area)
                     try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
                     try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
-                    // Сетка RGB(151, 151, 151) = #979797
                     try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
                     try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
                     try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
@@ -1364,7 +1357,6 @@ Rectangle {
                 }
                 LineSeries {
                     id: nmrLineSeries
-                    // Линия спектра — синяя (как на устройстве)
                     color: "#4a90e2"
                     width: 2
                     axisX: nmrAxisX
