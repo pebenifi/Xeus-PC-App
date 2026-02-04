@@ -466,11 +466,6 @@ class ModbusManager(QObject):
         # Используется для сравнения прочитанных значений с ожидаемыми и игнорирования несовпадающих значений
         # Формат: {'relay:pid_controller': (True, timestamp), 'fan:0': (False, timestamp), 'valve:5': (True, timestamp), ...}
         self._expected_states = {}
-        # Время последнего удаления ожидаемого состояния (чтобы игнорировать следующее чтение)
-        # Отдельно для каждого типа регистра
-        self._last_expected_state_removed_time_1021 = 0.0  # Реле (регистр 1021)
-        self._last_expected_state_removed_time_1111 = 0.0  # Клапаны (регистр 1111)
-        self._last_expected_state_removed_time_1131 = 0.0  # Вентиляторы (регистр 1131)
         # Буфер для регистров (для быстрого доступа без блокировки UI)
         self._register_cache = {}  # address -> value
         # Флаг паузы опросов (чтобы при переключении экранов не блокировать UI)
