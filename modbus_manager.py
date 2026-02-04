@@ -3545,23 +3545,24 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Alicats"""
             # Alicat 1 Xenon: value Torr (регистр 1611), setpoint Torr (регистр 1621)
-            xenon_value_regs = client.read_input_registers_direct(1611, 1, max_chunk=1)
+            # Используем обычный pymodbus для согласованности
+            xenon_value = client.read_input_register(1611)
             xenon_setpoint_value = client.read_holding_register(1621)
             
             # Alicat 2 N2: value Torr (регистр 1651), setpoint Torr (регистр 1661)
-            n2_value_regs = client.read_input_registers_direct(1651, 1, max_chunk=1)
+            n2_value = client.read_input_register(1651)
             n2_setpoint_value = client.read_holding_register(1661)
             
             result = {}
-            if xenon_value_regs and len(xenon_value_regs) >= 1:
+            if xenon_value is not None:
                 # Преобразуем из int (давление * 100) в float
-                result['xenon_pressure'] = float(int(xenon_value_regs[0])) / 100.0
+                result['xenon_pressure'] = float(xenon_value) / 100.0
             if xenon_setpoint_value is not None:
                 # Преобразуем из int (давление * 100) в float
                 result['xenon_setpoint'] = float(int(xenon_setpoint_value)) / 100.0
-            if n2_value_regs and len(n2_value_regs) >= 1:
+            if n2_value is not None:
                 # Преобразуем из int (давление * 100) в float
-                result['n2_pressure'] = float(int(n2_value_regs[0])) / 100.0
+                result['n2_pressure'] = float(n2_value) / 100.0
             if n2_setpoint_value is not None:
                 # Преобразуем из int (давление * 100) в float
                 result['n2_setpoint'] = float(int(n2_setpoint_value)) / 100.0
@@ -3621,17 +3622,17 @@ class ModbusManager(QObject):
             temp_regs = client.read_input_registers_direct(1841, 1, max_chunk=1)
             
             result = {}
-            if beam_state_regs and len(beam_state_regs) >= 1:
-                result['beam_state'] = bool(int(beam_state_regs[0]) & 0x01)
-            if mpd_regs and len(mpd_regs) >= 1:
+            if beam_state_value is not None:
+                result['beam_state'] = bool(int(beam_state_value) & 0x01)
+            if mpd_value is not None:
                 # MPD в uA - значение уже в нужных единицах
-                result['mpd'] = float(int(mpd_regs[0]))
-            if output_power_regs and len(output_power_regs) >= 1:
+                result['mpd'] = float(mpd_value)
+            if output_power_value is not None:
                 # Output Power - значение уже в нужных единицах
-                result['output_power'] = float(int(output_power_regs[0]))
-            if temp_regs and len(temp_regs) >= 1:
+                result['output_power'] = float(output_power_value)
+            if temp_value is not None:
                 # Temp - значение уже в нужных единицах
-                result['temp'] = float(int(temp_regs[0]))
+                result['temp'] = float(temp_value)
             
             return result
         
