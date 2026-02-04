@@ -67,7 +67,20 @@ Item {
         }
         
         var n = data.length
-        console.log("[NMR] Clinicalmode: data length:", n, "first 5 values:", data.slice(0, 5), "last 5 values:", data.slice(-5))
+        // ВАЖНО: логируем freq/ampl из метаданных + максимум по данным
+        var metaFreq = Number(payload.freq)
+        var metaAmpl = Number(payload.ampl)
+        var maxY = -1
+        var maxIdx = -1
+        for (var mi = 0; mi < n; mi++) {
+            var vy = Number(data[mi])
+            if (isFinite(vy) && !isNaN(vy) && vy > maxY) {
+                maxY = vy
+                maxIdx = mi
+            }
+        }
+        console.log("[NMR] Clinicalmode: meta freq=", metaFreq, "ampl=", metaAmpl, "max(data)=", maxY, "maxIdx=", maxIdx, "n=", n,
+                    "first 5 values:", data.slice(0, 5), "last 5 values:", data.slice(-5))
         var y0 = payload.y_min
         var y1 = payload.y_max
         
