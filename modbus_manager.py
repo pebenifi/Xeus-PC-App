@@ -1396,6 +1396,8 @@ class ModbusManager(QObject):
         self._connection_button_text = "Disconnect"
         self._connection_fail_count = 0
         self._sync_fail_count = 0
+        # Устанавливаем время последнего успешного ответа при подключении
+        # Это дает время на первые чтения регистров перед проверкой соединения
         self._last_modbus_ok_time = time.time()
         # Обновляем время возобновления опроса, чтобы не срабатывала проверка соединения сразу после переподключения
         self._polling_resumed_time = time.time()
