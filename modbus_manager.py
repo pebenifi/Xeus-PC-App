@@ -1593,21 +1593,47 @@ class ModbusManager(QObject):
             return
 
         low_byte = value_int & 0xFF
-        self._relay_states['water_chiller'] = bool(low_byte & 0x01)
-        self._relay_states['magnet_psu'] = bool(low_byte & 0x02)
-        self._relay_states['laser_psu'] = bool(low_byte & 0x04)
-        self._relay_states['vacuum_pump'] = bool(low_byte & 0x08)
-        self._relay_states['vacuum_gauge'] = bool(low_byte & 0x10)
-        self._relay_states['pid_controller'] = bool(low_byte & 0x20)
-        self._relay_states['op_cell_heating'] = bool(low_byte & 0x40)
-
-        self.waterChillerStateChanged.emit(self._relay_states['water_chiller'])
-        self.magnetPSUStateChanged.emit(self._relay_states['magnet_psu'])
-        self.laserPSUStateChanged.emit(self._relay_states['laser_psu'])
-        self.vacuumPumpStateChanged.emit(self._relay_states['vacuum_pump'])
-        self.vacuumGaugeStateChanged.emit(self._relay_states['vacuum_gauge'])
-        self.pidControllerStateChanged.emit(self._relay_states['pid_controller'])
-        self.opCellHeatingStateChanged.emit(self._relay_states['op_cell_heating'])
+        
+        # Вычисляем новые состояния
+        new_states = {
+            'water_chiller': bool(low_byte & 0x01),
+            'magnet_psu': bool(low_byte & 0x02),
+            'laser_psu': bool(low_byte & 0x04),
+            'vacuum_pump': bool(low_byte & 0x08),
+            'vacuum_gauge': bool(low_byte & 0x10),
+            'pid_controller': bool(low_byte & 0x20),
+            'op_cell_heating': bool(low_byte & 0x40),
+        }
+        
+        # Обновляем состояния и эмитим сигналы только если значения изменились
+        # Это предотвращает моргание кнопок при чтении того же значения
+        if new_states['water_chiller'] != self._relay_states['water_chiller']:
+            self._relay_states['water_chiller'] = new_states['water_chiller']
+            self.waterChillerStateChanged.emit(self._relay_states['water_chiller'])
+        
+        if new_states['magnet_psu'] != self._relay_states['magnet_psu']:
+            self._relay_states['magnet_psu'] = new_states['magnet_psu']
+            self.magnetPSUStateChanged.emit(self._relay_states['magnet_psu'])
+        
+        if new_states['laser_psu'] != self._relay_states['laser_psu']:
+            self._relay_states['laser_psu'] = new_states['laser_psu']
+            self.laserPSUStateChanged.emit(self._relay_states['laser_psu'])
+        
+        if new_states['vacuum_pump'] != self._relay_states['vacuum_pump']:
+            self._relay_states['vacuum_pump'] = new_states['vacuum_pump']
+            self.vacuumPumpStateChanged.emit(self._relay_states['vacuum_pump'])
+        
+        if new_states['vacuum_gauge'] != self._relay_states['vacuum_gauge']:
+            self._relay_states['vacuum_gauge'] = new_states['vacuum_gauge']
+            self.vacuumGaugeStateChanged.emit(self._relay_states['vacuum_gauge'])
+        
+        if new_states['pid_controller'] != self._relay_states['pid_controller']:
+            self._relay_states['pid_controller'] = new_states['pid_controller']
+            self.pidControllerStateChanged.emit(self._relay_states['pid_controller'])
+        
+        if new_states['op_cell_heating'] != self._relay_states['op_cell_heating']:
+            self._relay_states['op_cell_heating'] = new_states['op_cell_heating']
+            self.opCellHeatingStateChanged.emit(self._relay_states['op_cell_heating'])
 
     def _applyValve1111Value(self, value: object):
         self._reading_1111 = False
@@ -2771,9 +2797,10 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1021")
             return
         
-        # Игнорируем чтение в течение 300мс после записи, чтобы избежать чтения устаревшего значения
+        # Игнорируем чтение в течение 600мс после записи, чтобы избежать чтения устаревшего значения
+        # Увеличено до 600мс, так как устройство может обрабатывать запись дольше
         current_time = time.time()
-        if current_time - self._last_relay_1021_write_time < 0.3:
+        if current_time - self._last_relay_1021_write_time < 0.6:
             logger.debug("⏸ Пропускаем чтение регистра 1021: недавно была запись")
             return
 
