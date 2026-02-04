@@ -74,21 +74,13 @@ class ModbusClient:
                     # Настраиваем таймауты для избежания блокировки UI
                     # Уменьшаем количество повторных попыток, но оставляем достаточный таймаут для записи
                     
-                    # Функция для трассировки пакетов
-                    def trace_packet(is_tx, packet):
-                        direction = "Tx" if is_tx else "Rx"
-                        hex_str = " ".join(f"{b:02X}" for b in packet)
-                        logger.info(f"Modbus {direction}: {hex_str}")
-                        return packet
-                    
                     # Используем настройки как в тесте test_pymodbus.py
                     # В тесте не указаны timeout и retries, используем значения по умолчанию
-                    # Но добавляем trace_packet для отладки
+                    # Трассировка пакетов отключена для уменьшения логов
                     self.client = ModbusTcpClient(
                         host=self.host, 
                         port=self.port, 
-                        framer=actual_framer,
-                        trace_packet=trace_packet  # Трассировка пакетов для отладки
+                        framer=actual_framer
                     )
                     
                     # Настраиваем TCP keep-alive на уровне сокета после подключения
