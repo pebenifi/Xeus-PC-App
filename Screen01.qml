@@ -2775,7 +2775,8 @@ Rectangle {
                     width: parent.width - 48  // Освобождаем место для стрелок (16px) и кнопки "set" (30px) + отступы
                     height: parent.height
                     color: "#ffffff"
-                    text: modbusManager ? modbusManager.seopCellSetpoint.toFixed(1) : qsTr("--")
+                    // Убираем биндинг text, чтобы избежать циклической зависимости
+                    // Инициализируем значение через Connections
                     font.pixelSize: 15
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
@@ -2788,7 +2789,7 @@ Rectangle {
                         top: 100  // Максимальная температура (можно изменить)
                     }
                     
-                    // Обновление значения при изменении на устройстве
+                    // Инициализация и обновление значения при изменении на устройстве
                     Connections {
                         target: modbusManager
                         function onSeopCellSetpointChanged(setpoint) {
@@ -2800,6 +2801,15 @@ Rectangle {
                                     textInput8.text = setpoint.toFixed(1)
                                 }
                             }
+                        }
+                    }
+                    
+                    // Инициализация при загрузке компонента
+                    Component.onCompleted: {
+                        if (modbusManager) {
+                            textInput8.text = modbusManager.seopCellSetpoint.toFixed(1)
+                        } else {
+                            textInput8.text = "--"
                         }
                     }
                     
