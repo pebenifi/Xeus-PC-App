@@ -1425,6 +1425,12 @@ class ModbusManager(QObject):
         self._last_modbus_ok_time = time.time()
         # Обновляем время возобновления опроса, чтобы не срабатывала проверка соединения сразу после переподключения
         self._polling_resumed_time = time.time()
+        # Запоминаем время подключения для применения начальных значений без задержки
+        self._connection_time = time.time()
+        # Сбрасываем флаги, которые могут блокировать применение значений при первом подключении
+        self._write_in_progress = False
+        self._last_write_error_time = 0.0
+        logger.debug(f"🔌 Время подключения установлено: {self._connection_time}, сброшены блокировки")
 
         self.connectionStatusChanged.emit(self._is_connected)
         self.statusTextChanged.emit(self._status_text)
@@ -1432,6 +1438,12 @@ class ModbusManager(QObject):
 
         # Немедленно отправляем текущие состояния из буфера в UI для мгновенного отображения
         self._emitCachedStates()
+
+        # КРИТИЧНО: сразу читаем регистры вентиляторов и клапанов для синхронизации UI с устройством
+        # Это предотвращает задержку в 20-30 секунд перед отображением начальных состояний
+        QTimer.singleShot(100, lambda: self._readRelay1021() if self._is_connected else None)
+        QTimer.singleShot(150, lambda: self._readValve1111() if self._is_connected else None)
+        QTimer.singleShot(200, lambda: self._readFan1131() if self._is_connected else None)
 
         # Запускаем таймеры (они теперь будут только ставить задачи в worker, не блокируя UI)
         self._connection_check_timer.start()
@@ -1775,15 +1787,37 @@ class ModbusManager(QObject):
             logger.debug(f"⏭️ [1021] Пропускаем сохранение в кэш (запись в процессе или прошло {time_since_write_start:.2f} сек после начала записи {self._last_write_key})")
             return
         
-        # ПОСЛЕДОВАТЕЛЬНОЕ ОБНОВЛЕНИЕ UI: сохраняем изменения в кэш вместо немедленной эмиссии
-        # Функция _applyPendingUIUpdates применит их последовательно с проверкой стабильности
+        # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
+        # Это предотвращает задержку в 20-30 секунд перед отображением начальных состояний
+        time_since_connection = time.time() - self._connection_time
+        is_initial_connection = time_since_connection < 2.0 and self._connection_time > 0
+        
         current_time = time.time()
         for relay_name, new_state in new_states.items():
             current_state = self._relay_states[relay_name]
             if new_state != current_state:
-                # Сохраняем в кэш для последующего применения
-                self._pending_relay_updates[relay_name] = (new_state, current_time)
-                logger.debug(f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)")
+                # Для начальных значений после подключения применяем напрямую
+                if is_initial_connection:
+                    self._relay_states[relay_name] = new_state
+                    logger.info(f"✅ [1021] Начальное значение {relay_name}: {current_state} -> {new_state} (применено напрямую)")
+                    if relay_name == 'water_chiller':
+                        self.waterChillerStateChanged.emit(new_state)
+                    elif relay_name == 'magnet_psu':
+                        self.magnetPSUStateChanged.emit(new_state)
+                    elif relay_name == 'laser_psu':
+                        self.laserPSUStateChanged.emit(new_state)
+                    elif relay_name == 'vacuum_pump':
+                        self.vacuumPumpStateChanged.emit(new_state)
+                    elif relay_name == 'vacuum_gauge':
+                        self.vacuumGaugeStateChanged.emit(new_state)
+                    elif relay_name == 'pid_controller':
+                        self.pidControllerStateChanged.emit(new_state)
+                    elif relay_name == 'op_cell_heating':
+                        self.opCellHeatingStateChanged.emit(new_state)
+                else:
+                    # Для остальных значений сохраняем в кэш для последующего применения
+                    self._pending_relay_updates[relay_name] = (new_state, current_time)
+                    logger.debug(f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)")
 
     def _applyValve1111Value(self, value: object):
         self._reading_1111 = False
@@ -1805,14 +1839,23 @@ class ModbusManager(QObject):
             logger.debug(f"⏭️ [1111] Пропускаем сохранение в кэш (запись в процессе или прошло {time_since_write_start:.2f} сек после начала записи {self._last_write_key})")
             return
         
-        # ПОСЛЕДОВАТЕЛЬНОЕ ОБНОВЛЕНИЕ UI: сохраняем изменения в кэш вместо немедленной эмиссии
+        # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
+        time_since_connection = time.time() - self._connection_time
+        is_initial_connection = time_since_connection < 2.0 and self._connection_time > 0
+        
         current_time = time.time()
         for valve_index in range(5, 12):
             new_state = bool(value_int & (1 << valve_index))
             if new_state != self._valve_states[valve_index]:
-                # Сохраняем в кэш для последующего применения
-                self._pending_valve_updates[valve_index] = (new_state, current_time)
-                logger.debug(f"📝 [1111] Изменение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (добавлено в кэш)")
+                # Для начальных значений после подключения применяем напрямую
+                if is_initial_connection:
+                    self._valve_states[valve_index] = new_state
+                    logger.info(f"✅ [1111] Начальное значение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (применено напрямую)")
+                    self.valveStateChanged.emit(valve_index, new_state)
+                else:
+                    # Для остальных значений сохраняем в кэш для последующего применения
+                    self._pending_valve_updates[valve_index] = (new_state, current_time)
+                    logger.debug(f"📝 [1111] Изменение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (добавлено в кэш)")
 
     def _applyWaterChillerTemperatureValue(self, value: object):
         self._reading_1511 = False
@@ -1931,21 +1974,36 @@ class ModbusManager(QObject):
             5: 9,
         }
 
-        # ПОСЛЕДОВАТЕЛЬНОЕ ОБНОВЛЕНИЕ UI: сохраняем изменения в кэш вместо немедленной эмиссии
+        # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
+        time_since_connection = time.time() - self._connection_time
+        is_initial_connection = time_since_connection < 2.0 and self._connection_time > 0
+        
         current_time = time.time()
         for fan_index, bit_pos in fan_mapping.items():
             new_state = bool(value_int & (1 << bit_pos))
             if new_state != self._fan_states[fan_index]:
-                # Сохраняем в кэш для последующего применения
-                self._pending_fan_updates[fan_index] = (new_state, current_time)
-                logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
+                # Для начальных значений после подключения применяем напрямую
+                if is_initial_connection:
+                    self._fan_states[fan_index] = new_state
+                    logger.info(f"✅ [1131] Начальное значение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (применено напрямую)")
+                    self.fanStateChanged.emit(fan_index, new_state)
+                else:
+                    # Для остальных значений сохраняем в кэш для последующего применения
+                    self._pending_fan_updates[fan_index] = (new_state, current_time)
+                    logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
 
         # laser fan: bit 15
         new_laser_fan_state = bool(value_int & (1 << 15))
         if new_laser_fan_state != self._fan_states[10]:
-            # Сохраняем в кэш для последующего применения
-            self._pending_fan_updates[10] = (new_laser_fan_state, current_time)
-            logger.debug(f"📝 [1131] Изменение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (добавлено в кэш)")
+            # Для начальных значений после подключения применяем напрямую
+            if is_initial_connection:
+                self._fan_states[10] = new_laser_fan_state
+                logger.info(f"✅ [1131] Начальное значение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (применено напрямую)")
+                self.fanStateChanged.emit(10, new_laser_fan_state)
+            else:
+                # Для остальных значений сохраняем в кэш для последующего применения
+                self._pending_fan_updates[10] = (new_laser_fan_state, current_time)
+                logger.debug(f"📝 [1131] Изменение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (добавлено в кэш)")
 
     def _applyPowerSupplyValue(self, value: object):
         """Применение результатов чтения Power Supply (Laser PSU и Magnet PSU)"""
@@ -3625,10 +3683,12 @@ class ModbusManager(QObject):
         
         # КРИТИЧНО: не применяем значения из кэша сразу после ошибки записи
         # Это предотвращает применение "мусорных" значений после ошибки
-        time_since_error = current_time - self._last_write_error_time
-        if time_since_error < self._write_error_cooldown:
-            logger.debug(f"⏸️ Пропускаем применение значений из кэша (прошло {time_since_error:.2f} сек после ошибки записи)")
-            return
+        # Но только если была реальная ошибка (время ошибки > 0)
+        if self._last_write_error_time > 0:
+            time_since_error = current_time - self._last_write_error_time
+            if time_since_error < self._write_error_cooldown:
+                logger.debug(f"⏸️ Пропускаем применение значений из кэша (прошло {time_since_error:.2f} сек после ошибки записи)")
+                return
         
         # Применяем изменения реле
         to_remove_relay = []
@@ -3644,9 +3704,16 @@ class ModbusManager(QObject):
                     to_remove_relay.append(relay_name)
                     continue
             
+            # КРИТИЧНО: для начальных значений после подключения применяем сразу (в течение 5 секунд после подключения)
+            # Это предотвращает задержку в 20-30 секунд перед отображением начальных состояний
+            time_since_connection = current_time - self._connection_time
+            is_initial_value = time_since_connection < 5.0 and self._connection_time > 0
+            
             # Проверяем, что изменение стабильно (не менялось в течение stability_time)
             # И не слишком старое (не старше max_cache_age)
-            if time_since_update >= self._ui_update_stability_time and time_since_update < max_cache_age:
+            # Для начальных значений уменьшаем время стабильности до 200 мс
+            required_stability_time = 0.2 if is_initial_value else self._ui_update_stability_time
+            if time_since_update >= required_stability_time and time_since_update < max_cache_age:
                 current_state = self._relay_states[relay_name]
                 # КРИТИЧНО: проверяем, что значение не фликерует (не меняется туда-сюда)
                 # Если значение уже применялось недавно и вернулось обратно, игнорируем его
@@ -3726,7 +3793,12 @@ class ModbusManager(QObject):
                 to_remove_fan.append(fan_index)
                 continue
             
-            if time_since_update >= self._ui_update_stability_time and time_since_update < max_cache_age:
+            # КРИТИЧНО: для начальных значений после подключения применяем сразу
+            time_since_connection = current_time - self._connection_time
+            is_initial_value = time_since_connection < 5.0 and self._connection_time > 0
+            required_stability_time = 0.2 if is_initial_value else self._ui_update_stability_time
+            
+            if time_since_update >= required_stability_time and time_since_update < max_cache_age:
                 current_state = self._fan_states[fan_index]
                 # КРИТИЧНО: проверяем, что значение не фликерует
                 cache_key = f"fan:{fan_index}"
@@ -3769,7 +3841,12 @@ class ModbusManager(QObject):
                 to_remove_valve.append(valve_index)
                 continue
             
-            if time_since_update >= self._ui_update_stability_time and time_since_update < max_cache_age:
+            # КРИТИЧНО: для начальных значений после подключения применяем сразу
+            time_since_connection = current_time - self._connection_time
+            is_initial_value = time_since_connection < 5.0 and self._connection_time > 0
+            required_stability_time = 0.2 if is_initial_value else self._ui_update_stability_time
+            
+            if time_since_update >= required_stability_time and time_since_update < max_cache_age:
                 current_state = self._valve_states[valve_index]
                 # КРИТИЧНО: проверяем, что значение не фликерует
                 cache_key = f"valve:{valve_index}"
