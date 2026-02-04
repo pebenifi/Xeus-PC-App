@@ -1489,7 +1489,7 @@ class ModbusManager(QObject):
             return
         
         # Если регистр успешно прочитан и он был в списке проблемных - удаляем его
-        if key in self._problematic_registers:
+        if value is not None and key in self._problematic_registers:
             self._problematic_registers.remove(key)
             logger.info(f"✅ Регистр {key} успешно прочитан, удален из списка проблемных")
         
