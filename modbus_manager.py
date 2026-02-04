@@ -522,18 +522,18 @@ class ModbusManager(QObject):
         self._ui_update_timer = QTimer(self)
         self._ui_update_timer.timeout.connect(self._applyPendingUIUpdates)
         self._ui_update_timer.setInterval(200)  # Применяем изменения каждые 200 мс
-        self._ui_update_stability_time = 1.0  # Изменение должно быть стабильным 1 секунду перед применением (увеличено для предотвращения фликера)
+        self._ui_update_stability_time = 0.3  # Изменение должно быть стабильным 300 мс перед применением (уменьшено для быстрой синхронизации)
         self._last_applied_values = {}  # Словарь для отслеживания последних примененных значений (для предотвращения фликера)
         
         # Таймер для чтения регистра 1021 (реле) - быстрое обновление
         self._relay_1021_timer = QTimer(self)
         self._relay_1021_timer.timeout.connect(self._readRelay1021)
-        self._relay_1021_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._relay_1021_timer.setInterval(200)  # Чтение каждые 200 мс для быстрой синхронизации
         
         # Таймер для чтения регистра 1111 (клапаны X6-X12) - быстрое обновление
         self._valve_1111_timer = QTimer(self)
         self._valve_1111_timer.timeout.connect(self._readValve1111)
-        self._valve_1111_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._valve_1111_timer.setInterval(200)  # Чтение каждые 200 мс для быстрой синхронизации
         
         # Таймер для чтения регистра 1511 (температура Water Chiller) - быстрое обновление (старый, для обратной совместимости)
         self._water_chiller_temp_timer = QTimer(self)
@@ -578,7 +578,7 @@ class ModbusManager(QObject):
         # Таймер для чтения регистра 1131 (fans) - быстрое обновление
         self._fan_1131_timer = QTimer(self)
         self._fan_1131_timer.timeout.connect(self._readFan1131)
-        self._fan_1131_timer.setInterval(300)  # Чтение каждые 300 мс для максимально быстрого обновления
+        self._fan_1131_timer.setInterval(200)  # Чтение каждые 200 мс для быстрой синхронизации
 
         # Таймер для чтения регистров Power Supply (Laser PSU и Magnet PSU) - быстрое обновление
         self._power_supply_timer = QTimer(self)
