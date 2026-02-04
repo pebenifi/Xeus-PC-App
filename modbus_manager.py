@@ -1439,30 +1439,16 @@ class ModbusManager(QObject):
 
     @Slot(str, object)
     def _onWorkerReadFinished(self, key: str, value: object):
-        # Если регистр вернул пустоту или ошибку, разрываем соединение и добавляем в список проблемных
+        # Если регистр вернул пустоту или ошибку, НЕ разрываем соединение
+        # (как в pymodbus - он возвращает 0 для пустого регистра и не разрывает соединение)
+        # Просто добавляем в список проблемных и пропускаем дальше
         if value is None:
             # Проверяем, не является ли это уже проблемным регистром
             if key not in self._problematic_registers:
                 self._problematic_registers.add(key)
-                logger.warning(f"⚠️ Регистр {key} вернул пустоту/ошибку, добавлен в список проблемных. Разрываем соединение и переподключаемся...")
-                
-                # Разрываем соединение и переподключаемся
-                if self._is_connected and self._modbus_client is not None:
-                    try:
-                        # Отключаемся
-                        self._modbus_client.disconnect()
-                        self._is_connected = False
-                        self._status_text = "Disconnected"
-                        self.connectionStatusChanged.emit(self._is_connected)
-                        self.statusTextChanged.emit(self._status_text)
-                        
-                        # Переподключаемся
-                        logger.info("Попытка переподключения после ошибки регистра...")
-                        self._connection_in_progress = True
-                        self._workerSetClient.emit(self._modbus_client)
-                        self._workerConnect.emit()
-                    except Exception as e:
-                        logger.error(f"Ошибка при переподключении после ошибки регистра {key}: {e}")
+                logger.debug(f"⚠️ Регистр {key} вернул пустоту/ошибку, добавлен в список проблемных (соединение НЕ разрывается)")
+                # НЕ разрываем соединение - это нормально для пустых регистров
+                # Просто пропускаем этот регистр в следующих опросах
             
             # Не обрабатываем значение, если оно None
             # Но сбрасываем флаги чтения, чтобы не блокировать следующие попытки
