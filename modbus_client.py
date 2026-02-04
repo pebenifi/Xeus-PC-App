@@ -551,19 +551,6 @@ class ModbusClient:
                 logger.error(f"Неожиданная ошибка при чтении input регистра {address}: {e}")
             self._connected = False
             return None
-                        result = self.client.read_input_registers(
-                            address, 
-                            count=1, 
-                            device_id=self.unit_id
-                        )
-                        if not result.isError():
-                            value = result.registers[0] if result.registers else None
-                            logger.info(f"Прочитано из input регистра {address} после переподключения: значение = {value}")
-                            return value
-                    except Exception as e2:
-                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
-            self._connected = False
-            return None
         except Exception as e:
             error_str = str(e)
             # При ошибке "CLOSING CONNECTION" pymodbus сам закрывает соединение
