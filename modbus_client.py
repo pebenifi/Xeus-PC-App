@@ -941,9 +941,10 @@ class ModbusClient:
             return False
         
         # Читаем текущее состояние с повторными попытками, если нужно
+        # Используем обычный pymodbus для согласованности с остальными операциями
         current_value = None
         for attempt in range(3):  # До 3 попыток
-            current_value = self.read_register_1021_direct()
+            current_value = self.read_input_register(1021)
             if current_value is not None:
                 break
             if attempt < 2:  # Не ждем после последней попытки
