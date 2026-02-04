@@ -970,11 +970,6 @@ class ModbusClient:
         # Записываем новое значение
         result = self.write_register_1021_direct(new_value)
         
-        # Небольшая задержка после записи, чтобы устройство успело обработать запись
-        # перед следующим чтением (это предотвращает race condition)
-        if result:
-            time.sleep(0.05)  # 50ms задержка после успешной записи
-        
         return result
     
     def _build_read_frame_1111(self) -> bytes:

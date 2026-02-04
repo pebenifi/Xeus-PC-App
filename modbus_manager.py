@@ -1619,7 +1619,9 @@ class ModbusManager(QObject):
         # Если есть недавние ожидаемые состояния, полностью игнорируем чтение регистра 1021
         # чтобы не перезаписывать оптимистичные значения устаревшими данными
         if recent_relay_expected:
-            logger.debug(f"⏸ Игнорируем чтение регистра 1021: есть недавние ожидаемые состояния {list(recent_relay_expected.keys())}")
+            logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: есть недавние ожидаемые состояния {list(recent_relay_expected.keys())}")
+            logger.info(f"⏸ [1021] Прочитанные значения: {new_states}")
+            logger.info(f"⏸ [1021] Текущие состояния в памяти: {self._relay_states}")
             # Но проверяем, совпадают ли прочитанные значения с ожидаемыми - если да, удаляем из ожидаемых
             relay_key_map = {
                 'water_chiller': 'relay:water_chiller',
@@ -1637,7 +1639,7 @@ class ModbusManager(QObject):
                     expected_state, expected_time = expected_info
                     if new_state == expected_state:
                         # Прочитанное значение совпадает с ожидаемым - устройство обработало запись, удаляем из ожидаемых
-                        logger.debug(f"✅ {relay_name}: прочитанное значение совпадает с ожидаемым, удаляем из ожидаемых")
+                        logger.info(f"✅ [1021] {relay_name}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
                         self._expected_states.pop(relay_key, None)
             return  # Не применяем значения из регистра
         
@@ -1653,13 +1655,15 @@ class ModbusManager(QObject):
         }
         
         # Логируем прочитанное значение для отладки
-        logger.debug(f"📖 Регистр 1021 прочитан: low_byte=0x{low_byte:02X} ({low_byte:08b}), new_states={new_states}")
+        logger.info(f"📖 [1021] Регистр прочитан: low_byte=0x{low_byte:02X} ({low_byte:08b}), new_states={new_states}")
+        logger.info(f"📖 [1021] Текущие состояния в памяти: {self._relay_states}")
+        logger.info(f"📖 [1021] Ожидаемые состояния: {[(k, v[0], f'{current_time - v[1]:.2f}с назад') for k, v in self._expected_states.items() if k.startswith('relay:')]}")
         
         for relay_name, new_state in new_states.items():
             current_state = self._relay_states[relay_name]
             if new_state != current_state:
                 # Применяем новое значение
-                logger.debug(f"🔄 Обновление {relay_name}: {current_state} -> {new_state}")
+                logger.info(f"🔄 [1021] Обновление {relay_name}: {current_state} -> {new_state} (эмитим сигнал)")
                 self._relay_states[relay_name] = new_state
                 if relay_name == 'water_chiller':
                     self.waterChillerStateChanged.emit(new_state)
@@ -1675,6 +1679,8 @@ class ModbusManager(QObject):
                     self.pidControllerStateChanged.emit(new_state)
                 elif relay_name == 'op_cell_heating':
                     self.opCellHeatingStateChanged.emit(new_state)
+            else:
+                logger.debug(f"⏭️ [1021] {relay_name}: значение не изменилось ({current_state})")
 
     def _applyValve1111Value(self, value: object):
         self._reading_1111 = False
@@ -5793,7 +5799,8 @@ class ModbusManager(QObject):
             # Это будет использоваться для сравнения с прочитанным значением
             relay_key = f'relay:{relay_name}'
             self._expected_states[relay_key] = (state, time.time())
-            logger.debug(f"💾 Запоминаем ожидаемое состояние для {relay_name}: {state} (relay_num={relay_num}, бит={relay_num-1})")
+            logger.info(f"💾 [1021] Запоминаем ожидаемое состояние для {relay_name}: {state} (relay_num={relay_num}, бит={relay_num-1})")
+            logger.info(f"💾 [1021] Текущие состояния в памяти: {self._relay_states}")
 
         def task() -> bool:
             try:
@@ -6167,15 +6174,19 @@ class ModbusManager(QObject):
     @Slot(bool, result=bool)
     def setLaserPSU(self, state: bool) -> bool:
         """Управление Laser PSU через регистр 1021 (реле 3, бит 2)"""
+        logger.info(f"🔴 [SET] setLaserPSU вызван: state={state}, текущее состояние в памяти={self._relay_states.get('laser_psu')}")
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 3")
         # Логируем действие
         self._addLog(f"Laser PSU: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
+        old_state = self._relay_states.get('laser_psu')
         self._relay_states['laser_psu'] = state
+        logger.info(f"🔴 [SET] setLaserPSU: обновлено состояние в памяти {old_state} -> {state}, эмитим сигнал")
         self.laserPSUStateChanged.emit(state)
         # Затем отправляем команду на устройство асинхронно через очередь задач (только если подключено)
         if self._is_connected and self._modbus_client is not None:
+            logger.info(f"🔴 [SET] setLaserPSU: отправляем команду на устройство (реле 3, бит 2)")
             self._setRelayAsync(3, state, "Laser PSU")
         return True  # Возвращаем True сразу, так как UI уже обновлен
     
@@ -6197,15 +6208,19 @@ class ModbusManager(QObject):
     @Slot(bool, result=bool)
     def setPIDController(self, state: bool) -> bool:
         """Управление PID Controller через регистр 1021 (реле 6, бит 5)"""
+        logger.info(f"🔴 [SET] setPIDController вызван: state={state}, текущее состояние в памяти={self._relay_states.get('pid_controller')}")
         # Обновляем статус (даже без подключения)
         self._updateActionStatus(f"set 6")
         # Логируем действие
         self._addLog(f"PID Controller: {'ON' if state else 'OFF'}")
         # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
+        old_state = self._relay_states.get('pid_controller')
         self._relay_states['pid_controller'] = state
+        logger.info(f"🔴 [SET] setPIDController: обновлено состояние в памяти {old_state} -> {state}, эмитим сигнал")
         self.pidControllerStateChanged.emit(state)
         # Затем отправляем команду на устройство асинхронно через очередь задач (только если подключено)
         if self._is_connected and self._modbus_client is not None:
+            logger.info(f"🔴 [SET] setPIDController: отправляем команду на устройство (реле 6, бит 5)")
             self._setRelayAsync(6, state, "PID Controller")
         return True  # Возвращаем True сразу, так как UI уже обновлен
     
