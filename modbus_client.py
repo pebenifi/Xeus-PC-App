@@ -604,12 +604,61 @@ class ModbusClient:
         crc_high = (crc >> 8) & 0xFF
         return frame + bytes([crc_low, crc_high])
     
-    def _parse_read_response_1021(self, resp: bytes) -> Optional[int]:
-        """Расшифровка ответа на запрос чтения регистра 1021"""
-        if len(resp) < 7:
+    def _check_modbus_exception(self, resp: bytes, register_name: str = "register") -> Optional[dict]:
+        """
+        Проверяет ответ на Modbus exception response.
+        
+        Returns:
+            dict с информацией об ошибке, если это exception response, иначе None
+        """
+        if len(resp) < 3:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        fn = resp[1] if len(resp) > 1 else 0
+        if fn & 0x80:  # Modbus exception response
+            exc_code = resp[2] if len(resp) > 2 else None
+            error_messages = {
+                1: "Illegal Function",
+                2: "Illegal Data Address",
+                3: "Illegal Data Value",
+                4: "Slave Device Failure",
+                5: "Acknowledge",
+                6: "Slave Device Busy",
+                8: "Memory Parity Error"
+            }
+            error_msg = error_messages.get(exc_code, f"Unknown error ({exc_code})")
+            return {
+                'is_exception': True,
+                'function': fn & 0x7F,
+                'error_code': exc_code,
+                'error_message': error_msg,
+                'register_name': register_name
+            }
+        return None
+    
+    def _parse_read_response_1021(self, resp: bytes) -> Optional[int]:
+        """Расшифровка ответа на запрос чтения регистра 1021"""
+        if len(resp) < 5:
+            return None
+        
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1021")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1021 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1021 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -2459,7 +2508,22 @@ class ModbusClient:
         # Modbus exception response
         if fn & 0x80:
             exc_code = resp[2] if len(resp) > 2 else None
-            logger.warning(f"Modbus exception response: function={fn & 0x7F} code={exc_code}")
+            error_messages = {
+                1: "Illegal Function",
+                2: "Illegal Data Address",
+                3: "Illegal Data Value",
+                4: "Slave Device Failure",
+                5: "Acknowledge",
+                6: "Slave Device Busy",
+                8: "Memory Parity Error"
+            }
+            error_msg = error_messages.get(exc_code, f"Unknown error ({exc_code})")
+            # Для ошибок типа "Illegal Data Address" (код 2 или 3) просто логируем и возвращаем None
+            # Это нормально - регистр может отсутствовать, не нужно разрывать соединение
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Modbus exception response: function={fn & 0x7F} code={exc_code} ({error_msg}) - регистр отсутствует или недоступен")
+            else:
+                logger.warning(f"Modbus exception response: function={fn & 0x7F} code={exc_code} ({error_msg})")
             return None
 
         if fn != function:
@@ -2557,16 +2621,44 @@ class ModbusClient:
                         if parsed is not None and len(parsed) >= chunk:
                             parsed = parsed[:chunk]
                             break
+                        # Проверяем на Modbus exception response
+                        if resp and len(resp) >= 3:
+                            fn = resp[1] if len(resp) > 1 else 0
+                            if fn & 0x80:  # Modbus exception response
+                                exc_code = resp[2] if len(resp) > 2 else None
+                                if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                                    logger.debug(f"Регистр {current_addr} (qty={chunk}) вернул Modbus exception code={exc_code} - регистр отсутствует, пропускаем")
+                                    # Для отсутствующих регистров возвращаем пустой список для этого чанка
+                                    parsed = []
+                                    break
                     except (ConnectionError, OSError, socket.timeout) as e:
                         # первая попытка может не удаться — повторяем один раз
                         if attempt == 1:
-                            logger.warning(f"Direct multi-read failed at addr={current_addr} qty={chunk}: {e}")
+                            error_code = getattr(e, 'errno', None)
+                            # Для ошибок соединения пробуем переподключиться
+                            if error_code in (54, 32, 104, 107):
+                                logger.warning(f"Разрыв соединения при чтении регистров {current_addr}-{current_addr+chunk-1}: {e}, пробуем переподключиться...")
+                                if self._reconnect():
+                                    try:
+                                        sock = self._get_underlying_socket()
+                                        if sock:
+                                            sock.settimeout(0.5)
+                                            continue  # Повторяем попытку после переподключения
+                                    except Exception as e2:
+                                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+                            else:
+                                logger.warning(f"Direct multi-read failed at addr={current_addr} qty={chunk}: {e}")
                         time.sleep(0.01)  # Уменьшаем задержку между попытками с 0.02 до 0.01
 
                 if parsed is None:
-                    # Если не удалось прочитать — считаем, что соединение нестабильно
-                    self._connected = False
-                    return None
+                    # Если не удалось прочитать и это не Modbus exception - считаем, что соединение нестабильно
+                    # Но не разрываем соединение сразу - возможно, это временная проблема
+                    logger.debug(f"Не удалось прочитать регистры {current_addr}-{current_addr+chunk-1}, пропускаем чанк")
+                    # Возвращаем пустой список для этого чанка вместо разрыва соединения
+                    parsed = []
+                elif len(parsed) == 0:
+                    # Пустой ответ - регистр отсутствует, это нормально
+                    logger.debug(f"Регистр {current_addr} (qty={chunk}) вернул пустой ответ - регистр отсутствует, пропускаем")
 
                 out.extend(parsed)
                 current_addr += chunk
