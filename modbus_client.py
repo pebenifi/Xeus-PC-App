@@ -546,21 +546,13 @@ class ModbusClient:
             self._connected = False
             return None
         except Exception as e:
+            # В тесте исключения просто логируются, соединение не разрывается
             error_str = str(e)
-            # При ошибке "CLOSING CONNECTION" pymodbus сам закрывает соединение
-            # Мы только обновляем флаг, но НЕ закрываем соединение повторно
-            if "CLOSING CONNECTION" in error_str:
-                logger.debug(f"pymodbus закрыл соединение из-за отсутствия ответа при чтении input регистра {address}")
-                try:
-                    if self.client is not None and not self.client.is_socket_open():
-                        self._connected = False
-                except:
-                    self._connected = False
-            elif "No response" in error_str or "timeout" in error_str.lower():
-                logger.debug(f"Таймаут при чтении input регистра {address} (соединение может быть еще открыто)")
-                # При таймауте НЕ закрываем соединение - оно может быть еще активным
-            else:
-                logger.error(f"Исключение при чтении input регистра {address}: {e}")
+            logger.debug(f"Исключение при чтении input регистра {address}: {e}")
+            # Добавляем в проблемные, но НЕ разрываем соединение (как в тесте)
+            if address not in self._problematic_registers:
+                self._problematic_registers.add(address)
+                logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
             return None
     
     def _get_socket(self):
