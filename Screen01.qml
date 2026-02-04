@@ -61,6 +61,10 @@ Rectangle {
                 console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e0)
             }
 
+            var metaFreqPts = Number(payload.freq)
+            var metaAmplPts = Number(payload.ampl)
+            var maxYPts = -1
+            var maxIdxPts = -1
             var addedPts = 0
             for (var k = 0; k < pts.length; k++) {
                 try {
@@ -72,12 +76,15 @@ Rectangle {
                             nmrLineSeries.append(px, py)
                             addedPts++
                         }
+                        if (py > maxYPts) { maxYPts = py; maxIdxPts = k }
                     }
                 } catch (e1) {
                     console.log("[NMR] Screen01: append(points) failed at", k, e1)
                 }
             }
-            console.log("[NMR] Screen01: drawn from payload.points, added=", addedPts, "of", pts.length)
+            console.log("[NMR] Screen01: meta freq=", metaFreqPts, "ampl=", metaAmplPts,
+                        "max(points.y)=", maxYPts, "maxIdx=", maxIdxPts,
+                        "drawn from payload.points, added=", addedPts, "of", pts.length)
             return
         }
 
@@ -106,6 +113,18 @@ Rectangle {
         }
 
         var n = data.length
+        var metaFreq = Number(payload.freq)
+        var metaAmpl = Number(payload.ampl)
+        var maxY = -1
+        var maxIdx = -1
+        for (var mi = 0; mi < n; mi++) {
+            var vy = Number(data[mi])
+            if (isFinite(vy) && !isNaN(vy) && vy > maxY) {
+                maxY = vy
+                maxIdx = mi
+            }
+        }
+        console.log("[NMR] Screen01: meta freq=", metaFreq, "ampl=", metaAmpl, "max(data)=", maxY, "maxIdx=", maxIdx, "n=", n)
         var y0 = payload.y_min
         var y1 = payload.y_max
 

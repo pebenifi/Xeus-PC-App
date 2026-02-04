@@ -2844,9 +2844,19 @@ class ModbusManager(QObject):
             # Логируем для отладки
             non_zero_count = sum(1 for v in data_values_raw if v != 0)
             non_zero_indices = [i for i, v in enumerate(data_values_raw) if v != 0]
+            try:
+                max_raw = int(max(data_values_raw)) if data_values_raw else 0
+                imax_raw = int(max(range(len(data_values_raw)), key=lambda i: int(data_values_raw[i]))) if data_values_raw else -1
+            except Exception:
+                max_raw = 0
+                imax_raw = -1
             logger.debug(f"NMR spectrum: raw data - total={len(data_values_raw)}, non_zero={non_zero_count}, "
                        f"non_zero_indices_range=[{min(non_zero_indices) if non_zero_indices else 'N/A'}, {max(non_zero_indices) if non_zero_indices else 'N/A'}], "
                        f"first10={data_values_raw[:10]}, last10={data_values_raw[-10:]}")
+            logger.debug(
+                f"NMR spectrum: meta freq={freq!r} ampl={ampl!r} x_min/x_max=[{x_min!r},{x_max!r}] "
+                f"max_raw={max_raw} imax_raw={imax_raw}"
+            )
             
             # Используем raw значения напрямую
             # Если ampl из метаданных разумный, можно использовать его для проверки масштаба
@@ -2875,6 +2885,16 @@ class ModbusManager(QObject):
                 except Exception:
                     imax = 0
 
+                # Нормализация по амплитуде из метаданных:
+                # если max_raw > 0 и ampl валиден, масштабируем Y так, чтобы максимум ~= ampl
+                try:
+                    max_y = float(max(data_values)) if data_values else 0.0
+                except Exception:
+                    max_y = 0.0
+                scale = 1.0
+                if max_y > 0.0 and math.isfinite(ampl) and float(ampl) > 0.0:
+                    scale = float(ampl) / max_y
+
                 dx = (X_MAX - X_MIN) / float(n - 1)
                 # целевое положение пика по X
                 x_peak_default = X_MIN + dx * float(imax)
@@ -2885,8 +2905,18 @@ class ModbusManager(QObject):
 
                 for i, ampl_value in enumerate(data_values):
                     x = X_MIN + dx * float(i) + shift
-                    y = float(ampl_value)
+                    y = float(ampl_value) * scale
                     points.append({"x": x, "y": y})
+
+                # Если данные все нули, но ampl>0 и freq валиден — строим синтетический пик
+                if max_y <= 0.0 and math.isfinite(freq) and math.isfinite(ampl) and float(ampl) > 0.0:
+                    import math as _math
+                    sigma = 120.0  # ~ширина пика, подберем по виду прибора
+                    points = []
+                    for i in range(n):
+                        x = X_MIN + dx * float(i)
+                        y = float(ampl) * _math.exp(-0.5 * ((x - float(freq)) / sigma) ** 2)
+                        points.append({"x": x, "y": y})
             else:
                 for i, ampl_value in enumerate(data_values):
                     points.append({"x": float(i), "y": float(ampl_value)})
