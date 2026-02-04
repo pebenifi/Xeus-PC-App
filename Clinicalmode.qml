@@ -83,7 +83,8 @@ Item {
         nmrAxisX.min = X_MIN
         nmrAxisX.max = X_MAX
         nmrAxisX.tickAnchor = X_MIN
-        nmrAxisX.tickInterval = 500
+        // подписи не должны налезать — оставляем крупные тики 1000, а 500 делаем как subTickCount на оси
+        nmrAxisX.tickInterval = 1000
         
         // Ось Y: амплитуда (ampl) - используем диапазон из данных
         nmrAxisY.min = y0
@@ -6973,6 +6974,7 @@ Item {
             max: 44000
             tickAnchor: 38000
             tickInterval: 1000
+            subTickCount: 1
             labelsVisible: true
             // Убрали labelDelegate для избежания ошибок с modelData/value
             // Используем стандартные подписи осей
