@@ -44,7 +44,8 @@ Rectangle {
         nmrAxisX.min = X_MIN
         nmrAxisX.max = X_MAX
         nmrAxisX.tickAnchor = X_MIN
-        nmrAxisX.tickInterval = 500
+        // подписи не должны налезать — оставляем крупные тики 1000, а 500 делаем как subTickCount на оси
+        nmrAxisX.tickInterval = 1000
 
         // Y берем из backend (если есть)
         if (payload.y_min !== undefined && payload.y_max !== undefined) {
@@ -63,8 +64,9 @@ Rectangle {
             var addedPts = 0
             for (var k = 0; k < pts.length; k++) {
                 try {
+                    // X берём из backend (payload.points). Это убирает сдвиги/искажения по частоте.
+                    var px = Number(pts[k].x)
                     var py = Number(pts[k].y)
-                    var px = (pts.length > 1) ? (X_MIN + (X_MAX - X_MIN) * k / (pts.length - 1)) : X_MIN
                     if (isFinite(px) && isFinite(py) && !isNaN(px) && !isNaN(py)) {
                         if (nmrLineSeries.append) {
                             nmrLineSeries.append(px, py)
@@ -1403,6 +1405,7 @@ Rectangle {
                     max: 44000
                     tickAnchor: 38000
                     tickInterval: 1000
+                    subTickCount: 1
                     labelsVisible: true
                 }
                 ValueAxis {
