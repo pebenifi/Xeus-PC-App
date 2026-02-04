@@ -68,22 +68,22 @@ Item {
         
         var n = data.length
         console.log("[NMR] Clinicalmode: data length:", n, "first 5 values:", data.slice(0, 5), "last 5 values:", data.slice(-5))
-        var x0 = payload.x_min
-        var x1 = payload.x_max
         var y0 = payload.y_min
         var y1 = payload.y_max
         
-        if (x0 === undefined || x1 === undefined || y0 === undefined || y1 === undefined) {
-            console.log("[NMR] Clinicalmode: missing axis ranges")
+        if (y0 === undefined || y1 === undefined) {
+            console.log("[NMR] Clinicalmode: missing Y axis ranges")
             return
         }
         
-        // Обновляем оси
-        // Ось X: частота (freq) - диапазон 38500-43000 с шагом 500 (как на устройстве)
-        nmrAxisX.min = x0
-        nmrAxisX.max = x1
-        nmrAxisX.tickAnchor = x0
-        nmrAxisX.tickInterval = 500  // Шаг 500 как на устройстве
+        // Требование: разметка оси X начинается с 38000 и шаг 500.
+        // Рисуем в фиксированном диапазоне X: 38000..44000, чтобы не было смещения пиков.
+        var X_MIN = 38000
+        var X_MAX = 44000
+        nmrAxisX.min = X_MIN
+        nmrAxisX.max = X_MAX
+        nmrAxisX.tickAnchor = X_MIN
+        nmrAxisX.tickInterval = 500
         
         // Ось Y: амплитуда (ampl) - используем диапазон из данных
         nmrAxisY.min = y0
@@ -96,7 +96,7 @@ Item {
         var validPoints = 0
         for (var i = 0; i < n; i++) {
             // Формула: x[i] = x0 + (x1 - x0) * i / (n-1) - растягивает на весь диапазон
-            var x = (n > 1) ? (x0 + (x1 - x0) * i / (n - 1)) : x0
+            var x = (n > 1) ? (X_MIN + (X_MAX - X_MIN) * i / (n - 1)) : X_MIN
             var y = Number(data[i])
             if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
                 pointsToAdd.push({x: x, y: y})

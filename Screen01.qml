@@ -35,24 +35,27 @@ Rectangle {
             return
         }
 
-        // 1) Предпочитаем payload.points (уже готовые x,y из backend) — самый надежный путь
+        // Требование: разметка оси X начинается с 38000 и шаг 500.
+        // Чтобы не было смещения (и странных вертикальных "палок" при неправильных X),
+        // рисуем NMR в фиксированном диапазоне X: 38000..44000, равномерно распределяя точки.
+        var X_MIN = 38000
+        var X_MAX = 44000
+
+        nmrAxisX.min = X_MIN
+        nmrAxisX.max = X_MAX
+        nmrAxisX.tickAnchor = X_MIN
+        nmrAxisX.tickInterval = 500
+
+        // Y берем из backend (если есть)
+        if (payload.y_min !== undefined && payload.y_max !== undefined) {
+            nmrAxisY.min = payload.y_min
+            nmrAxisY.max = payload.y_max
+        }
+
+        // 1) Предпочитаем payload.points / payload.data_json / payload.data.
+        // Но X координату задаем сами (фиксированная ось).
         var pts = payload.points
         if (pts && Array.isArray(pts) && pts.length > 0) {
-            var x0p = payload.x_min
-            var x1p = payload.x_max
-            var y0p = payload.y_min
-            var y1p = payload.y_max
-            if (x0p !== undefined && x1p !== undefined) {
-                nmrAxisX.min = x0p
-                nmrAxisX.max = x1p
-                nmrAxisX.tickAnchor = x0p
-                nmrAxisX.tickInterval = 500
-            }
-            if (y0p !== undefined && y1p !== undefined) {
-                nmrAxisY.min = y0p
-                nmrAxisY.max = y1p
-            }
-
             try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e0) {
                 console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e0)
             }
@@ -60,8 +63,8 @@ Rectangle {
             var addedPts = 0
             for (var k = 0; k < pts.length; k++) {
                 try {
-                    var px = Number(pts[k].x)
                     var py = Number(pts[k].y)
+                    var px = (pts.length > 1) ? (X_MIN + (X_MAX - X_MIN) * k / (pts.length - 1)) : X_MIN
                     if (isFinite(px) && isFinite(py) && !isNaN(px) && !isNaN(py)) {
                         if (nmrLineSeries.append) {
                             nmrLineSeries.append(px, py)
@@ -101,27 +104,21 @@ Rectangle {
         }
 
         var n = data.length
-        var x0 = payload.x_min
-        var x1 = payload.x_max
         var y0 = payload.y_min
         var y1 = payload.y_max
 
-        if (x0 === undefined || x1 === undefined || y0 === undefined || y1 === undefined) {
-            console.log("[NMR] Screen01: missing axis ranges", "x0=", x0, "x1=", x1, "y0=", y0, "y1=", y1)
+        if (y0 === undefined || y1 === undefined) {
+            console.log("[NMR] Screen01: missing Y axis ranges", "y0=", y0, "y1=", y1)
             return
         }
 
-        nmrAxisX.min = x0
-        nmrAxisX.max = x1
-        nmrAxisX.tickAnchor = x0
-        nmrAxisX.tickInterval = 500
         nmrAxisY.min = y0
         nmrAxisY.max = y1
 
         var pointsToAdd = []
         var valid = 0
         for (var i = 0; i < n; i++) {
-            var x = (n > 1) ? (x0 + (x1 - x0) * i / (n - 1)) : x0
+            var x = (n > 1) ? (X_MIN + (X_MAX - X_MIN) * i / (n - 1)) : X_MIN
             var y = Number(data[i])
             if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
                 pointsToAdd.push({x: x, y: y})
