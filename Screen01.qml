@@ -250,8 +250,8 @@ Rectangle {
         var xMin = irAxisXMain.min
         var xMax = irAxisXMain.max
         // пунктир делаем набором коротких сегментов (QtGraphs LineSeries не умеет DashLine)
-        screen01._updateDashedVerticalMarker(spline1.resMarkerSegments, resX, yLo, yHi, xMin, xMax, "res")
-        screen01._updateDashedVerticalMarker(spline1.freqMarkerSegments, freqX, yLo, yHi, xMin, xMax, "freq")
+        screen01._updateDashedVerticalMarker(spline.resMarkerSegments, resX, yLo, yHi, xMin, xMax, "res")
+        screen01._updateDashedVerticalMarker(spline.freqMarkerSegments, freqX, yLo, yHi, xMin, xMax, "freq")
 
         // Диагностика: где заканчиваются ненулевые значения
         var lastNonZero = -1
@@ -1220,6 +1220,9 @@ Rectangle {
 
         GraphsTheme { id: irThemeMain }
         theme: irThemeMain
+
+        property var resMarkerSegments: []
+        property var freqMarkerSegments: []
 
         Component.onCompleted: {
             resMarkerSegments = [
