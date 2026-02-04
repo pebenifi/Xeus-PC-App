@@ -1628,8 +1628,12 @@ class ModbusManager(QObject):
             'op_cell_heating': 'relay:op_cell_heating',
         }
         
+        # Логируем прочитанное значение для отладки
+        logger.debug(f"📖 Регистр 1021 прочитан: low_byte=0x{low_byte:02X} ({low_byte:08b}), new_states={new_states}")
+        
         for relay_name, new_state in new_states.items():
-            if new_state != self._relay_states[relay_name]:
+            current_state = self._relay_states[relay_name]
+            if new_state != current_state:
                 relay_key = relay_key_map[relay_name]
                 expected_info = self._expected_states.get(relay_key)
                 
@@ -1639,7 +1643,7 @@ class ModbusManager(QObject):
                     time_since_expected = current_time - expected_time
                     if time_since_expected < 2.0 and new_state != expected_state:
                         # Прочитанное значение не совпадает с ожидаемым - это старое значение, игнорируем
-                        logger.debug(f"⏸ Игнорируем чтение {relay_name}: прочитано {new_state}, ожидается {expected_state} (прошло {time_since_expected:.2f}с)")
+                        logger.debug(f"⏸ Игнорируем чтение {relay_name}: прочитано {new_state}, ожидается {expected_state}, текущее {current_state} (прошло {time_since_expected:.2f}с)")
                         continue
                     elif new_state == expected_state:
                         # Прочитанное значение совпадает с ожидаемым - устройство обработало запись, удаляем из ожидаемых
@@ -1647,6 +1651,7 @@ class ModbusManager(QObject):
                         self._expected_states.pop(relay_key, None)
                 
                 # Применяем новое значение
+                logger.debug(f"🔄 Обновление {relay_name}: {current_state} -> {new_state}")
                 self._relay_states[relay_name] = new_state
                 if relay_name == 'water_chiller':
                     self.waterChillerStateChanged.emit(new_state)
@@ -5780,6 +5785,7 @@ class ModbusManager(QObject):
             # Это будет использоваться для сравнения с прочитанным значением
             relay_key = f'relay:{relay_name}'
             self._expected_states[relay_key] = (state, time.time())
+            logger.debug(f"💾 Запоминаем ожидаемое состояние для {relay_name}: {state} (relay_num={relay_num}, бит={relay_num-1})")
 
         def task() -> bool:
             try:
