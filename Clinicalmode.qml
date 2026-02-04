@@ -46,7 +46,39 @@ Item {
             return
         }
         
-        // Используем тот же подход, что и для IR - через data_json (самый надежный способ)
+        // Сначала пробуем payload.points (backend уже посчитал корректные X)
+        var pts = payload.points
+        if (pts && pts.length !== undefined && pts.length > 0) {
+            try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e0) {
+                console.log("[NMR] Clinicalmode: nmrLineSeries.clear() failed:", e0)
+            }
+            var metaFreqPts = Number(payload.freq)
+            var metaAmplPts = Number(payload.ampl)
+            var maxYPts = -1
+            var maxIdxPts = -1
+            var addedPts = 0
+            for (var k = 0; k < pts.length; k++) {
+                try {
+                    var px = Number(pts[k].x)
+                    var py = Number(pts[k].y)
+                    if (isFinite(px) && isFinite(py) && !isNaN(px) && !isNaN(py)) {
+                        if (nmrLineSeries.append) {
+                            nmrLineSeries.append(px, py)
+                            addedPts++
+                        }
+                        if (py > maxYPts) { maxYPts = py; maxIdxPts = k }
+                    }
+                } catch (e1) {
+                    console.log("[NMR] Clinicalmode: append(points) failed at", k, e1)
+                }
+            }
+            console.log("[NMR] Clinicalmode: meta freq=", metaFreqPts, "ampl=", metaAmplPts,
+                        "max(points.y)=", maxYPts, "maxIdx=", maxIdxPts,
+                        "drawn from payload.points, added=", addedPts, "of", pts.length)
+            return
+        }
+        
+        // Fallback: data_json / data (должно срабатывать редко)
         var data = null
         if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
             try {
@@ -67,20 +99,6 @@ Item {
         }
         
         var n = data.length
-        // ВАЖНО: логируем freq/ampl из метаданных + максимум по данным
-        var metaFreq = Number(payload.freq)
-        var metaAmpl = Number(payload.ampl)
-        var maxY = -1
-        var maxIdx = -1
-        for (var mi = 0; mi < n; mi++) {
-            var vy = Number(data[mi])
-            if (isFinite(vy) && !isNaN(vy) && vy > maxY) {
-                maxY = vy
-                maxIdx = mi
-            }
-        }
-        console.log("[NMR] Clinicalmode: meta freq=", metaFreq, "ampl=", metaAmpl, "max(data)=", maxY, "maxIdx=", maxIdx, "n=", n,
-                    "first 5 values:", data.slice(0, 5), "last 5 values:", data.slice(-5))
         var y0 = payload.y_min
         var y1 = payload.y_max
         
@@ -90,12 +108,10 @@ Item {
         }
         
         // Требование: разметка оси X начинается с 38000 и шаг 500.
-        // Рисуем в фиксированном диапазоне X: 38000..44000, чтобы не было смещения пиков.
-        var X_MIN = 38000
-        var X_MAX = 44000
-        nmrAxisX.min = X_MIN
-        nmrAxisX.max = X_MAX
-        nmrAxisX.tickAnchor = X_MIN
+        // Диапазон X приходит из backend (x_min/x_max уже 38000..44000)
+        nmrAxisX.min = payload.x_min
+        nmrAxisX.max = payload.x_max
+        nmrAxisX.tickAnchor = payload.x_min
         // подписи не должны налезать — оставляем крупные тики 1000, а 500 делаем как subTickCount на оси
         nmrAxisX.tickInterval = 1000
         
@@ -105,27 +121,10 @@ Item {
         
         console.log("[NMR] Clinicalmode: axes updated - X:", nmrAxisX.min, "-", nmrAxisX.max, "Y:", nmrAxisY.min, "-", nmrAxisY.max)
         
-        // Вычисляем maxIdx и сдвиг X так, чтобы пик оказался на meta freq
-        var metaFreq = Number(payload.freq)
-        var maxY = -1
-        var maxIdx = -1
-        for (var mi = 0; mi < n; mi++) {
-            var vy = Number(data[mi])
-            if (isFinite(vy) && !isNaN(vy) && vy > maxY) {
-                maxY = vy
-                maxIdx = mi
-            }
-        }
-        console.log("[NMR] Clinicalmode: meta freq=", metaFreq, "ampl=", Number(payload.ampl), "max(data)=", maxY, "maxIdx=", maxIdx, "n=", n)
-
+        // Создаем точки из data (как в IR графике) - равномерно от x_min до x_max
+        var X_MIN = payload.x_min
+        var X_MAX = payload.x_max
         var dx = (n > 1) ? ((X_MAX - X_MIN) / (n - 1)) : 0
-        var xPeakDefault = (n > 1) ? (X_MIN + dx * maxIdx) : X_MIN
-        var shift = 0.0
-        if (isFinite(metaFreq) && !isNaN(metaFreq) && maxIdx >= 0) {
-            shift = metaFreq - xPeakDefault
-        }
-
-        // Создаем точки из data (как в IR графике) - равномерно распределяем по диапазону X со сдвигом
         var pointsToAdd = []
         var validPoints = 0
         for (var i = 0; i < n; i++) {
