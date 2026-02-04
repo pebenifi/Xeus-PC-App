@@ -940,10 +940,17 @@ class ModbusClient:
             logger.error(f"Номер реле должен быть от 1 до 8, получен {relay_num}")
             return False
         
-        # Читаем текущее состояние
-        current_value = self.read_register_1021_direct()
+        # Читаем текущее состояние с повторными попытками, если нужно
+        current_value = None
+        for attempt in range(3):  # До 3 попыток
+            current_value = self.read_register_1021_direct()
+            if current_value is not None:
+                break
+            if attempt < 2:  # Не ждем после последней попытки
+                time.sleep(0.1)  # Небольшая задержка перед повторной попыткой
+        
         if current_value is None:
-            logger.error("Не удалось прочитать текущее состояние регистра 1021")
+            logger.error("Не удалось прочитать текущее состояние регистра 1021 после нескольких попыток")
             return False
         
         current_low_byte = current_value & 0xFF
@@ -960,7 +967,14 @@ class ModbusClient:
         new_value = (current_value & 0xFF00) | new_low_byte
         
         # Записываем новое значение
-        return self.write_register_1021_direct(new_value)
+        result = self.write_register_1021_direct(new_value)
+        
+        # Небольшая задержка после записи, чтобы устройство успело обработать запись
+        # перед следующим чтением (это предотвращает race condition)
+        if result:
+            time.sleep(0.05)  # 50ms задержка после успешной записи
+        
+        return result
     
     def _build_read_frame_1111(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1111 (функция 04)"""
