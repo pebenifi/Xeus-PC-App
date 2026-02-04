@@ -466,6 +466,8 @@ class ModbusManager(QObject):
         # Используется для сравнения прочитанных значений с ожидаемыми и игнорирования несовпадающих значений
         # Формат: {'relay:pid_controller': (True, timestamp), 'fan:0': (False, timestamp), 'valve:5': (True, timestamp), ...}
         self._expected_states = {}
+        # Время последнего удаления ожидаемого состояния (чтобы игнорировать следующее чтение)
+        self._last_expected_state_removed_time = 0.0
         # Буфер для регистров (для быстрого доступа без блокировки UI)
         self._register_cache = {}  # address -> value
         # Флаг паузы опросов (чтобы при переключении экранов не блокировать UI)
@@ -1612,6 +1614,12 @@ class ModbusManager(QObject):
         self._expected_states = {k: v for k, v in self._expected_states.items() 
                                 if not k.startswith('relay:') or current_time - v[1] < 2.0}
         
+        # Игнорируем чтение в течение 300мс после удаления ожидаемого состояния
+        # (чтобы не применять временные неправильные значения из регистра)
+        if current_time - self._last_expected_state_removed_time < 0.3:
+            logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time:.2f}с назад)")
+            return
+        
         # Проверяем, есть ли недавние ожидаемые состояния для реле (в течение 1.5 секунд)
         recent_relay_expected = {k: v for k, v in self._expected_states.items() 
                                 if k.startswith('relay:') and current_time - v[1] < 1.5}
@@ -1642,6 +1650,8 @@ class ModbusManager(QObject):
                         # Прочитанное значение совпадает с ожидаемым - устройство обработало запись
                         logger.info(f"✅ [1021] {relay_name}: прочитанное значение ({new_state}) совпадает с ожидаемым, удаляем из ожидаемых")
                         self._expected_states.pop(relay_key, None)
+                        # Запоминаем время удаления, чтобы игнорировать следующее чтение
+                        self._last_expected_state_removed_time = current_time
                         # Применяем ТОЛЬКО это реле, остальные игнорируем (чтобы не перезаписать их устаревшими значениями)
                         current_state = self._relay_states[relay_name]
                         if new_state != current_state:
