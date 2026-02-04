@@ -740,43 +740,45 @@ class ModbusClient:
                         exception_info = self._check_modbus_exception(resp, str(address))
                         if exception_info:
                             exc_code = exception_info['error_code']
-                            # Если это ошибка адреса или значения - регистр проблемный
+                            # Если это ошибка адреса или значения - регистр отсутствует или недоступен
+                            # НЕ разрываем соединение - это нормальная ситуация (как в pymodbus)
                             if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                                logger.debug(f"Регистр {address} вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует или недоступен")
+                                # Добавляем в проблемные, чтобы не опрашивать его дальше, но НЕ разрываем соединение
                                 if address not in self._problematic_registers:
                                     self._problematic_registers.add(address)
-                                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (Modbus exception code={exc_code})")
-                                # Разрываем соединение и переподключаемся
-                                logger.warning(f"Регистр {address} вернул Modbus exception, разрываем соединение...")
-                                if self._reconnect():
-                                    return None  # Не повторяем запрос для проблемного регистра
-                                return None
+                                    logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных (Modbus exception code={exc_code})")
+                                return None  # Просто возвращаем None, соединение остается активным
                             else:
-                                logger.warning(f"Регистр {address} вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+                                # Другие Modbus exceptions - тоже не разрываем соединение
+                                logger.debug(f"Регистр {address} вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
                                 return None
                         
                         parsed = parse_response_func(resp)
                         if parsed is not None:
+                            # Успешное чтение - возвращаем значение (может быть 0, это нормально)
+                            # Если значение 0, это может быть пустой регистр, но соединение не разрываем
+                            # (как в pymodbus - он возвращает 0 для пустого регистра и не разрывает соединение)
+                            # Возвращаем значение, даже если оно 0 - это нормальное поведение
+                            success = True
+                            break
+                        elif parsed == 0:
+                            # Если значение 0 - это нормально, не разрываем соединение
+                            # (как в pymodbus - он возвращает 0 для пустого регистра)
                             success = True
                             break
                         else:
-                            # Пустой ответ или ошибка парсинга - регистр проблемный
-                            if address not in self._problematic_registers:
-                                self._problematic_registers.add(address)
-                                logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (пустой ответ или ошибка парсинга)")
-                            # Разрываем соединение и переподключаемся
-                            logger.warning(f"Регистр {address} вернул пустой ответ, разрываем соединение...")
-                            if self._reconnect():
-                                return None  # Не повторяем запрос для проблемного регистра
+                            # Ошибка парсинга (не Modbus exception, а проблема с CRC или форматом ответа)
+                            # Это может быть реальная проблема, но не обязательно разрывать соединение
+                            # Логируем и возвращаем None, но не разрываем соединение
+                            logger.debug(f"Регистр {address}: ошибка парсинга ответа (возможно, некорректный формат или CRC)")
+                            # Не добавляем в проблемные и не разрываем соединение - просто возвращаем None
                             return None
                     else:
-                        # Пустой ответ - регистр проблемный
-                        if address not in self._problematic_registers:
-                            self._problematic_registers.add(address)
-                            logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (пустой ответ)")
-                        # Разрываем соединение и переподключаемся
-                        logger.warning(f"Регистр {address} вернул пустой ответ, разрываем соединение...")
-                        if self._reconnect():
-                            return None
+                        # Пустой ответ (timeout при чтении)
+                        # Это может быть нормально - устройство может не отвечать на некоторые регистры
+                        # Не разрываем соединение, просто возвращаем None (как pymodbus)
+                        logger.debug(f"Регистр {address}: пустой ответ (timeout при чтении)")
                         return None
                         
                 except (ConnectionError, OSError) as e:
