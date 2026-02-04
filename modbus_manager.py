@@ -899,7 +899,7 @@ class ModbusManager(QObject):
     @Slot()
     def enableSEOPParametersPolling(self):
         """Включить чтение регистров SEOP Parameters (3011-3081) по требованию (например, при открытии SEOP Parameters)"""
-        logger.info(f"enableSEOPParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        logger.debug(f"enableSEOPParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
         if self._is_connected and not self._polling_paused:
             if not self._seop_parameters_timer.isActive():
                 # Сразу делаем первое чтение, не ждем таймера
@@ -909,7 +909,7 @@ class ModbusManager(QObject):
             else:
                 logger.info("⏸ Опрос SEOP Parameters уже активен")
         else:
-            logger.warning(f"⏸ Опрос SEOP Parameters не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+            logger.debug(f"⏸ Опрос SEOP Parameters не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
     
     @Slot()
     def disableSEOPParametersPolling(self):
@@ -921,7 +921,7 @@ class ModbusManager(QObject):
     @Slot()
     def enableCalculatedParametersPolling(self):
         """Включить чтение регистров Calculated Parameters (4011-4101) по требованию (например, при открытии Calculated Parameters)"""
-        logger.info(f"enableCalculatedParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        logger.debug(f"enableCalculatedParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
         if self._is_connected and not self._polling_paused:
             if not self._calculated_parameters_timer.isActive():
                 # Сразу делаем первое чтение, не ждем таймера
@@ -931,7 +931,7 @@ class ModbusManager(QObject):
             else:
                 logger.info("⏸ Опрос Calculated Parameters уже активен")
         else:
-            logger.warning(f"⏸ Опрос Calculated Parameters не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+            logger.debug(f"⏸ Опрос Calculated Parameters не включен: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
     
     @Slot()
     def disableCalculatedParametersPolling(self):
