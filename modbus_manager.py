@@ -2675,11 +2675,15 @@ class ModbusManager(QObject):
         logger.warning("Нет успешных ответов Modbus >3с, пробуем переподключиться (в фоне)")
 
         # Останавливаем polling таймеры, чтобы не засыпать очередь запросами во время reconnect
+        # НО НЕ закрываем соединение - оно должно оставаться открытым
         try:
             for t in self._polling_timers:
                 t.stop()
         except Exception:
             pass
+        
+        # Сбрасываем время возобновления опроса, чтобы после переподключения установилось новое время
+        self._polling_resumed_time = 0.0
 
         self._connection_in_progress = True
         self._workerSetClient.emit(self._modbus_client)
