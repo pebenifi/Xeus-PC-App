@@ -28,6 +28,70 @@ Rectangle {
     // IR spectrum on main screen
     property bool cachedIsConnected: false
 
+    function updateNmrGraph(payload) {
+        console.log("[NMR] Screen01 updateNmrGraph payload=", payload)
+        if (!payload) {
+            console.log("[NMR] Screen01: payload is null/undefined")
+            return
+        }
+        
+        // Используем data_json (самый надежный способ)
+        var data = null
+        if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
+            try {
+                data = JSON.parse(payload.data_json)
+            } catch (ejson) {
+                console.log("[NMR] Screen01: JSON.parse(data_json) failed:", ejson)
+                data = payload.data
+            }
+        } else {
+            data = payload.data
+        }
+        
+        if (!data || data.length === 0) {
+            console.log("[NMR] Screen01: no data to draw")
+            return
+        }
+        
+        var n = data.length
+        var x0 = payload.x_min
+        var x1 = payload.x_max
+        var y0 = payload.y_min
+        var y1 = payload.y_max
+        
+        if (x0 === undefined || x1 === undefined || y0 === undefined || y1 === undefined) {
+            console.log("[NMR] Screen01: missing axis ranges")
+            return
+        }
+        
+        // Обновляем оси
+        nmrAxisX.min = x0
+        nmrAxisX.max = x1
+        nmrAxisX.tickAnchor = x0
+        nmrAxisX.tickInterval = 500
+        nmrAxisY.min = y0
+        nmrAxisY.max = y1
+        
+        // Подготовка точек
+        var pointsToAdd = []
+        for (var i = 0; i < n; i++) {
+            var x = (n > 1) ? (x0 + (x1 - x0) * i / (n - 1)) : x0
+            var y = Number(data[i])
+            if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
+                pointsToAdd.push({x: x, y: y})
+            }
+        }
+        if (pointsToAdd.length === 0) return
+        
+        // Очищаем серию
+        try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e) {}
+        
+        // Добавляем точки
+        for (var j = 0; j < pointsToAdd.length; j++) {
+            try { if (nmrLineSeries.append) nmrLineSeries.append(pointsToAdd[j].x, pointsToAdd[j].y) } catch (e2) {}
+        }
+    }
+
     function _updateDashedVerticalMarker(markerSegments, xVal, yLo, yHi, xMin, xMax, tag) {
         if (!markerSegments || markerSegments.length === 0) return
         // всегда чистим старые сегменты
@@ -207,11 +271,17 @@ Rectangle {
         function onConnectionStatusChanged(connected) {
             screen01.cachedIsConnected = connected
             if (connected && modbusManager) {
-                Qt.callLater(function() { modbusManager.requestIrSpectrum() })
+                Qt.callLater(function() {
+                    modbusManager.requestIrSpectrum()
+                    modbusManager.requestNmrSpectrum()
+                })
             }
         }
         function onIrSpectrumChanged(payload) {
             screen01.updateIrGraphMain(payload)
+        }
+        function onNmrSpectrumChanged(payload) {
+            screen01.updateNmrGraph(payload)
         }
     }
 
@@ -221,7 +291,10 @@ Rectangle {
         repeat: true
         running: screen01.cachedIsConnected
         onTriggered: {
-            if (modbusManager) modbusManager.requestIrSpectrum()
+            if (modbusManager) {
+                modbusManager.requestIrSpectrum()
+                modbusManager.requestNmrSpectrum()
+            }
         }
     }
 
@@ -1138,27 +1211,54 @@ Rectangle {
         anchors.topMargin: 16
         width: 520
         height: 289
-        SplineSeries {
-            id: splineSeries
-            XYPoint {
-                x: 1
-                y: 1
-            }
+        axisX: nmrAxisX
+        axisY: nmrAxisY
+        marginLeft: -17
+        marginRight: 17
+        marginTop: 10
+        marginBottom: -10
 
-            XYPoint {
-                x: 2
-                y: 4
-            }
+        GraphsTheme { id: nmrTheme }
+        theme: nmrTheme
 
-            XYPoint {
-                x: 4
-                y: 2
-            }
+        Component.onCompleted: {
+            // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
+            try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
+            // Фон области графика (plot area)
+            try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+            try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
+            // Сетка RGB(151, 151, 151) = #979797
+            try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
+            try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
+            try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
+            try { nmrTheme.axisX.subColor = "#979797" } catch (e4) {}
+            try { nmrTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+            try { nmrTheme.axisY.mainColor = "#979797" } catch (e6) {}
+            try { nmrTheme.axisY.subColor = "#979797" } catch (e7) {}
+            try { nmrTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+        }
 
-            XYPoint {
-                x: 5
-                y: 5
-            }
+        ValueAxis {
+            id: nmrAxisX
+            min: 38000
+            max: 44000
+            tickAnchor: 38000
+            tickInterval: 1000
+            labelsVisible: true
+        }
+        ValueAxis {
+            id: nmrAxisY
+            min: 0
+            max: 1
+            labelsVisible: true
+        }
+        LineSeries {
+            id: nmrLineSeries
+            // Линия спектра — синяя (как на устройстве)
+            color: "#4a90e2"
+            width: 2
+            axisX: nmrAxisX
+            axisY: nmrAxisY
         }
     }
 
