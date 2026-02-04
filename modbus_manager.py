@@ -735,10 +735,22 @@ class ModbusManager(QObject):
         if not self._polling_paused:
             return
         self._polling_paused = False
-        for t in self._polling_timers:
-            t.start()
-        self.pollingPausedChanged.emit(False)
-        logger.info("▶️ Опрос Modbus возобновлен после переключения экрана")
+        
+        # Обновляем время последнего успешного ответа, чтобы не срабатывала проверка соединения
+        # сразу после возобновления опроса (время паузы не должно учитываться)
+        if self._last_modbus_ok_time > 0:
+            self._last_modbus_ok_time = time.time()
+        
+        # Добавляем небольшую задержку перед возобновлением опроса, чтобы соединение стабилизировалось
+        # Используем QTimer для неблокирующей задержки
+        def startPollingAfterDelay():
+            for t in self._polling_timers:
+                t.start()
+            self.pollingPausedChanged.emit(False)
+            logger.info("▶️ Опрос Modbus возобновлен после переключения экрана")
+        
+        # Задержка 200ms перед возобновлением опроса
+        QTimer.singleShot(200, startPollingAfterDelay)
     
     @Slot()
     def enableRelayPolling(self):
