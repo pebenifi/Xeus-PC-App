@@ -1623,18 +1623,18 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1021:.2f}с назад)")
             return
         
-        # Проверяем, есть ли недавние ожидаемые состояния для реле (в течение 2 секунд)
-        recent_relay_expected = {k: v for k, v in self._expected_states.items() 
-                                if k.startswith('relay:') and current_time - v[1] < 2.0}
+        # Проверяем, есть ли ЛЮБЫЕ ожидаемые состояния для реле
+        relay_expected = {k: v for k, v in self._expected_states.items() 
+                         if k.startswith('relay:')}
         
-        # Если есть недавние ожидаемые состояния, полностью игнорируем чтение регистра 1021
-        # чтобы не перезаписывать оптимистичные значения устаревшими данными
-        if recent_relay_expected:
-            logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: есть недавние ожидаемые состояния {list(recent_relay_expected.keys())}")
+        # Если есть ожидаемые состояния, полностью игнорируем чтение регистра 1021
+        # до тех пор, пока не совпадут ВСЕ ожидаемые состояния
+        if relay_expected:
+            logger.info(f"⏸ [1021] ИГНОРИРУЕМ чтение: есть ожидаемые состояния {list(relay_expected.keys())}")
             logger.info(f"⏸ [1021] Прочитанные значения: {new_states}")
             logger.info(f"⏸ [1021] Текущие состояния в памяти: {self._relay_states}")
-            # Но проверяем, совпадают ли прочитанные значения с ожидаемыми - если да, удаляем из ожидаемых
-            # ВАЖНО: применяем ТОЛЬКО то реле, которое совпало с ожидаемым, остальные игнорируем
+            # Проверяем, совпадают ли прочитанные значения с ожидаемыми - если да, удаляем из ожидаемых
+            # ВАЖНО: применяем ТОЛЬКО те реле, которые совпали с ожидаемыми, остальные игнорируем
             relay_key_map = {
                 'water_chiller': 'relay:water_chiller',
                 'magnet_psu': 'relay:magnet_psu',
@@ -1734,13 +1734,13 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1111] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1111:.2f}с назад)")
             return
         
-        # Проверяем, есть ли недавние ожидаемые состояния для клапанов (в течение 2 секунд)
-        recent_valve_expected = {k: v for k, v in self._expected_states.items() 
-                                if k.startswith('valve:') and current_time - v[1] < 2.0}
+        # Проверяем, есть ли ЛЮБЫЕ ожидаемые состояния для клапанов
+        valve_expected = {k: v for k, v in self._expected_states.items() 
+                         if k.startswith('valve:')}
         
-        # Если есть недавние ожидаемые состояния, проверяем совпадения и применяем только совпавшие
-        if recent_valve_expected:
-            logger.info(f"⏸ [1111] ИГНОРИРУЕМ чтение: есть недавние ожидаемые состояния {list(recent_valve_expected.keys())}")
+        # Если есть ожидаемые состояния, проверяем совпадения и применяем только совпавшие
+        if valve_expected:
+            logger.info(f"⏸ [1111] ИГНОРИРУЕМ чтение: есть ожидаемые состояния {list(valve_expected.keys())}")
             for valve_index in range(5, 12):
                 new_state = bool(value_int & (1 << valve_index))
                 valve_key = f'valve:{valve_index}'
@@ -1886,13 +1886,13 @@ class ModbusManager(QObject):
             logger.info(f"⏸ [1131] ИГНОРИРУЕМ чтение: недавно удалено ожидаемое состояние ({current_time - self._last_expected_state_removed_time_1131:.2f}с назад)")
             return
         
-        # Проверяем, есть ли недавние ожидаемые состояния для вентиляторов (в течение 2 секунд)
-        recent_fan_expected = {k: v for k, v in self._expected_states.items() 
-                              if k.startswith('fan:') and current_time - v[1] < 2.0}
+        # Проверяем, есть ли ЛЮБЫЕ ожидаемые состояния для вентиляторов
+        fan_expected = {k: v for k, v in self._expected_states.items() 
+                       if k.startswith('fan:')}
         
-        # Если есть недавние ожидаемые состояния, проверяем совпадения и применяем только совпавшие
-        if recent_fan_expected:
-            logger.info(f"⏸ [1131] ИГНОРИРУЕМ чтение: есть недавние ожидаемые состояния {list(recent_fan_expected.keys())}")
+        # Если есть ожидаемые состояния, проверяем совпадения и применяем только совпавшие
+        if fan_expected:
+            logger.info(f"⏸ [1131] ИГНОРИРУЕМ чтение: есть ожидаемые состояния {list(fan_expected.keys())}")
             for fan_index, bit_pos in fan_mapping.items():
                 new_state = bool(value_int & (1 << bit_pos))
                 fan_key = f'fan:{fan_index}'
@@ -5756,7 +5756,8 @@ class ModbusManager(QObject):
             10: "laser fan"
         }
         
-        # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
+        # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
+        # Это обеспечивает мгновенную реакцию кнопок даже при подключенном устройстве
         if fanIndex == 10:
             # Laser fan использует бит 15 (считая с 0), что соответствует биту 16 (считая с 1)
             logger.info(f"Установка Laser Fan (бит 15): {state}")
@@ -5764,8 +5765,10 @@ class ModbusManager(QObject):
             self._updateActionStatus(f"set {fan_name_mapping[10]}")
             # Логируем действие
             self._addLog(f"{fan_name_mapping[10]}: {'ON' if state else 'OFF'}")
-            # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
-            # Запоминаем ожидаемое состояние для Laser Fan (но не обновляем UI)
+            # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
+            self._fan_states[10] = state
+            self.fanStateChanged.emit(10, state)
+            # Запоминаем ожидаемое состояние для Laser Fan
             fan_key = 'fan:10'
             self._expected_states[fan_key] = (state, time.time())
             # Затем отправляем команду на устройство асинхронно через очередь задач (только если подключено)
@@ -5784,8 +5787,10 @@ class ModbusManager(QObject):
                 self._updateActionStatus(f"set fan {fanIndex + 1}")
                 # Логируем действие
                 self._addLog(f"Fan {fanIndex + 1}: {'ON' if state else 'OFF'}")
-            # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
-            # Запоминаем ожидаемое состояние для этого вентилятора (но не обновляем UI)
+            # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
+            self._fan_states[fanIndex] = state
+            self.fanStateChanged.emit(fanIndex, state)
+            # Запоминаем ожидаемое состояние для этого вентилятора
             fan_key = f'fan:{fanIndex}'
             self._expected_states[fan_key] = (state, time.time())
             # Затем отправляем команду на устройство асинхронно через очередь задач (только если подключено)
@@ -6364,8 +6369,11 @@ class ModbusManager(QObject):
         # Логируем действие
         self._addLog(f"Valve X{valve_number}: {'OPEN' if state else 'CLOSED'}")
         
-        # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
-        # Запоминаем ожидаемое состояние для этого клапана (но не обновляем UI)
+        # ВСЕГДА обновляем UI мгновенно (оптимистичное обновление) ДО проверки подключения
+        # Это обеспечивает мгновенную реакцию кнопок даже при подключенном устройстве
+        self._valve_states[valveIndex] = state
+        self.valveStateChanged.emit(valveIndex, state)
+        # Запоминаем ожидаемое состояние для этого клапана
         valve_key = f'valve:{valveIndex}'
         self._expected_states[valve_key] = (state, time.time())
         
@@ -6403,10 +6411,12 @@ class ModbusManager(QObject):
         # Попробуем: valve_bit = valveIndex (биты нумеруются с 0)
         valve_bit = valveIndex
         
-        # НЕ обновляем UI сразу - ждем подтверждения от устройства через Modbus
+        # Сразу обновляем буфер и UI для мгновенной реакции (оптимистичное обновление)
+        self._valve_states[valveIndex] = state
+        self.valveStateChanged.emit(valveIndex, state)
         # Затем отправляем команду на устройство асинхронно через очередь задач
         self._setValveAsync(valveIndex, valve_bit, state)
-        return True
+        return True  # Возвращаем True сразу, так как UI уже обновлен
     
     # ===== Power Supply методы записи =====
     @Slot(float, result=bool)
