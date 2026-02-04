@@ -2644,6 +2644,11 @@ class ModbusManager(QObject):
         now = time.time()
         if self._last_modbus_ok_time <= 0:
             return
+        
+        # Не проверяем соединение, если опрос приостановлен (при переключении экранов)
+        # Время паузы не должно учитываться при проверке соединения
+        if self._polling_paused:
+            return
 
         # Если давно не было успешных ответов — считаем соединение "подвисшим"
         if (now - self._last_modbus_ok_time) < 3.0:
