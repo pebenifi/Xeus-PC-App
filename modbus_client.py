@@ -31,6 +31,10 @@ class ModbusClient:
         self.framer = framer
         self.client: Optional[ModbusTcpClient] = None
         self._connected = False
+        # Список проблемных регистров, которые вызывают разрыв соединения
+        self._problematic_registers: set[int] = set()
+        # Последний регистр, который читался перед разрывом соединения
+        self._last_read_register: Optional[int] = None
     
     def connect(self) -> bool:
         """
@@ -284,6 +288,14 @@ class ModbusClient:
         Returns:
             Значение регистра или None в случае ошибки
         """
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         # Проверяем соединение, но не блокируем чтение если сокет открыт
         if self.client is None:
             logger.warning("Клиент не инициализирован")
@@ -305,6 +317,10 @@ class ModbusClient:
                 error_str = str(result)
                 if "No response" in error_str or "timeout" in error_str.lower():
                     logger.debug(f"Таймаут при чтении регистра {address}")
+                    # При таймауте также добавляем регистр в проблемные
+                    if address not in self._problematic_registers:
+                        self._problematic_registers.add(address)
+                        logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (таймаут при чтении)")
                 else:
                     logger.error(f"Ошибка чтения регистра {address}: {result}")
                 return None
@@ -315,19 +331,16 @@ class ModbusClient:
             logger.warning(f"Ошибка соединения при чтении holding регистра {address}: {e} (errno={error_code})")
             # При ошибках соединения (Connection reset, Broken pipe и т.д.) пробуем переподключиться
             if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
                 logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
                 if self._reconnect():
-                    # После успешного переподключения пробуем повторить запрос
-                    try:
-                        result = self.client.read_holding_registers(
-                            address, 
-                            count=1, 
-                            device_id=self.unit_id
-                        )
-                        if not result.isError():
-                            return result.registers[0] if result.registers else None
-                    except Exception as e2:
-                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+                    # После успешного переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    # Просто возвращаем None, чтобы не вызывать повторный разрыв
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
             self._connected = False
             return None
         except Exception as e:
@@ -471,6 +484,14 @@ class ModbusClient:
         Returns:
             Значение регистра или None в случае ошибки
         """
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         # Проверяем соединение, но не блокируем чтение если сокет открыт
         if self.client is None:
             logger.warning("Клиент не инициализирован")
@@ -492,6 +513,10 @@ class ModbusClient:
                 error_str = str(result)
                 if "No response" in error_str or "timeout" in error_str.lower():
                     logger.debug(f"Таймаут при чтении input регистра {address}")
+                    # При таймауте также добавляем регистр в проблемные
+                    if address not in self._problematic_registers:
+                        self._problematic_registers.add(address)
+                        logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (таймаут при чтении)")
                 else:
                     logger.error(f"Ошибка чтения input регистра {address}: {result}")
                 return None
@@ -504,10 +529,28 @@ class ModbusClient:
             logger.warning(f"Ошибка соединения при чтении input регистра {address}: {e} (errno={error_code})")
             # При ошибках соединения (Connection reset, Broken pipe и т.д.) пробуем переподключиться
             if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
                 logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
                 if self._reconnect():
-                    # После успешного переподключения пробуем повторить запрос
-                    try:
+                    # После успешного переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    # Просто возвращаем None, чтобы не вызывать повторный разрыв
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
+        except Exception as e:
+            # Не логируем таймауты как критические ошибки
+            error_str = str(e)
+            # При ошибке "CLOSING CONNECTION" pymodbus сам закрывает соединение
+            if "CLOSING CONNECTION" in error_str:
+                logger.debug(f"Соединение закрыто при чтении input регистра {address}")
+            else:
+                logger.error(f"Неожиданная ошибка при чтении input регистра {address}: {e}")
+            self._connected = False
+            return None
                         result = self.client.read_input_registers(
                             address, 
                             count=1, 
