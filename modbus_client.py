@@ -3,7 +3,7 @@ Modbus клиент для работы с XeUS driver
 Поддерживает Modbus RTU over TCP/IP
 """
 from pymodbus.client import ModbusTcpClient
-from typing import Optional
+from typing import Optional, Callable
 import logging
 import socket
 import time
@@ -671,6 +671,163 @@ class ModbusClient:
             }
         return None
     
+    def _read_register_direct_generic(self, address: int, build_frame_func: Callable[[], bytes], 
+                                       parse_response_func: Callable[[bytes], Optional[int]]) -> Optional[int]:
+        """
+        Общий метод для чтения регистра через прямой сокет с логикой из test_modbus.py.
+        
+        Args:
+            address: Адрес регистра
+            build_frame_func: Функция для построения фрейма запроса
+            parse_response_func: Функция для парсинга ответа
+        
+        Returns:
+            Значение регистра или None при ошибке
+        """
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
+        if self.client is None or not self.client.is_socket_open():
+            return None
+        
+        read_frame = build_frame_func()
+        
+        # Отправляем запрос 2 раза (первый может потеряться) - как в test_modbus.py
+        for attempt in range(2):
+            max_retries = 3
+            retry_count = 0
+            success = False
+            parsed = None
+            
+            while retry_count < max_retries and not success:
+                try:
+                    # Получаем сокет из pymodbus клиента
+                    sock = self._get_socket()
+                    if sock is None:
+                        logger.warning(f"Не удалось получить сокет для прямого чтения регистра {address}")
+                        return None
+                    
+                    sock.sendall(read_frame)
+                    time.sleep(0.1)  # Задержка как в test_modbus.py
+                    
+                    # Читаем ответ с таймаутом
+                    resp = b''
+                    try:
+                        sock.settimeout(1.0)  # Увеличиваем таймаут до 1 секунды как в test_modbus.py
+                        while True:
+                            chunk = sock.recv(256)
+                            if not chunk:
+                                break
+                            resp += chunk
+                            # Проверяем, не закончился ли фрейм
+                            if len(resp) >= 7:
+                                byte_count = resp[2] if len(resp) > 2 else 0
+                                expected_length = 3 + byte_count + 2
+                                if len(resp) >= expected_length:
+                                    break
+                    except socket.timeout:
+                        pass  # Таймаут - возможно, все данные уже получены
+                    finally:
+                        sock.settimeout(2.0)  # Возвращаем обычный таймаут
+                    
+                    if resp:
+                        # Проверяем на Modbus exception response
+                        exception_info = self._check_modbus_exception(resp, str(address))
+                        if exception_info:
+                            exc_code = exception_info['error_code']
+                            # Если это ошибка адреса или значения - регистр проблемный
+                            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                                if address not in self._problematic_registers:
+                                    self._problematic_registers.add(address)
+                                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (Modbus exception code={exc_code})")
+                                # Разрываем соединение и переподключаемся
+                                logger.warning(f"Регистр {address} вернул Modbus exception, разрываем соединение...")
+                                if self._reconnect():
+                                    return None  # Не повторяем запрос для проблемного регистра
+                                return None
+                            else:
+                                logger.warning(f"Регистр {address} вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+                                return None
+                        
+                        parsed = parse_response_func(resp)
+                        if parsed is not None:
+                            success = True
+                            break
+                        else:
+                            # Пустой ответ или ошибка парсинга - регистр проблемный
+                            if address not in self._problematic_registers:
+                                self._problematic_registers.add(address)
+                                logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (пустой ответ или ошибка парсинга)")
+                            # Разрываем соединение и переподключаемся
+                            logger.warning(f"Регистр {address} вернул пустой ответ, разрываем соединение...")
+                            if self._reconnect():
+                                return None  # Не повторяем запрос для проблемного регистра
+                            return None
+                    else:
+                        # Пустой ответ - регистр проблемный
+                        if address not in self._problematic_registers:
+                            self._problematic_registers.add(address)
+                            logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (пустой ответ)")
+                        # Разрываем соединение и переподключаемся
+                        logger.warning(f"Регистр {address} вернул пустой ответ, разрываем соединение...")
+                        if self._reconnect():
+                            return None
+                        return None
+                        
+                except (ConnectionError, OSError) as e:
+                    error_code = getattr(e, 'errno', None)
+                    retry_count += 1
+                    logger.warning(f"⚠️ Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+                    
+                    if retry_count < max_retries:
+                        logger.info(f"Переподключение (попытка {retry_count}/{max_retries-1})...")
+                        # Закрываем старое соединение и переподключаемся
+                        try:
+                            if self.client is not None:
+                                self.client.close()
+                        except:
+                            pass
+                        
+                        if self._reconnect():
+                            time.sleep(0.3)  # Задержка после переподключения как в test_modbus.py
+                            logger.info("✓ Переподключено, повтор запроса...")
+                            continue  # Повторяем попытку
+                        else:
+                            logger.error("❌ Ошибка переподключения")
+                            if retry_count >= max_retries:
+                                # Запоминаем проблемный регистр
+                                if address not in self._problematic_registers:
+                                    self._problematic_registers.add(address)
+                                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (не удалось переподключиться)")
+                                return None
+                    else:
+                        logger.error(f"❌ Не удалось переподключиться после {max_retries} попыток")
+                        # Запоминаем проблемный регистр
+                        if address not in self._problematic_registers:
+                            self._problematic_registers.add(address)
+                            logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (не удалось переподключиться после {max_retries} попыток)")
+                        return None
+                except Exception as e:
+                    logger.error(f"Ошибка при чтении регистра {address}: {e}")
+                    return None
+            
+            if success and parsed is not None:
+                return parsed
+            
+            if attempt < 1:  # Не ждем после последней отправки
+                time.sleep(0.5)  # Задержка между попытками как в test_modbus.py
+        
+        # Если обе попытки не удались
+        if address not in self._problematic_registers:
+            self._problematic_registers.add(address)
+            logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (не удалось прочитать после 2 попыток)")
+        return None
+    
     def _parse_read_response_1021(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1021"""
         if len(resp) < 5:
@@ -712,77 +869,8 @@ class ModbusClient:
             return None  # Не возвращаем некорректные данные
     
     def read_register_1021_direct(self) -> Optional[int]:
-        """Чтение регистра 1021 через прямой сокет (функция 04)"""
-        address = 1021
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1021")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1021()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1021(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    error_code = getattr(e, 'errno', None)
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1021 не удалась (это нормально): {e}")
-                    else:
-                        # При разрыве соединения пробуем переподключиться
-                        if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                            # Запоминаем проблемный регистр
-                            if address not in self._problematic_registers:
-                                self._problematic_registers.add(address)
-                                logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                            logger.warning(f"Разрыв соединения при чтении регистра {address}: {e}, пробуем переподключиться...")
-                            if self._reconnect():
-                                # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                                logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                                return None
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра 1021: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения пробуем повторить запрос
-                    try:
-                        return self.read_register_1021_direct()
-                    except Exception as e2:
-                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1021 через прямой сокет: {e}")
-            return None
+        """Чтение регистра 1021 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1021, self._build_read_frame_1021, self._parse_read_response_1021)
     
     def write_register_1021_direct(self, value: int) -> bool:
         """Запись в регистр 1021 через прямой сокет (функция 06)
@@ -932,10 +1020,27 @@ class ModbusClient:
     
     def _parse_read_response_1111(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1111"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1111")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1111 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1111 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -951,79 +1056,11 @@ class ModbusClient:
             return value
         else:
             logger.warning(f"CRC не совпадает для регистра 1111: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
-            # Если CRC не совпадает, это может быть признаком проблемного регистра
-            # Добавляем регистр в список проблемных после ошибки CRC
-            if 1111 not in self._problematic_registers:
-                self._problematic_registers.add(1111)
-                logger.warning(f"⚠️ Регистр 1111 добавлен в список проблемных (ошибка CRC)")
             return None  # Не возвращаем некорректные данные
     
     def read_register_1111_direct(self) -> Optional[int]:
-        """Чтение регистра 1111 через прямой сокет (функция 04)"""
-        address = 1111
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1111")
-                return None
-            
-            # Устанавливаем таймаут на сокет для чтения
-            try:
-                sock.settimeout(2.0)  # 2 секунды таймаут
-            except Exception:
-                pass
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1111()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.05)  # Задержка для стабильности (как в рабочей версии)
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1111(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError, socket.timeout) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1111 не удалась (это нормально): {e}")
-                    else:
-                        logger.warning(f"Вторая попытка чтения регистра 1111 не удалась: {e}")
-                if i < 1:
-                    time.sleep(0.1)  # Задержка между попытками
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра 1111: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения пробуем повторить запрос
-                    try:
-                        return self.read_register_1111_direct()
-                    except Exception as e2:
-                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1111 через прямой сокет: {e}")
-            return None
+        """Чтение регистра 1111 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1111, self._build_read_frame_1111, self._parse_read_response_1111)
     
     def write_register_1111_direct(self, value: int) -> bool:
         """Запись в регистр 1111 через прямой сокет (функция 06)
@@ -1152,10 +1189,27 @@ class ModbusClient:
     
     def _parse_read_response_1511(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1511"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1511")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1511 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1511 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -1174,86 +1228,8 @@ class ModbusClient:
             return None  # Не возвращаем некорректные данные
     
     def read_register_1511_direct(self) -> Optional[int]:
-        """Чтение регистра 1511 (температура Water Chiller) через прямой сокет (функция 04)"""
-        address = 1511
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1511")
-                return None
-            
-            # Устанавливаем таймаут на сокет для чтения
-            try:
-                sock.settimeout(2.0)  # 2 секунды таймаут
-            except Exception:
-                pass
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1511()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.05)  # Задержка для стабильности (как в рабочей версии)
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1511(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError, socket.timeout) as e:
-                    error_code = getattr(e, 'errno', None)
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1511 не удалась (это нормально): {e}")
-                    else:
-                        # При разрыве соединения пробуем переподключиться
-                        if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                            # Запоминаем проблемный регистр
-                            if address not in self._problematic_registers:
-                                self._problematic_registers.add(address)
-                                logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                            logger.warning(f"Разрыв соединения при чтении регистра {address}: {e}, пробуем переподключиться...")
-                            if self._reconnect():
-                                # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                                logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                                return None
-                        else:
-                            logger.warning(f"Вторая попытка чтения регистра 1511 не удалась: {e}")
-                if i < 1:
-                    time.sleep(0.1)  # Задержка между попытками
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1511 через прямой сокет: {e}")
-            return None
+        """Чтение регистра 1511 (температура Water Chiller) через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1511, self._build_read_frame_1511, self._parse_read_response_1511)
     
     def _build_write_frame_1531(self, value: int) -> bytes:
         """Формирование Modbus RTU фрейма для записи в регистр 1531 (функция 06)"""
@@ -1616,6 +1592,28 @@ class ModbusClient:
     
     def _parse_read_response_1411(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1411"""
+        if len(resp) < 5:
+            logger.debug(f"Регистр 1411: ответ слишком короткий: {len(resp)} байт")
+            return None
+        
+        if resp[0] != self.unit_id:
+            logger.warning(f"Регистр 1411: неправильный unit_id: получен {resp[0]}, ожидался {self.unit_id}")
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1411")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1411 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1411 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
         if len(resp) < 7:
             logger.debug(f"Регистр 1411: ответ слишком короткий: {len(resp)} байт")
             return None
@@ -1623,10 +1621,6 @@ class ModbusClient:
         # Логируем полный ответ для отладки
         hex_resp = ' '.join(f'{b:02X}' for b in resp)
         logger.debug(f"Регистр 1411: полный ответ: {hex_resp}, длина: {len(resp)}")
-        
-        if resp[0] != self.unit_id:
-            logger.warning(f"Регистр 1411: неправильный unit_id: получен {resp[0]}, ожидался {self.unit_id}")
-            return None
         
         if resp[1] != 4:
             logger.warning(f"Регистр 1411: неправильная функция: получена {resp[1]}, ожидалась 4")
@@ -1652,86 +1646,8 @@ class ModbusClient:
             return None
     
     def read_register_1411_direct(self) -> Optional[int]:
-        """Чтение регистра 1411 (температура SEOP Cell) через прямой сокет (функция 04)"""
-        address = 1411
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1411")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1411()
-            hex_frame = ' '.join(f'{b:02X}' for b in read_frame)
-            logger.debug(f"Регистр 1411: отправляем запрос: {hex_frame}")
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    # Очищаем буфер сокета перед отправкой, чтобы избежать чтения старых данных
-                    sock.settimeout(0.1)
-                    try:
-                        while True:
-                            sock.recv(256)  # Очищаем буфер
-                    except socket.timeout:
-                        pass  # Буфер пуст
-                    except BlockingIOError:
-                        pass  # Нет данных
-                    sock.settimeout(2.0)  # Возвращаем нормальный таймаут
-                    
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи
-                    resp = sock.recv(256)
-                    if resp:
-                        hex_resp = ' '.join(f'{b:02X}' for b in resp)
-                        logger.debug(f"Регистр 1411: получен ответ (попытка {i+1}): {hex_resp}, длина: {len(resp)}")
-                        parsed = self._parse_read_response_1411(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1411 не удалась (это нормально): {e}")
-                    else:
-                        raise
-                except socket.timeout:
-                    logger.debug(f"Таймаут при чтении регистра 1411 (попытка {i+1})")
-                    if i == 1:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
-            return None
+        """Чтение регистра 1411 (температура SEOP Cell) через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1411, self._build_read_frame_1411, self._parse_read_response_1411)
     
     def read_register_1421_direct(self) -> Optional[int]:
         """Чтение регистра 1421 (setpoint SEOP Cell) через прямой сокет (функция 04)"""
@@ -1814,10 +1730,27 @@ class ModbusClient:
     
     def _parse_read_response_1341(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1341"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1341")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1341 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1341 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -1835,69 +1768,11 @@ class ModbusClient:
             logger.warning(f"CRC не совпадает для регистра 1341: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
             return None  # Не возвращаем некорректные данные
     
-    def read_register_1341_direct(self) -> Optional[int]:
-        """Чтение регистра 1341 (ток Magnet PSU) через прямой сокет (функция 04)"""
-        address = 1341
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1341")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1341()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1341(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1341 не удалась (это нормально): {e}")
-                    else:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
-            return None
+        def read_register_1341_direct(self) -> Optional[int]:
+        """Чтение регистра 1341 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1341, self._build_read_frame_1341, self._parse_read_response_1341)
     
+
     def _build_read_frame_1251(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1251 (функция 04)"""
         address = 1251
@@ -1912,10 +1787,27 @@ class ModbusClient:
     
     def _parse_read_response_1251(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1251"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1251")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1251 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1251 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -1933,69 +1825,11 @@ class ModbusClient:
             logger.warning(f"CRC не совпадает для регистра 1251: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
             return None  # Не возвращаем некорректные данные
     
-    def read_register_1251_direct(self) -> Optional[int]:
-        """Чтение регистра 1251 (ток Laser PSU) через прямой сокет (функция 04)"""
-        address = 1251
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1251")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1251()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1251(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1251 не удалась (это нормально): {e}")
-                    else:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
-            return None
+        def read_register_1251_direct(self) -> Optional[int]:
+        """Чтение регистра 1251 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1251, self._build_read_frame_1251, self._parse_read_response_1251)
     
+
     def _build_read_frame_1611(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1611 (функция 04)"""
         address = 1611
@@ -2010,10 +1844,27 @@ class ModbusClient:
     
     def _parse_read_response_1611(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1611"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1611")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1611 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1611 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -2036,72 +1887,11 @@ class ModbusClient:
             # Не возвращаем некорректные данные при ошибке CRC
             return None
     
-    def read_register_1611_direct(self) -> Optional[int]:
-        """Чтение регистра 1611 (давление Xenon) через прямой сокет (функция 04)"""
-        address = 1611
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1611")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1611()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
-                    resp = sock.recv(256)
-                    if resp:
-                        # Логируем полный ответ для отладки
-                        hex_resp = ' '.join(f'{b:02X}' for b in resp)
-                        logger.debug(f"Регистр 1611: получен ответ (попытка {i+1}): {hex_resp}, длина: {len(resp)}")
-                        parsed = self._parse_read_response_1611(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1611 не удалась (это нормально): {e}")
-                    else:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
-            return None
+        def read_register_1611_direct(self) -> Optional[int]:
+        """Чтение регистра 1611 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1611, self._build_read_frame_1611, self._parse_read_response_1611)
     
+
     def _build_write_frame_1621(self, value: int) -> bytes:
         """Формирование Modbus RTU фрейма для записи в регистр 1621 (функция 06)"""
         address = 1621
@@ -2273,10 +2063,27 @@ class ModbusClient:
     
     def _parse_read_response_1651(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1651"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1651")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1651 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1651 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -2299,72 +2106,11 @@ class ModbusClient:
             # Не возвращаем некорректные данные при ошибке CRC
             return None
     
-    def read_register_1651_direct(self) -> Optional[int]:
-        """Чтение регистра 1651 (давление N2) через прямой сокет (функция 04)"""
-        address = 1651
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1651")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1651()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
-                    resp = sock.recv(256)
-                    if resp:
-                        # Логируем полный ответ для отладки
-                        hex_resp = ' '.join(f'{b:02X}' for b in resp)
-                        logger.debug(f"Регистр 1651: получен ответ (попытка {i+1}): {hex_resp}, длина: {len(resp)}")
-                        parsed = self._parse_read_response_1651(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1651 не удалась (это нормально): {e}")
-                    else:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
-            return None
+        def read_register_1651_direct(self) -> Optional[int]:
+        """Чтение регистра 1651 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1651, self._build_read_frame_1651, self._parse_read_response_1651)
     
+
     def _build_read_frame_1701(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1701 (функция 04)"""
         address = 1701
@@ -2379,10 +2125,27 @@ class ModbusClient:
     
     def _parse_read_response_1701(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1701"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1701")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1701 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1701 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -2405,69 +2168,11 @@ class ModbusClient:
             # Не возвращаем некорректные данные при ошибке CRC
             return None
     
-    def read_register_1701_direct(self) -> Optional[int]:
-        """Чтение регистра 1701 (давление Vacuum) через прямой сокет (функция 04)"""
-        address = 1701
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1701")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1701()
-            parsed = None
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1701(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1701 не удалась (это нормально): {e}")
-                    else:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
-                    return None
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
-            return None
+        def read_register_1701_direct(self) -> Optional[int]:
+        """Чтение регистра 1701 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1701, self._build_read_frame_1701, self._parse_read_response_1701)
     
+
     def _build_read_frame_1131(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1131 (функция 04)"""
         address = 1131
@@ -2496,10 +2201,27 @@ class ModbusClient:
     
     def _parse_read_response_1131(self, resp: bytes) -> Optional[int]:
         """Расшифровка ответа на запрос чтения регистра 1131"""
-        if len(resp) < 7:
+        if len(resp) < 5:
             return None
         
-        if resp[0] != self.unit_id or resp[1] != 4:
+        if resp[0] != self.unit_id:
+            return None
+        
+        # Проверяем на Modbus exception response
+        exception_info = self._check_modbus_exception(resp, "1131")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
+                logger.debug(f"Регистр 1131 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1131 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+        
+        fn = resp[1]
+        if fn != 4:
+            return None
+        
+        if len(resp) < 7:
             return None
         
         value_high = resp[3]
@@ -2517,73 +2239,11 @@ class ModbusClient:
             logger.debug(f"Регистр 1131: CRC не совпадает - получен {received_crc:04X}, ожидался {calculated_crc:04X}")
             return None  # Не возвращаем некорректные данные
     
-    def read_register_1131_direct(self) -> Optional[int]:
-        """Чтение регистра 1131 (fans) через прямой сокет (функция 04)"""
-        address = 1131
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
-        
-        # Сохраняем адрес регистра для отслеживания проблем
-        self._last_read_register = address
-        
-        if self.client is None or not self.client.is_socket_open():
-            return None
-        
-        try:
-            # Получаем сокет из pymodbus клиента
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для прямого чтения регистра 1131")
-                return None
-            
-            # Отправляем запрос дважды (первый может потеряться)
-            read_frame = self._build_read_frame_1131()
-            parsed = None
-            
-            # Устанавливаем таймаут на сокет для чтения
-            try:
-                sock.settimeout(2.0)  # 2 секунды таймаут
-            except Exception:
-                pass
-            
-            for i in range(2):
-                try:
-                    sock.sendall(read_frame)
-                    time.sleep(0.05)  # Задержка для стабильности (как в рабочей версии)
-                    resp = sock.recv(256)
-                    if resp:
-                        parsed = self._parse_read_response_1131(resp)
-                        if parsed is not None:
-                            break
-                except (ConnectionError, OSError, socket.timeout) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка чтения регистра 1131 не удалась (это нормально): {e}")
-                    else:
-                        logger.warning(f"Вторая попытка чтения регистра 1131 не удалась: {e}")
-                if i < 1:
-                    time.sleep(0.1)  # Задержка между попытками
-            
-            return parsed
-        except (ConnectionError, OSError) as e:
-            error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра 1131: {e} (errno={error_code})")
-            # При разрыве соединения пробуем переподключиться
-            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
-                if self._reconnect():
-                    # После переподключения пробуем повторить запрос
-                    try:
-                        return self.read_register_1131_direct()
-                    except Exception as e2:
-                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
-            self._connected = False
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1131 через прямой сокет: {e}")
-            return None
+        def read_register_1131_direct(self) -> Optional[int]:
+        """Чтение регистра 1131 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+        return self._read_register_direct_generic(1131, self._build_read_frame_1131, self._parse_read_response_1131)
     
+
     def write_register_1131_direct(self, value: int) -> bool:
         """Запись в регистр 1131 через прямой сокет (функция 06)
         
