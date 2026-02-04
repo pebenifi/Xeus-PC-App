@@ -1825,7 +1825,7 @@ class ModbusClient:
             logger.warning(f"CRC не совпадает для регистра 1251: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
             return None  # Не возвращаем некорректные данные
     
-        def read_register_1251_direct(self) -> Optional[int]:
+    def read_register_1251_direct(self) -> Optional[int]:
         """Чтение регистра 1251 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
         return self._read_register_direct_generic(1251, self._build_read_frame_1251, self._parse_read_response_1251)
     
@@ -1887,7 +1887,7 @@ class ModbusClient:
             # Не возвращаем некорректные данные при ошибке CRC
             return None
     
-        def read_register_1611_direct(self) -> Optional[int]:
+    def read_register_1611_direct(self) -> Optional[int]:
         """Чтение регистра 1611 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
         return self._read_register_direct_generic(1611, self._build_read_frame_1611, self._parse_read_response_1611)
     
@@ -2106,7 +2106,7 @@ class ModbusClient:
             # Не возвращаем некорректные данные при ошибке CRC
             return None
     
-        def read_register_1651_direct(self) -> Optional[int]:
+    def read_register_1651_direct(self) -> Optional[int]:
         """Чтение регистра 1651 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
         return self._read_register_direct_generic(1651, self._build_read_frame_1651, self._parse_read_response_1651)
     
@@ -2168,7 +2168,7 @@ class ModbusClient:
             # Не возвращаем некорректные данные при ошибке CRC
             return None
     
-        def read_register_1701_direct(self) -> Optional[int]:
+    def read_register_1701_direct(self) -> Optional[int]:
         """Чтение регистра 1701 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
         return self._read_register_direct_generic(1701, self._build_read_frame_1701, self._parse_read_response_1701)
     
@@ -2239,7 +2239,7 @@ class ModbusClient:
             logger.debug(f"Регистр 1131: CRC не совпадает - получен {received_crc:04X}, ожидался {calculated_crc:04X}")
             return None  # Не возвращаем некорректные данные
     
-        def read_register_1131_direct(self) -> Optional[int]:
+    def read_register_1131_direct(self) -> Optional[int]:
         """Чтение регистра 1131 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
         return self._read_register_direct_generic(1131, self._build_read_frame_1131, self._parse_read_response_1131)
     
