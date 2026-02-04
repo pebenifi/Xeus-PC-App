@@ -144,9 +144,9 @@ Item {
     }
 
     function updateIrGraph(payload) {
-        console.log("[IR] Clinicalmode updateIrGraph payload=", payload)
+        // console.log("[IR] Clinicalmode updateIrGraph payload=", payload)
         if (!payload) {
-            console.log("[IR] Clinicalmode: payload is null/undefined")
+            // console.log("[IR] Clinicalmode: payload is null/undefined")
             return
         }
 
@@ -156,14 +156,14 @@ Item {
             try {
                 ys = JSON.parse(payload.data_json)
             } catch (ejson) {
-                console.log("[IR] Clinicalmode: JSON.parse(data_json) failed:", ejson, payload.data_json)
+                // console.log("[IR] Clinicalmode: JSON.parse(data_json) failed:", ejson, payload.data_json)
                 ys = payload.data
             }
         } else {
             ys = payload.data
         }
         if (!ys || ys.length === 0) {
-            console.log("[IR] Clinicalmode: no data to draw", payload.data, payload.points)
+            // console.log("[IR] Clinicalmode: no data to draw", payload.data, payload.points)
             return
         }
 
@@ -236,9 +236,9 @@ Item {
             }
         }
         
-        console.log("[IR] Clinicalmode: prepared", validPoints, "valid points out of", n, "total, first=", 
-                   pointsToAdd.length > 0 ? (pointsToAdd[0].x + "," + pointsToAdd[0].y) : "none",
-                   "last=", pointsToAdd.length > 0 ? (pointsToAdd[pointsToAdd.length-1].x + "," + pointsToAdd[pointsToAdd.length-1].y) : "none")
+        // console.log("[IR] Clinicalmode: prepared", validPoints, "valid points out of", n, "total, first=", 
+        //            pointsToAdd.length > 0 ? (pointsToAdd[0].x + "," + pointsToAdd[0].y) : "none",
+        //            "last=", pointsToAdd.length > 0 ? (pointsToAdd[pointsToAdd.length-1].x + "," + pointsToAdd[pointsToAdd.length-1].y) : "none")
         
         // Очищаем серию перед добавлением новых точек
         try {
@@ -246,7 +246,7 @@ Item {
                 splineSeries.clear()
             }
         } catch (e) {
-            console.log("[IR] Clinicalmode: splineSeries.clear() failed:", e)
+            // console.log("[IR] Clinicalmode: splineSeries.clear() failed:", e)
         }
 
         // Добавляем все точки быстро в одном блоке
@@ -259,11 +259,11 @@ Item {
                     added++
                 }
             } catch (e2) {
-                console.log("[IR] Clinicalmode: append failed at", j, pointsToAdd[j].x, pointsToAdd[j].y, e2)
+                // console.log("[IR] Clinicalmode: append failed at", j, pointsToAdd[j].x, pointsToAdd[j].y, e2)
             }
         }
         
-        console.log("[IR] Clinicalmode: added", added, "points out of", pointsToAdd.length, "prepared, series count=", (splineSeries.count !== undefined ? splineSeries.count : "unknown"))
+        // console.log("[IR] Clinicalmode: added", added, "points out of", pointsToAdd.length, "prepared, series count=", (splineSeries.count !== undefined ? splineSeries.count : "unknown"))
 
         // Две "палки" (вертикальные маркеры) из метаданных:
         // - res_freq = регистры 409-410
@@ -283,11 +283,11 @@ Item {
             if (Number(ys[k]) !== 0) { lastNonZero = k; break }
         }
         var xLastNonZero = (lastNonZero >= 0) ? (x0 + dx * lastNonZero) : null
-        console.log("[IR] Clinicalmode: n=", n, "dx=", dx, "points added =", added, "x0=", x0, "x_last=", (x0 + dx * (n - 1)),
-                    "axisY=[" + (y0 - padY) + "," + (y1 + padY) + "] (from payload y_min=" + payload.y_min + " y_max=" + payload.y_max + ") dataY=[" + minY + "," + maxY + "]",
-                    "res_freq=", resX, "freq=", freqX,
-                    "lastNonZeroIdx=", lastNonZero, "xLastNonZero=", xLastNonZero,
-                    "tail=", ys.slice(Math.max(0, n - 6)))
+        // console.log("[IR] Clinicalmode: n=", n, "dx=", dx, "points added =", added, "x0=", x0, "x_last=", (x0 + dx * (n - 1)),
+        //             "axisY=[" + (y0 - padY) + "," + (y1 + padY) + "] (from payload y_min=" + payload.y_min + " y_max=" + payload.y_max + ") dataY=[" + minY + "," + maxY + "]",
+        //             "res_freq=", resX, "freq=", freqX,
+        //             "lastNonZeroIdx=", lastNonZero, "xLastNonZero=", xLastNonZero,
+        //             "tail=", ys.slice(Math.max(0, n - 6)))
     }
 
     // Retry: если IR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
