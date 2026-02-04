@@ -2769,7 +2769,8 @@ class ModbusManager(QObject):
 
         self._reading_1021 = True
         client = self._modbus_client
-        self._enqueue_read("1021", lambda: client.read_register_1021_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1021", lambda: client.read_input_register(1021))
     
     def _readValve1111(self):
         """Чтение регистра 1111 (клапаны X6-X12) и обновление состояний"""
@@ -2783,7 +2784,8 @@ class ModbusManager(QObject):
 
         self._reading_1111 = True
         client = self._modbus_client
-        self._enqueue_read("1111", lambda: client.read_register_1111_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1111", lambda: client.read_input_register(1111))
     
     def _readWaterChillerTemperature(self):
         """Чтение регистра 1511 (температура Water Chiller) и обновление label C"""
@@ -2797,7 +2799,8 @@ class ModbusManager(QObject):
 
         self._reading_1511 = True
         client = self._modbus_client
-        self._enqueue_read("1511", lambda: client.read_register_1511_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1511", lambda: client.read_input_register(1511))
     
     def _autoUpdateWaterChillerSetpoint(self):
         """
@@ -3213,7 +3216,8 @@ class ModbusManager(QObject):
 
         self._reading_1411 = True
         client = self._modbus_client
-        self._enqueue_read("1411", lambda: client.read_register_1411_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1411", lambda: client.read_input_register(1411))
     
     def _readMagnetPSUCurrent(self):
         """Чтение регистра 1341 (ток Magnet PSU) и обновление label A"""
@@ -3227,7 +3231,8 @@ class ModbusManager(QObject):
 
         self._reading_1341 = True
         client = self._modbus_client
-        self._enqueue_read("1341", lambda: client.read_register_1341_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1341", lambda: client.read_input_register(1341))
     
     def _readLaserPSUCurrent(self):
         """Чтение регистра 1251 (ток Laser PSU) и обновление label A"""
@@ -3241,7 +3246,8 @@ class ModbusManager(QObject):
 
         self._reading_1251 = True
         client = self._modbus_client
-        self._enqueue_read("1251", lambda: client.read_register_1251_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1251", lambda: client.read_input_register(1251))
     
     def _readXenonPressure(self):
         """Чтение регистра 1611 (давление Xenon) и обновление label Torr"""
@@ -3255,7 +3261,8 @@ class ModbusManager(QObject):
 
         self._reading_1611 = True
         client = self._modbus_client
-        self._enqueue_read("1611", lambda: client.read_register_1611_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1611", lambda: client.read_input_register(1611))
     
     def _readN2Pressure(self):
         """Чтение регистра 1651 (давление N2) и обновление label Torr"""
@@ -3269,7 +3276,8 @@ class ModbusManager(QObject):
 
         self._reading_1651 = True
         client = self._modbus_client
-        self._enqueue_read("1651", lambda: client.read_register_1651_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1651", lambda: client.read_input_register(1651))
     
     def _readVacuumPressure(self):
         """Чтение регистра 1701 (давление Vacuum) и обновление label Torr"""
@@ -3283,7 +3291,8 @@ class ModbusManager(QObject):
 
         self._reading_1701 = True
         client = self._modbus_client
-        self._enqueue_read("1701", lambda: client.read_register_1701_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1701", lambda: client.read_input_register(1701))
     
     def _readFan1131(self):
         """Чтение регистра 1131 (fans) и обновление состояний всех вентиляторов"""
@@ -3297,7 +3306,8 @@ class ModbusManager(QObject):
 
         self._reading_1131 = True
         client = self._modbus_client
-        self._enqueue_read("1131", lambda: client.read_register_1131_direct())
+        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
+        self._enqueue_read("1131", lambda: client.read_input_register(1131))
     
     def _checkProblematicRegisters(self):
         """Периодическая проверка проблемных регистров - дважды пытаемся прочитать каждый"""
