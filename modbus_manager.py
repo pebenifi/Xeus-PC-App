@@ -5647,16 +5647,9 @@ class ModbusManager(QObject):
                     logger.info(f"✅ Laser Fan успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} Laser Fan")
-                    # При ошибке удаляем из ожидаемых и возобновляем чтение
-                    if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
-                        self._fan_1131_timer.start()
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке Laser Fan: {e}", exc_info=True)
-                # При ошибке удаляем из ожидаемых и возобновляем чтение
-                self._expected_states.pop(fan_key, None)
-                if not self._fan_1131_timer.isActive() and self._is_connected and not self._polling_paused:
-                    self._fan_1131_timer.start()
                 return False
 
         self._enqueue_write("laser_fan", task, {"state": state})
