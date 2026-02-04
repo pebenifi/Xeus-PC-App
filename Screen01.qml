@@ -1444,8 +1444,6 @@ Rectangle {
                     id: nmrLineSeries
                     color: "#4a90e2"
                     width: 2
-                    axisX: nmrAxisX
-                    axisY: nmrAxisY
                 }
             }
         }
