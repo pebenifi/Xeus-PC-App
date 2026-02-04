@@ -1187,10 +1187,10 @@ Rectangle {
     Rectangle {
         id: rectangle1
         anchors.right: parent.right
-        anchors.rightMargin: 19
+        anchors.rightMargin: 18
         anchors.top: rectangle.bottom
         anchors.topMargin: 308
-        width: 520
+        width: 480
         height: 33
         color: "#979797"
     }
@@ -1206,11 +1206,11 @@ Rectangle {
     GraphsView {
         id: spline
         anchors.right: parent.right
-        anchors.rightMargin: 19
+        anchors.rightMargin: 18
         anchors.top: rectangle1.bottom
         anchors.topMargin: 16
-        width: 520
-        height: 289
+        width: 480
+        height: 280
         axisX: nmrAxisX
         axisY: nmrAxisY
         marginLeft: -17
@@ -1265,10 +1265,10 @@ Rectangle {
     Rectangle {
         id: rectangle2
         anchors.right: parent.right
-        anchors.rightMargin: 19
+        anchors.rightMargin: 18
         anchors.top: spline.bottom
         anchors.topMargin: 19
-        width: 520
+        width: 480
         height: 33
         color: "#979797"
     }
@@ -1276,20 +1276,19 @@ Rectangle {
     GraphsView {
         id: spline1
         anchors.right: parent.right
-        anchors.rightMargin: 19
+        anchors.rightMargin: 18
         anchors.top: rectangle2.bottom
         anchors.topMargin: 16
         // Растягиваем график влево и вниз (как на скрине: там есть свободное место)
-        width: 520
-        height: 320
+        width: 480
+        height: 280
         axisX: irAxisXMain
         axisY: irAxisYMain
-        // Убираем лишние внутренние отступы (по умолчанию ~20px) — больше места под plotArea и подписи
-        marginLeft: 0
-        marginRight: 0
-        marginTop: 0
-        marginBottom: 0
-        // Тема для сетки/подписей (безопасно настраиваем через try/catch в onCompleted)
+        marginLeft: -17
+        marginRight: 17
+        marginTop: 10
+        marginBottom: -10
+
         GraphsTheme { id: irThemeMain }
         theme: irThemeMain
 
@@ -1305,14 +1304,20 @@ Rectangle {
                 irMarkerFreqMain0, irMarkerFreqMain1, irMarkerFreqMain2, irMarkerFreqMain3, irMarkerFreqMain4, irMarkerFreqMain5,
                 irMarkerFreqMain6, irMarkerFreqMain7, irMarkerFreqMain8, irMarkerFreqMain9, irMarkerFreqMain10, irMarkerFreqMain11
             ]
-            // Сетка тёмно-синяя, подписи/оси — светлые
-            try { irThemeMain.grid.mainColor = "#102a66" } catch (e1) {}
-            try { irThemeMain.grid.subColor = "#0b1a3a" } catch (e2) {}
-            try { irThemeMain.axisX.mainColor = "#102a66" } catch (e3) {}
-            try { irThemeMain.axisX.subColor = "#0b1a3a" } catch (e4) {}
+            // Один-в-один как на Clinicalmode
+            // Фон графика RGB(66, 66, 66) = #424242 (включая область внутри)
+            try { irThemeMain.backgroundColor = "#424242" } catch (e0) {}
+            // Фон области графика (plot area)
+            try { irThemeMain.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+            try { irThemeMain.plotAreaColor = "#424242" } catch (e0b) {}
+            // Сетка RGB(151, 151, 151) = #979797
+            try { irThemeMain.grid.mainColor = "#979797" } catch (e1) {}
+            try { irThemeMain.grid.subColor = "#979797" } catch (e2) {}
+            try { irThemeMain.axisX.mainColor = "#979797" } catch (e3) {}
+            try { irThemeMain.axisX.subColor = "#979797" } catch (e4) {}
             try { irThemeMain.axisX.labelTextColor = "#ffffff" } catch (e5) {}
-            try { irThemeMain.axisY.mainColor = "#102a66" } catch (e6) {}
-            try { irThemeMain.axisY.subColor = "#0b1a3a" } catch (e7) {}
+            try { irThemeMain.axisY.mainColor = "#979797" } catch (e6) {}
+            try { irThemeMain.axisY.subColor = "#979797" } catch (e7) {}
             try { irThemeMain.axisY.labelTextColor = "#ffffff" } catch (e8) {}
         }
 
@@ -1321,9 +1326,10 @@ Rectangle {
             min: 792
             max: 798
             tickAnchor: 792
-            tickInterval: 0.5
+            tickInterval: 1.0
+            labelsVisible: true
         }
-        ValueAxis { id: irAxisYMain; min: 0; max: 1 }
+        ValueAxis { id: irAxisYMain; min: 0; max: 1; labelsVisible: true }
         LineSeries {
             id: splineSeries1
             // Линия спектра — красная, без сглаживания
