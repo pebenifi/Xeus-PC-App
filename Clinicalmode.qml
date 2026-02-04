@@ -105,12 +105,31 @@ Item {
         
         console.log("[NMR] Clinicalmode: axes updated - X:", nmrAxisX.min, "-", nmrAxisX.max, "Y:", nmrAxisY.min, "-", nmrAxisY.max)
         
-        // Создаем точки из data (как в IR графике) - равномерно распределяем по диапазону X
+        // Вычисляем maxIdx и сдвиг X так, чтобы пик оказался на meta freq
+        var metaFreq = Number(payload.freq)
+        var maxY = -1
+        var maxIdx = -1
+        for (var mi = 0; mi < n; mi++) {
+            var vy = Number(data[mi])
+            if (isFinite(vy) && !isNaN(vy) && vy > maxY) {
+                maxY = vy
+                maxIdx = mi
+            }
+        }
+        console.log("[NMR] Clinicalmode: meta freq=", metaFreq, "ampl=", Number(payload.ampl), "max(data)=", maxY, "maxIdx=", maxIdx, "n=", n)
+
+        var dx = (n > 1) ? ((X_MAX - X_MIN) / (n - 1)) : 0
+        var xPeakDefault = (n > 1) ? (X_MIN + dx * maxIdx) : X_MIN
+        var shift = 0.0
+        if (isFinite(metaFreq) && !isNaN(metaFreq) && maxIdx >= 0) {
+            shift = metaFreq - xPeakDefault
+        }
+
+        // Создаем точки из data (как в IR графике) - равномерно распределяем по диапазону X со сдвигом
         var pointsToAdd = []
         var validPoints = 0
         for (var i = 0; i < n; i++) {
-            // Формула: x[i] = x0 + (x1 - x0) * i / (n-1) - растягивает на весь диапазон
-            var x = (n > 1) ? (X_MIN + (X_MAX - X_MIN) * i / (n - 1)) : X_MIN
+            var x = (n > 1) ? (X_MIN + dx * i + shift) : X_MIN
             var y = Number(data[i])
             if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
                 pointsToAdd.push({x: x, y: y})
