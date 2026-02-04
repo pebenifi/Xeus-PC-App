@@ -3613,13 +3613,14 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Laser"""
             # Регистр 1811 - Beam on/off (1 = on, 0 = off)
-            beam_state_regs = client.read_input_registers_direct(1811, 1, max_chunk=1)
+            # Используем обычный pymodbus для согласованности
+            beam_state_value = client.read_input_register(1811)
             # Регистр 1821 - MPD в uA
-            mpd_regs = client.read_input_registers_direct(1821, 1, max_chunk=1)
+            mpd_value = client.read_input_register(1821)
             # Регистр 1831 - Output Power
-            output_power_regs = client.read_input_registers_direct(1831, 1, max_chunk=1)
+            output_power_value = client.read_input_register(1831)
             # Регистр 1841 - Temp
-            temp_regs = client.read_input_registers_direct(1841, 1, max_chunk=1)
+            temp_value = client.read_input_register(1841)
             
             result = {}
             if beam_state_value is not None:
