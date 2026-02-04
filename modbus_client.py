@@ -951,6 +951,11 @@ class ModbusClient:
             return value
         else:
             logger.warning(f"CRC не совпадает для регистра 1111: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
+            # Если CRC не совпадает, это может быть признаком проблемного регистра
+            # Добавляем регистр в список проблемных после ошибки CRC
+            if 1111 not in self._problematic_registers:
+                self._problematic_registers.add(1111)
+                logger.warning(f"⚠️ Регистр 1111 добавлен в список проблемных (ошибка CRC)")
             return None  # Не возвращаем некорректные данные
     
     def read_register_1111_direct(self) -> Optional[int]:
