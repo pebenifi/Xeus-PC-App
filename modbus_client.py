@@ -1768,8 +1768,8 @@ class ModbusClient:
             logger.warning(f"CRC не совпадает для регистра 1341: получен {received_crc:04X}, ожидался {calculated_crc:04X}")
             return None  # Не возвращаем некорректные данные
     
-        def read_register_1341_direct(self) -> Optional[int]:
-        """Чтение регистра 1341 через прямой сокет (функция 04) - реализация как в test_modbus.py"""
+    def read_register_1341_direct(self) -> Optional[int]:
+        """Чтение регистра 1341 (ток Magnet PSU) через прямой сокет (функция 04) - реализация как в test_modbus.py"""
         return self._read_register_direct_generic(1341, self._build_read_frame_1341, self._parse_read_response_1341)
     
 
