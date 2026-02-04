@@ -462,8 +462,9 @@ class ModbusManager(QObject):
         # Вентиляторы (регистр 1131) - индексы 0-10
         self._fan_states = {i: False for i in range(11)}
         self._fan_optimistic_updates = {}  # Флаги оптимистичных обновлений вентиляторов: fanIndex -> timestamp
-        # Время последней записи в регистр 1021 (для предотвращения чтения сразу после записи)
-        self._last_relay_1021_write_time = 0.0
+        # Отслеживание оптимистичных обновлений реле: relay_name -> timestamp
+        # Используется для игнорирования чтения регистра 1021 для конкретных реле после оптимистичного обновления
+        self._relay_optimistic_updates = {}  # {'laser_psu': timestamp, 'pid_controller': timestamp, ...}
         # Буфер для регистров (для быстрого доступа без блокировки UI)
         self._register_cache = {}  # address -> value
         # Флаг паузы опросов (чтобы при переключении экранов не блокировать UI)
@@ -1605,35 +1606,50 @@ class ModbusManager(QObject):
             'op_cell_heating': bool(low_byte & 0x40),
         }
         
-        # Обновляем состояния и эмитим сигналы только если значения изменились
-        # Это предотвращает моргание кнопок при чтении того же значения
+        current_time = time.time()
+        # Удаляем старые записи оптимистичных обновлений (старше 1 секунды)
+        self._relay_optimistic_updates = {k: v for k, v in self._relay_optimistic_updates.items() 
+                                         if current_time - v < 1.0}
+        
+        # Обновляем состояния и эмитим сигналы только если:
+        # 1. Значение изменилось
+        # 2. И нет недавнего оптимистичного обновления для этого реле (в течение 1 секунды)
+        # Это предотвращает перезапись оптимистичных значений устаревшими данными с устройства
+        
         if new_states['water_chiller'] != self._relay_states['water_chiller']:
-            self._relay_states['water_chiller'] = new_states['water_chiller']
-            self.waterChillerStateChanged.emit(self._relay_states['water_chiller'])
+            if 'water_chiller' not in self._relay_optimistic_updates:
+                self._relay_states['water_chiller'] = new_states['water_chiller']
+                self.waterChillerStateChanged.emit(self._relay_states['water_chiller'])
         
         if new_states['magnet_psu'] != self._relay_states['magnet_psu']:
-            self._relay_states['magnet_psu'] = new_states['magnet_psu']
-            self.magnetPSUStateChanged.emit(self._relay_states['magnet_psu'])
+            if 'magnet_psu' not in self._relay_optimistic_updates:
+                self._relay_states['magnet_psu'] = new_states['magnet_psu']
+                self.magnetPSUStateChanged.emit(self._relay_states['magnet_psu'])
         
         if new_states['laser_psu'] != self._relay_states['laser_psu']:
-            self._relay_states['laser_psu'] = new_states['laser_psu']
-            self.laserPSUStateChanged.emit(self._relay_states['laser_psu'])
+            if 'laser_psu' not in self._relay_optimistic_updates:
+                self._relay_states['laser_psu'] = new_states['laser_psu']
+                self.laserPSUStateChanged.emit(self._relay_states['laser_psu'])
         
         if new_states['vacuum_pump'] != self._relay_states['vacuum_pump']:
-            self._relay_states['vacuum_pump'] = new_states['vacuum_pump']
-            self.vacuumPumpStateChanged.emit(self._relay_states['vacuum_pump'])
+            if 'vacuum_pump' not in self._relay_optimistic_updates:
+                self._relay_states['vacuum_pump'] = new_states['vacuum_pump']
+                self.vacuumPumpStateChanged.emit(self._relay_states['vacuum_pump'])
         
         if new_states['vacuum_gauge'] != self._relay_states['vacuum_gauge']:
-            self._relay_states['vacuum_gauge'] = new_states['vacuum_gauge']
-            self.vacuumGaugeStateChanged.emit(self._relay_states['vacuum_gauge'])
+            if 'vacuum_gauge' not in self._relay_optimistic_updates:
+                self._relay_states['vacuum_gauge'] = new_states['vacuum_gauge']
+                self.vacuumGaugeStateChanged.emit(self._relay_states['vacuum_gauge'])
         
         if new_states['pid_controller'] != self._relay_states['pid_controller']:
-            self._relay_states['pid_controller'] = new_states['pid_controller']
-            self.pidControllerStateChanged.emit(self._relay_states['pid_controller'])
+            if 'pid_controller' not in self._relay_optimistic_updates:
+                self._relay_states['pid_controller'] = new_states['pid_controller']
+                self.pidControllerStateChanged.emit(self._relay_states['pid_controller'])
         
         if new_states['op_cell_heating'] != self._relay_states['op_cell_heating']:
-            self._relay_states['op_cell_heating'] = new_states['op_cell_heating']
-            self.opCellHeatingStateChanged.emit(self._relay_states['op_cell_heating'])
+            if 'op_cell_heating' not in self._relay_optimistic_updates:
+                self._relay_states['op_cell_heating'] = new_states['op_cell_heating']
+                self.opCellHeatingStateChanged.emit(self._relay_states['op_cell_heating'])
 
     def _applyValve1111Value(self, value: object):
         self._reading_1111 = False
@@ -2795,13 +2811,6 @@ class ModbusManager(QObject):
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
         if "1021" in self._problematic_registers and not self._checking_problematic_register:
             logger.debug("⚠️ Пропускаем проблемный регистр 1021")
-            return
-        
-        # Игнорируем чтение в течение 600мс после записи, чтобы избежать чтения устаревшего значения
-        # Увеличено до 600мс, так как устройство может обрабатывать запись дольше
-        current_time = time.time()
-        if current_time - self._last_relay_1021_write_time < 0.6:
-            logger.debug("⏸ Пропускаем чтение регистра 1021: недавно была запись")
             return
 
         self._reading_1021 = True
@@ -5687,21 +5696,43 @@ class ModbusManager(QObject):
         """Асинхронная установка состояния реле (не блокирует UI)"""
         client = self._modbus_client
         
-        # Запоминаем время записи, чтобы временно игнорировать чтения регистра 1021
-        self._last_relay_1021_write_time = time.time()
+        # Маппинг номера реле на имя в _relay_states
+        relay_name_map = {
+            1: 'water_chiller',
+            2: 'magnet_psu',
+            3: 'laser_psu',
+            4: 'vacuum_pump',
+            5: 'vacuum_gauge',
+            6: 'pid_controller',
+            7: 'op_cell_heating',
+        }
+        
+        relay_name = relay_name_map.get(relay_num)
+        if relay_name:
+            # Запоминаем время оптимистичного обновления для этого реле
+            # Это будет использоваться для игнорирования чтения этого реле из регистра 1021
+            self._relay_optimistic_updates[relay_name] = time.time()
 
         def task() -> bool:
             try:
                 result = client.set_relay_1021(relay_num, state)
                 if result:
                     logger.info(f"✅ {name} успешно {'включен' if state else 'выключен'}")
-                    # Обновляем время записи после успешной записи
-                    self._last_relay_1021_write_time = time.time()
+                    # После успешной записи удаляем из оптимистичных обновлений через 1 секунду
+                    # чтобы дать устройству время обработать запись и следующее чтение применило правильное значение
+                    if relay_name:
+                        QTimer.singleShot(1000, lambda: self._relay_optimistic_updates.pop(relay_name, None))
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} {name}")
+                    # При ошибке сразу удаляем из оптимистичных обновлений
+                    if relay_name:
+                        self._relay_optimistic_updates.pop(relay_name, None)
                 return bool(result)
             except Exception as e:
                 logger.error(f"Ошибка при асинхронной установке {name}: {e}", exc_info=True)
+                # При ошибке сразу удаляем из оптимистичных обновлений
+                if relay_name:
+                    self._relay_optimistic_updates.pop(relay_name, None)
                 return False
 
         self._enqueue_write(f"relay:{relay_num}", task, {"relay": relay_num, "state": state, "name": name})
