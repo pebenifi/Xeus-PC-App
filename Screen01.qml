@@ -53,10 +53,9 @@ Rectangle {
             nmrAxisY.max = payload.y_max
         }
 
-        // 1) Предпочитаем payload.points / payload.data_json / payload.data.
-        // Но X координату задаем сами (фиксированная ось).
+        // 1) Предпочитаем payload.points — backend уже посчитал корректные X (с учетом freq).
         var pts = payload.points
-        if (pts && Array.isArray(pts) && pts.length > 0) {
+        if (pts && pts.length !== undefined && pts.length > 0) {
             try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e0) {
                 console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e0)
             }
