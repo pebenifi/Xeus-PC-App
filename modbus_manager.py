@@ -3313,6 +3313,66 @@ class ModbusManager(QObject):
         client = self._modbus_client
         self._enqueue_read("1131", lambda: client.read_register_1131_direct())
     
+    def _checkProblematicRegisters(self):
+        """Периодическая проверка проблемных регистров - дважды пытаемся прочитать каждый"""
+        if not self._is_connected or self._modbus_client is None:
+            return
+        
+        if self._checking_problematic_register:
+            return  # Уже идет проверка
+        
+        if not self._problematic_registers:
+            return  # Нет проблемных регистров
+        
+        self._checking_problematic_register = True
+        
+        # Создаем копию списка, чтобы не изменять его во время итерации
+        problematic_list = list(self._problematic_registers)
+        
+        for key in problematic_list:
+            logger.debug(f"🔄 Проверяем проблемный регистр {key} (попытка 1)...")
+            
+            # Маппинг ключей на методы чтения
+            read_methods = {
+                "1021": self._readRelay1021,
+                "1111": self._readValve1111,
+                "1511": self._readWaterChillerTemperature,
+                "1411": self._readSeopCellTemperature,
+                "1341": self._readMagnetPSUCurrent,
+                "1251": self._readLaserPSUCurrent,
+                "1611": self._readXenonPressure,
+                "1651": self._readN2Pressure,
+                "1701": self._readVacuumPressure,
+                "1131": self._readFan1131,
+            }
+            
+            if key in read_methods:
+                # Первая попытка чтения
+                read_methods[key]()
+                # Ждем немного перед второй попыткой
+                QTimer.singleShot(500, lambda k=key, method=read_methods[key]: self._retryProblematicRegister(k, method))
+                break  # Проверяем по одному регистру за раз
+            else:
+                # Если метод не найден, сбрасываем флаг
+                self._checking_problematic_register = False
+    
+    def _retryProblematicRegister(self, key: str, read_method: Callable):
+        """Вторая попытка чтения проблемного регистра"""
+        if not self._is_connected or self._modbus_client is None:
+            self._checking_problematic_register = False
+            return
+        
+        if key not in self._problematic_registers:
+            self._checking_problematic_register = False
+            return  # Регистр уже удален из списка проблемных
+        
+        logger.debug(f"🔄 Проверяем проблемный регистр {key} (попытка 2)...")
+        self._checking_problematic_register = True
+        read_method()
+        # Флаг будет сброшен после завершения чтения в _onWorkerReadFinished
+        # Но на случай, если чтение не завершится, сбрасываем через таймаут
+        QTimer.singleShot(1000, lambda: setattr(self, '_checking_problematic_register', False))
+    
     def _readPowerSupply(self):
         """Чтение регистров Power Supply (Laser PSU и Magnet PSU)"""
         if not self._is_connected or self._modbus_client is None or self._reading_power_supply:
