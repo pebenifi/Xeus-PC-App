@@ -3385,17 +3385,28 @@ class ModbusManager(QObject):
             # Laser PSU: Voltage Value (1211), Voltage Setpoint (1221), Current Value (1231), Current Setpoint (1241), On/Off (1251)
             # Magnet PSU: Voltage Value (1301), Voltage Setpoint (1311), Current Value (1321), Current Setpoint (1331), On/Off (1341)
             # Читаем по 2 регистра для float значений (Voltage и Current)
-            laser_voltage_regs = client.read_input_registers_direct(1211, 2, max_chunk=2)
-            laser_current_regs = client.read_input_registers_direct(1231, 2, max_chunk=2)
-            laser_voltage_setpoint_regs = client.read_input_registers_direct(1221, 2, max_chunk=2)
-            laser_current_setpoint_regs = client.read_input_registers_direct(1241, 2, max_chunk=2)
-            laser_state_reg = client.read_input_registers_direct(1251, 1, max_chunk=1)
+            # Используем обычный pymodbus для согласованности
+            def read_multiple_registers(addr: int, count: int) -> Optional[list]:
+                """Чтение нескольких регистров через обычный pymodbus"""
+                try:
+                    result = client.client.read_input_registers(address=addr, count=count, device_id=client.unit_id)
+                    if result.isError():
+                        return None
+                    return result.registers if result.registers else None
+                except Exception:
+                    return None
             
-            magnet_voltage_regs = client.read_input_registers_direct(1301, 2, max_chunk=2)
-            magnet_current_regs = client.read_input_registers_direct(1321, 2, max_chunk=2)
-            magnet_voltage_setpoint_regs = client.read_input_registers_direct(1311, 2, max_chunk=2)
-            magnet_current_setpoint_regs = client.read_input_registers_direct(1331, 2, max_chunk=2)
-            magnet_state_reg = client.read_input_registers_direct(1341, 1, max_chunk=1)
+            laser_voltage_regs = read_multiple_registers(1211, 2)
+            laser_current_regs = read_multiple_registers(1231, 2)
+            laser_voltage_setpoint_regs = read_multiple_registers(1221, 2)
+            laser_current_setpoint_regs = read_multiple_registers(1241, 2)
+            laser_state_reg = read_multiple_registers(1251, 1)
+            
+            magnet_voltage_regs = read_multiple_registers(1301, 2)
+            magnet_current_regs = read_multiple_registers(1321, 2)
+            magnet_voltage_setpoint_regs = read_multiple_registers(1311, 2)
+            magnet_current_setpoint_regs = read_multiple_registers(1331, 2)
+            magnet_state_reg = read_multiple_registers(1341, 1)
             
             # Декодируем float из двух регистров (используем тот же метод, что и для IR)
             def _registers_to_float(reg1: int, reg2: int) -> float:
@@ -3465,11 +3476,12 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров PID Controller"""
             # Регистр 1411 - температура (value) в градусах Цельсия
-            temp_value = client.read_register_1411_direct()
+            # Используем обычный pymodbus для согласованности
+            temp_value = client.read_input_register(1411)
             # Регистр 1421 - setpoint в градусах Цельсия
-            setpoint_value = client.read_register_1421_direct()
+            setpoint_value = client.read_input_register(1421)
             # Регистр 1431 - on/off (1 = вкл, 0 = выкл)
-            state_value = client.read_input_registers_direct(1431, 1, max_chunk=1)
+            state_value = client.read_input_register(1431)
             
             result = {}
             if temp_value is not None:
@@ -3478,8 +3490,8 @@ class ModbusManager(QObject):
             if setpoint_value is not None:
                 # Преобразуем из int (температура * 10) в float
                 result['setpoint'] = float(setpoint_value) / 10.0
-            if state_value and len(state_value) >= 1:
-                result['state'] = bool(int(state_value[0]) & 0x01)
+            if state_value is not None:
+                result['state'] = bool(int(state_value) & 0x01)
             
             return result
         
@@ -3496,26 +3508,27 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Water Chiller"""
             # Регистр 1511 - температура на входе (inlet temp) в градусах Цельсия
-            inlet_temp_value = client.read_register_1511_direct()
+            # Используем обычный pymodbus для согласованности
+            inlet_temp_value = client.read_input_register(1511)
             # Регистр 1521 - температура на выходе (outlet temp) в градусах Цельсия
-            outlet_temp_regs = client.read_input_registers_direct(1521, 1, max_chunk=1)
+            outlet_temp_value = client.read_input_register(1521)
             # Регистр 1531 - setpoint в градусах Цельсия (holding register, пробуем через read_holding_register)
             setpoint_value = client.read_holding_register(1531)
             # Регистр 1541 - on/off (1 = вкл, 0 = выкл)
-            state_regs = client.read_input_registers_direct(1541, 1, max_chunk=1)
+            state_value = client.read_input_register(1541)
             
             result = {}
             if inlet_temp_value is not None:
                 # Преобразуем из int (температура * 100) в float
                 result['inlet_temperature'] = float(inlet_temp_value) / 100.0
-            if outlet_temp_regs and len(outlet_temp_regs) >= 1:
+            if outlet_temp_value is not None:
                 # Преобразуем из int (температура * 100) в float
-                result['outlet_temperature'] = float(int(outlet_temp_regs[0])) / 100.0
+                result['outlet_temperature'] = float(outlet_temp_value) / 100.0
             if setpoint_value is not None:
                 # Преобразуем из int (температура * 100) в float
                 result['setpoint'] = float(int(setpoint_value)) / 100.0
-            if state_regs and len(state_regs) >= 1:
-                result['state'] = bool(int(state_regs[0]) & 0x01)
+            if state_value is not None:
+                result['state'] = bool(int(state_value) & 0x01)
             
             return result
         
@@ -3575,7 +3588,8 @@ class ModbusManager(QObject):
         def task():
             """Чтение регистра Vacuum Controller"""
             # Регистр 1701 - давление Vacuum (уже в mTorr)
-            value = client.read_register_1701_direct()
+            # Используем обычный pymodbus для согласованности
+            value = client.read_input_register(1701)
             
             result = {}
             if value is not None:
