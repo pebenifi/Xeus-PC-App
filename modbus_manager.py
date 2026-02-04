@@ -258,6 +258,8 @@ class ModbusManager(QObject):
         self._last_reconnect_attempt_time = 0.0
         self._status_text = "Disconnected"
         self._connection_button_text = "Connect"  # Текст кнопки подключения: "Connect" или "Disconnect"
+        # Список проблемных регистров, которые вызывают разрыв соединения
+        self._problematic_registers: set[str] = set()  # Ключи регистров (например, "1021", "1111", "1511")
         self._water_chiller_inlet_temperature = 0.0  # Температура на входе Water Chiller (регистр 1511)
         self._water_chiller_outlet_temperature = 0.0  # Температура на выходе Water Chiller (регистр 1521)
         self._water_chiller_setpoint = 0.0  # Заданная температура Water Chiller (регистр 1531)
@@ -1432,6 +1434,55 @@ class ModbusManager(QObject):
 
     @Slot(str, object)
     def _onWorkerReadFinished(self, key: str, value: object):
+        # Если регистр вернул пустоту или ошибку, разрываем соединение и добавляем в список проблемных
+        if value is None:
+            # Проверяем, не является ли это уже проблемным регистром
+            if key not in self._problematic_registers:
+                self._problematic_registers.add(key)
+                logger.warning(f"⚠️ Регистр {key} вернул пустоту/ошибку, добавлен в список проблемных. Разрываем соединение и переподключаемся...")
+                
+                # Разрываем соединение и переподключаемся
+                if self._is_connected and self._modbus_client is not None:
+                    try:
+                        # Отключаемся
+                        self._modbus_client.disconnect()
+                        self._is_connected = False
+                        self._status_text = "Disconnected"
+                        self.connectionStatusChanged.emit(self._is_connected)
+                        self.statusTextChanged.emit(self._status_text)
+                        
+                        # Переподключаемся
+                        logger.info("Попытка переподключения после ошибки регистра...")
+                        self._connection_in_progress = True
+                        self._workerSetClient.emit(self._modbus_client)
+                        self._workerConnect.emit()
+                    except Exception as e:
+                        logger.error(f"Ошибка при переподключении после ошибки регистра {key}: {e}")
+            
+            # Не обрабатываем значение, если оно None
+            # Но сбрасываем флаги чтения, чтобы не блокировать следующие попытки
+            if key == "1021":
+                self._reading_1021 = False
+            elif key == "1111":
+                self._reading_1111 = False
+            elif key == "1511":
+                self._reading_1511 = False
+            elif key == "1411":
+                self._reading_1411 = False
+            elif key == "1341":
+                self._reading_1341 = False
+            elif key == "1251":
+                self._reading_1251 = False
+            elif key == "1611":
+                self._reading_1611 = False
+            elif key == "1651":
+                self._reading_1651 = False
+            elif key == "1701":
+                self._reading_1701 = False
+            elif key == "1131":
+                self._reading_1131 = False
+            return
+        
         # Любое успешное чтение считаем keep-alive
         if value is not None:
             self._last_modbus_ok_time = time.time()
@@ -2723,6 +2774,11 @@ class ModbusManager(QObject):
         """Чтение регистра 1111 (клапаны X6-X12) и обновление состояний"""
         if not self._is_connected or self._modbus_client is None or self._reading_1111:
             return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1111" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1111")
+            return
 
         self._reading_1111 = True
         client = self._modbus_client
@@ -2731,6 +2787,11 @@ class ModbusManager(QObject):
     def _readWaterChillerTemperature(self):
         """Чтение регистра 1511 (температура Water Chiller) и обновление label C"""
         if not self._is_connected or self._modbus_client is None or self._reading_1511:
+            return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1511" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1511")
             return
 
         self._reading_1511 = True
@@ -3143,6 +3204,11 @@ class ModbusManager(QObject):
         """Чтение регистра 1411 (температура SEOP Cell) и обновление label C"""
         if not self._is_connected or self._modbus_client is None or self._reading_1411:
             return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1411" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1411")
+            return
 
         self._reading_1411 = True
         client = self._modbus_client
@@ -3151,6 +3217,11 @@ class ModbusManager(QObject):
     def _readMagnetPSUCurrent(self):
         """Чтение регистра 1341 (ток Magnet PSU) и обновление label A"""
         if not self._is_connected or self._modbus_client is None or self._reading_1341:
+            return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1341" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1341")
             return
 
         self._reading_1341 = True
@@ -3161,6 +3232,11 @@ class ModbusManager(QObject):
         """Чтение регистра 1251 (ток Laser PSU) и обновление label A"""
         if not self._is_connected or self._modbus_client is None or self._reading_1251:
             return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1251" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1251")
+            return
 
         self._reading_1251 = True
         client = self._modbus_client
@@ -3169,6 +3245,11 @@ class ModbusManager(QObject):
     def _readXenonPressure(self):
         """Чтение регистра 1611 (давление Xenon) и обновление label Torr"""
         if not self._is_connected or self._modbus_client is None or self._reading_1611:
+            return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1611" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1611")
             return
 
         self._reading_1611 = True
@@ -3179,6 +3260,11 @@ class ModbusManager(QObject):
         """Чтение регистра 1651 (давление N2) и обновление label Torr"""
         if not self._is_connected or self._modbus_client is None or self._reading_1651:
             return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1651" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1651")
+            return
 
         self._reading_1651 = True
         client = self._modbus_client
@@ -3188,6 +3274,11 @@ class ModbusManager(QObject):
         """Чтение регистра 1701 (давление Vacuum) и обновление label Torr"""
         if not self._is_connected or self._modbus_client is None or self._reading_1701:
             return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1701" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1701")
+            return
 
         self._reading_1701 = True
         client = self._modbus_client
@@ -3196,6 +3287,11 @@ class ModbusManager(QObject):
     def _readFan1131(self):
         """Чтение регистра 1131 (fans) и обновление состояний всех вентиляторов"""
         if not self._is_connected or self._modbus_client is None or self._reading_1131:
+            return
+        
+        # Проверяем, не является ли регистр проблемным
+        if "1131" in self._problematic_registers:
+            logger.debug("⚠️ Пропускаем проблемный регистр 1131")
             return
 
         self._reading_1131 = True
