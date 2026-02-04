@@ -2783,9 +2783,14 @@ class ModbusClient:
         received_crc = (resp[expected_len - 1] << 8) | resp[expected_len - 2]
         calculated_crc = self._crc16_modbus(resp[: expected_len - 2])
         if received_crc != calculated_crc:
+            # Пытаемся определить адрес регистра из ответа (если возможно)
+            # Если это начало ответа, адрес может быть в предыдущем запросе
+            # Для простоты логируем общую ошибку CRC
             logger.warning(
                 f"CRC mismatch: got=0x{received_crc:04X} expected=0x{calculated_crc:04X} (addr multi-read)"
             )
+            # Если CRC не совпадает, это может быть признаком проблемного регистра
+            # Но мы не знаем точный адрес из ответа, поэтому просто возвращаем None
             return None
 
         registers = []
@@ -2805,6 +2810,15 @@ class ModbusClient:
         """
         if quantity <= 0:
             return []
+        
+        # Проверяем, не является ли начальный регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return []
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             self._connected = False
             return None
