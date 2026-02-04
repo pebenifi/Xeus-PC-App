@@ -713,6 +713,15 @@ class ModbusClient:
     
     def read_register_1021_direct(self) -> Optional[int]:
         """Чтение регистра 1021 через прямой сокет (функция 04)"""
+        address = 1021
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -743,22 +752,15 @@ class ModbusClient:
                     else:
                         # При разрыве соединения пробуем переподключиться
                         if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                            logger.warning(f"Разрыв соединения при чтении регистра 1021: {e}, пробуем переподключиться...")
+                            # Запоминаем проблемный регистр
+                            if address not in self._problematic_registers:
+                                self._problematic_registers.add(address)
+                                logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                            logger.warning(f"Разрыв соединения при чтении регистра {address}: {e}, пробуем переподключиться...")
                             if self._reconnect():
-                                # После переподключения пробуем повторить запрос
-                                try:
-                                    # Получаем новый сокет после переподключения
-                                    sock = self._get_socket()
-                                    if sock:
-                                        sock.sendall(read_frame)
-                                        time.sleep(0.01)
-                                        resp = sock.recv(256)
-                                        if resp:
-                                            parsed = self._parse_read_response_1021(resp)
-                                            if parsed is not None:
-                                                return parsed
-                                except Exception as e2:
-                                    logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+                                # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                                logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                                return None
                         raise
                 if i < 1:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
@@ -788,6 +790,15 @@ class ModbusClient:
         Args:
             value: Полное значение для записи в регистр
         """
+        address = 1021
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+
         if self.client is None or not self.client.is_socket_open():
             return False
         
@@ -944,6 +955,15 @@ class ModbusClient:
     
     def read_register_1111_direct(self) -> Optional[int]:
         """Чтение регистра 1111 через прямой сокет (функция 04)"""
+                address = 1111
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1006,6 +1026,15 @@ class ModbusClient:
         Args:
             value: Полное значение для записи в регистр
         """
+        address = 1111
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+
         if self.client is None or not self.client.is_socket_open():
             return False
         
@@ -1141,6 +1170,15 @@ class ModbusClient:
     
     def read_register_1511_direct(self) -> Optional[int]:
         """Чтение регистра 1511 (температура Water Chiller) через прямой сокет (функция 04)"""
+        address = 1511
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1177,22 +1215,15 @@ class ModbusClient:
                     else:
                         # При разрыве соединения пробуем переподключиться
                         if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
-                            logger.warning(f"Разрыв соединения при чтении регистра 1511: {e}, пробуем переподключиться...")
+                            # Запоминаем проблемный регистр
+                            if address not in self._problematic_registers:
+                                self._problematic_registers.add(address)
+                                logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                            logger.warning(f"Разрыв соединения при чтении регистра {address}: {e}, пробуем переподключиться...")
                             if self._reconnect():
-                                # После переподключения пробуем повторить запрос
-                                try:
-                                    sock = self._get_socket()
-                                    if sock:
-                                        sock.settimeout(2.0)
-                                        sock.sendall(read_frame)
-                                        time.sleep(0.05)
-                                        resp = sock.recv(256)
-                                        if resp:
-                                            parsed = self._parse_read_response_1511(resp)
-                                            if parsed is not None:
-                                                return parsed
-                                except Exception as e2:
-                                    logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+                                # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                                logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                                return None
                         else:
                             logger.warning(f"Вторая попытка чтения регистра 1511 не удалась: {e}")
                 if i < 1:
@@ -1201,16 +1232,18 @@ class ModbusClient:
             return parsed
         except (ConnectionError, OSError) as e:
             error_code = getattr(e, 'errno', None)
-            logger.warning(f"Ошибка соединения при чтении регистра 1511: {e} (errno={error_code})")
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
             # При разрыве соединения пробуем переподключиться
             if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
                 logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
                 if self._reconnect():
-                    # После переподключения пробуем повторить запрос
-                    try:
-                        return self.read_register_1511_direct()
-                    except Exception as e2:
-                        logger.warning(f"Ошибка при повторном чтении после переподключения: {e2}")
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
             self._connected = False
             return None
         except Exception as e:
@@ -1615,6 +1648,15 @@ class ModbusClient:
     
     def read_register_1411_direct(self) -> Optional[int]:
         """Чтение регистра 1411 (температура SEOP Cell) через прямой сокет (функция 04)"""
+        address = 1411
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1666,12 +1708,37 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
         except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1411 через прямой сокет: {e}")
+            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
             return None
     
     def read_register_1421_direct(self) -> Optional[int]:
         """Чтение регистра 1421 (setpoint SEOP Cell) через прямой сокет (функция 04)"""
+        address = 1421
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1765,6 +1832,15 @@ class ModbusClient:
     
     def read_register_1341_direct(self) -> Optional[int]:
         """Чтение регистра 1341 (ток Magnet PSU) через прямой сокет (функция 04)"""
+        address = 1341
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1797,8 +1873,24 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
         except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1341 через прямой сокет: {e}")
+            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
             return None
     
     def _build_read_frame_1251(self) -> bytes:
@@ -1838,6 +1930,15 @@ class ModbusClient:
     
     def read_register_1251_direct(self) -> Optional[int]:
         """Чтение регистра 1251 (ток Laser PSU) через прямой сокет (функция 04)"""
+        address = 1251
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1870,8 +1971,24 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
         except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1251 через прямой сокет: {e}")
+            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
             return None
     
     def _build_read_frame_1611(self) -> bytes:
@@ -1916,6 +2033,15 @@ class ModbusClient:
     
     def read_register_1611_direct(self) -> Optional[int]:
         """Чтение регистра 1611 (давление Xenon) через прямой сокет (функция 04)"""
+        address = 1611
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -1951,8 +2077,24 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
         except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1611 через прямой сокет: {e}")
+            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
             return None
     
     def _build_write_frame_1621(self, value: int) -> bytes:
@@ -2154,6 +2296,15 @@ class ModbusClient:
     
     def read_register_1651_direct(self) -> Optional[int]:
         """Чтение регистра 1651 (давление N2) через прямой сокет (функция 04)"""
+        address = 1651
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -2189,8 +2340,24 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
         except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1651 через прямой сокет: {e}")
+            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
             return None
     
     def _build_read_frame_1701(self) -> bytes:
@@ -2235,6 +2402,15 @@ class ModbusClient:
     
     def read_register_1701_direct(self) -> Optional[int]:
         """Чтение регистра 1701 (давление Vacuum) через прямой сокет (функция 04)"""
+        address = 1701
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -2267,8 +2443,24 @@ class ModbusClient:
                     time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
             
             return parsed
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при чтении регистра {address}: {e} (errno={error_code})")
+            # При разрыве соединения пробуем переподключиться
+            if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
+                # Запоминаем проблемный регистр
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    # После переподключения НЕ пробуем повторить запрос для проблемного регистра
+                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    return None
+            self._connected = False
+            return None
         except Exception as e:
-            logger.error(f"Ошибка при чтении регистра 1701 через прямой сокет: {e}")
+            logger.error(f"Ошибка при чтении регистра {address} через прямой сокет: {e}")
             return None
     
     def _build_read_frame_1131(self) -> bytes:
@@ -2322,6 +2514,15 @@ class ModbusClient:
     
     def read_register_1131_direct(self) -> Optional[int]:
         """Чтение регистра 1131 (fans) через прямой сокет (функция 04)"""
+        address = 1131
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+        
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+        
         if self.client is None or not self.client.is_socket_open():
             return None
         
@@ -2384,6 +2585,15 @@ class ModbusClient:
         Args:
             value: Полное значение для записи в регистр
         """
+        address = 1131
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+
+        # Сохраняем адрес регистра для отслеживания проблем
+        self._last_read_register = address
+
         if self.client is None or not self.client.is_socket_open():
             return False
         
