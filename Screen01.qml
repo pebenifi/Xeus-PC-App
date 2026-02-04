@@ -34,12 +34,54 @@ Rectangle {
             console.log("[NMR] Screen01: payload is null/undefined")
             return
         }
-        
-        // Используем data_json (самый надежный способ)
+
+        // 1) Предпочитаем payload.points (уже готовые x,y из backend) — самый надежный путь
+        var pts = payload.points
+        if (pts && Array.isArray(pts) && pts.length > 0) {
+            var x0p = payload.x_min
+            var x1p = payload.x_max
+            var y0p = payload.y_min
+            var y1p = payload.y_max
+            if (x0p !== undefined && x1p !== undefined) {
+                nmrAxisX.min = x0p
+                nmrAxisX.max = x1p
+                nmrAxisX.tickAnchor = x0p
+                nmrAxisX.tickInterval = 500
+            }
+            if (y0p !== undefined && y1p !== undefined) {
+                nmrAxisY.min = y0p
+                nmrAxisY.max = y1p
+            }
+
+            try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e0) {
+                console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e0)
+            }
+
+            var addedPts = 0
+            for (var k = 0; k < pts.length; k++) {
+                try {
+                    var px = Number(pts[k].x)
+                    var py = Number(pts[k].y)
+                    if (isFinite(px) && isFinite(py) && !isNaN(px) && !isNaN(py)) {
+                        if (nmrLineSeries.append) {
+                            nmrLineSeries.append(px, py)
+                            addedPts++
+                        }
+                    }
+                } catch (e1) {
+                    console.log("[NMR] Screen01: append(points) failed at", k, e1)
+                }
+            }
+            console.log("[NMR] Screen01: drawn from payload.points, added=", addedPts, "of", pts.length)
+            return
+        }
+
+        // 2) Fallback: payload.data_json / payload.data
         var data = null
         if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
             try {
                 data = JSON.parse(payload.data_json)
+                console.log("[NMR] Screen01: parsed data_json, type=", (Array.isArray(data) ? "array" : typeof data), "len=", (data && data.length !== undefined ? data.length : "n/a"))
             } catch (ejson) {
                 console.log("[NMR] Screen01: JSON.parse(data_json) failed:", ejson)
                 data = payload.data
@@ -47,49 +89,66 @@ Rectangle {
         } else {
             data = payload.data
         }
-        
-        if (!data || data.length === 0) {
-            console.log("[NMR] Screen01: no data to draw")
+
+        // иногда data_json может быть объектом {data:[...]} — подхватываем
+        if (data && !Array.isArray(data) && data.data !== undefined) {
+            data = data.data
+        }
+
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.log("[NMR] Screen01: no array data to draw; data=", data)
             return
         }
-        
+
         var n = data.length
         var x0 = payload.x_min
         var x1 = payload.x_max
         var y0 = payload.y_min
         var y1 = payload.y_max
-        
+
         if (x0 === undefined || x1 === undefined || y0 === undefined || y1 === undefined) {
-            console.log("[NMR] Screen01: missing axis ranges")
+            console.log("[NMR] Screen01: missing axis ranges", "x0=", x0, "x1=", x1, "y0=", y0, "y1=", y1)
             return
         }
-        
-        // Обновляем оси
+
         nmrAxisX.min = x0
         nmrAxisX.max = x1
         nmrAxisX.tickAnchor = x0
         nmrAxisX.tickInterval = 500
         nmrAxisY.min = y0
         nmrAxisY.max = y1
-        
-        // Подготовка точек
+
         var pointsToAdd = []
+        var valid = 0
         for (var i = 0; i < n; i++) {
             var x = (n > 1) ? (x0 + (x1 - x0) * i / (n - 1)) : x0
             var y = Number(data[i])
             if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
                 pointsToAdd.push({x: x, y: y})
+                valid++
             }
         }
-        if (pointsToAdd.length === 0) return
-        
-        // Очищаем серию
-        try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e) {}
-        
-        // Добавляем точки
-        for (var j = 0; j < pointsToAdd.length; j++) {
-            try { if (nmrLineSeries.append) nmrLineSeries.append(pointsToAdd[j].x, pointsToAdd[j].y) } catch (e2) {}
+        if (pointsToAdd.length === 0) {
+            console.log("[NMR] Screen01: no valid points prepared (n=", n, ")")
+            return
         }
+
+        try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e2) {
+            console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e2)
+        }
+
+        var added = 0
+        for (var j = 0; j < pointsToAdd.length; j++) {
+            try {
+                if (nmrLineSeries.append) {
+                    nmrLineSeries.append(pointsToAdd[j].x, pointsToAdd[j].y)
+                    added++
+                }
+            } catch (e3) {
+                console.log("[NMR] Screen01: append failed at", j, pointsToAdd[j].x, pointsToAdd[j].y, e3)
+            }
+        }
+        console.log("[NMR] Screen01: added", added, "points (validPrepared=", valid, "n=", n, ")")
     }
 
     function _updateDashedVerticalMarker(markerSegments, xVal, yLo, yHi, xMin, xMax, tag) {
