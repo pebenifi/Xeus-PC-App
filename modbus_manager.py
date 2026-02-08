@@ -1468,7 +1468,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(50, lambda: self._relay_1021_timer.start())
         # Запускаем таймер последовательного обновления UI
         self._ui_update_timer.start()
-        # QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
+        QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
         # QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
         # QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
         # QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
@@ -1782,7 +1782,8 @@ class ModbusManager(QObject):
                 #     logger.debug(f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)")
 
     def _applyValve1111Value(self, value: object):
-        logger.debug(f"🔍 [1111] RAW VALUE: {value} (type={type(value)})")
+        apply_time = time.time()
+        logger.debug(f"📥 [RESP] Получено значение клапанов 1111: {value} (type={type(value)}) в {apply_time:.3f}")
         self._reading_1111 = False
         if value is None:
             return
@@ -1791,35 +1792,10 @@ class ModbusManager(QObject):
         except Exception:
             return
         
-        # КРИТИЧНО: если это происходит сразу после начала записи (в течение 2 секунд),
-        # то обновляем только тот клапан, который мы записывали, остальные игнорируем
-        time_since_write = time.time() - self._last_write_time
-        if time_since_write < 2.0:
-            if hasattr(self, '_last_write_key'):
-                 # Если записывали клапан - обновляем только его
-                if self._last_write_key.startswith("valve:"):
-                    try:
-                        written_valve_num = int(self._last_write_key.split(":")[1]) if ":" in self._last_write_key else -1
-                    except:
-                        written_valve_num = -1
-                    
-                    for valve_index in range(5, 12):
-                        if valve_index == written_valve_num:
-                            new_state = bool(value_int & (1 << valve_index))
-                            current_state = self._valve_states[valve_index]
-                            if new_state != current_state:
-                                self._valve_states[valve_index] = new_state
-                                logger.info(f"✅ [1111] Синхронизация клапана {valve_index} после записи: {current_state} -> {new_state} (применено напрямую)")
-                                self.valveStateChanged.emit(valve_index, new_state)
-                            return # Выходим, обновив (или нет) только целевой клапан
-                    return
-                else:
-                     return
-
         # КРИТИЧНО: если активен режим записи (флаг _write_in_progress), блокируем кэширование
-        if self._write_in_progress:
+        # if self._write_in_progress:
             # logger.debug(f"⏭️ [1111] Пропускаем сохранение в кэш (_write_in_progress=True)")
-            return
+            # return
 
         # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
         time_since_connection = time.time() - self._connection_time
@@ -1828,16 +1804,22 @@ class ModbusManager(QObject):
         current_time = time.time()
         for valve_index in range(5, 12):
             new_state = bool(value_int & (1 << valve_index))
-            if new_state != self._valve_states[valve_index]:
-                # Для начальных значений после подключения применяем напрямую
-                if is_initial_connection:
+            current_state = self._valve_states[valve_index]
+            
+            if new_state != current_state:
+                # Временно применяем ВСЕГДА напрямую
+                if True:
                     self._valve_states[valve_index] = new_state
-                    logger.info(f"✅ [1111] Начальное значение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (применено напрямую)")
+                    logger.info(f"✅ [1111] Изменение клапана {valve_index}: {current_state} -> {new_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
                     self.valveStateChanged.emit(valve_index, new_state)
-                else:
-                    # Для остальных значений сохраняем в кэш для последующего применения
-                    self._pending_valve_updates[valve_index] = (new_state, current_time)
-                    logger.debug(f"📝 [1111] Изменение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (добавлено в кэш)")
+                # if is_initial_connection:
+                #     self._valve_states[valve_index] = new_state
+                #     logger.info(f"✅ [1111] Начальное значение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (применено напрямую)")
+                #     self.valveStateChanged.emit(valve_index, new_state)
+                # else:
+                #     # Для остальных значений сохраняем в кэш для последующего применения
+                #     self._pending_valve_updates[valve_index] = (new_state, current_time)
+                #     logger.debug(f"📝 [1111] Изменение клапана {valve_index}: {self._valve_states[valve_index]} -> {new_state} (добавлено в кэш)")
 
     def _applyWaterChillerTemperatureValue(self, value: object):
         self._reading_1511 = False
