@@ -1744,9 +1744,9 @@ class ModbusManager(QObject):
                     return
 
         # КРИТИЧНО: если активен режим записи (флаг _write_in_progress), блокируем кэширование
-        if self._write_in_progress:
+        # if self._write_in_progress:
             # logger.debug(f"⏭️ [1021] Пропускаем сохранение в кэш (_write_in_progress=True)")
-            return
+            # return
         
         # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
         # Это предотвращает задержку в 20-30 секунд перед отображением начальных состояний
@@ -1757,10 +1757,11 @@ class ModbusManager(QObject):
         for relay_name, new_state in new_states.items():
             current_state = self._relay_states[relay_name]
             if new_state != current_state:
-                # Для начальных значений после подключения применяем напрямую
-                if is_initial_connection:
+                # Временно применяем ВСЕГДА напрямую, чтобы исключить проблему кэширования
+                # if is_initial_connection:
+                if True:
                     self._relay_states[relay_name] = new_state
-                    logger.info(f"✅ [1021] Начальное значение {relay_name}: {current_state} -> {new_state} (применено напрямую)")
+                    logger.info(f"✅ [1021] Изменение {relay_name}: {current_state} -> {new_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
                     if relay_name == 'water_chiller':
                         self.waterChillerStateChanged.emit(new_state)
                     elif relay_name == 'magnet_psu':
@@ -1775,10 +1776,10 @@ class ModbusManager(QObject):
                         self.pidControllerStateChanged.emit(new_state)
                     elif relay_name == 'op_cell_heating':
                         self.opCellHeatingStateChanged.emit(new_state)
-                else:
-                    # Для остальных значений сохраняем в кэш для последующего применения
-                    self._pending_relay_updates[relay_name] = (new_state, current_time)
-                    logger.debug(f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)")
+                # else:
+                #     # Для остальных значений сохраняем в кэш для последующего применения
+                #     self._pending_relay_updates[relay_name] = (new_state, current_time)
+                #     logger.debug(f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)")
 
     def _applyValve1111Value(self, value: object):
         logger.debug(f"🔍 [1111] RAW VALUE: {value} (type={type(value)})")
@@ -3128,6 +3129,9 @@ class ModbusManager(QObject):
     @Slot()
     def _readRelay1021(self):
         """Чтение регистра 1021 (реле) и обновление состояний всех реле"""
+        # DEBUG: Проверяем, вызывается ли вообще метод
+        # logger.info(f"_readRelay1021 TICK: con={self._is_connected}, pause={self._polling_paused}, reading={self._reading_1021}")
+
         if not self._is_connected or self._modbus_client is None:
             return
 
