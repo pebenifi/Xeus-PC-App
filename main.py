@@ -7,8 +7,12 @@ from PySide6.QtCore import QUrl
 from modbus_manager import ModbusManager
 
 # Настройка логирования для вывода в консоль
+# Добавляем логгер для pymodbus
+pymodbus_logger = logging.getLogger("pymodbus")
+pymodbus_logger.setLevel(logging.DEBUG)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
