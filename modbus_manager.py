@@ -1476,7 +1476,7 @@ class ModbusManager(QObject):
         # QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
         # QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         # QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
-        # QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
+        QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
 
         # Таймеры автообновления setpoint (UI-логика)
         # self._water_chiller_setpoint_auto_update_timer.start()
@@ -1703,7 +1703,7 @@ class ModbusManager(QObject):
     # ===== apply-методы: применяют результат чтения в GUI-потоке =====
     def _applyRelay1021Value(self, value: object):
         apply_time = time.time()
-        logger.info(f"📥 [RESP] Получено значение реле 1021: {value} (type={type(value)}) в {apply_time:.3f}")
+        logger.debug(f"📥 [RESP] Получено значение реле 1021: {value} (type={type(value)}) в {apply_time:.3f}")
         
         self._reading_1021 = False
         if value is None:
@@ -1966,7 +1966,7 @@ class ModbusManager(QObject):
             self.vacuumPressureChanged.emit(pressure)
 
     def _applyFan1131Value(self, value: object):
-        logger.debug(f"🔍 [1131] RAW VALUE: {value} (type={type(value)})")
+        # logger.debug(f"🔍 [1131] RAW VALUE: {value} (type={type(value)})")
         self._reading_1131 = False
         if value is None:
             return
@@ -2016,9 +2016,9 @@ class ModbusManager(QObject):
                     return
 
         # КРИТИЧНО: если активен режим записи (флаг _write_in_progress), блокируем кэширование
-        if self._write_in_progress:
+        # if self._write_in_progress:
             # logger.debug(f"⏭️ [1131] Пропускаем сохранение в кэш (_write_in_progress=True)")
-            return
+            # return
 
         fan_mapping = {
             0: 0,
@@ -2040,29 +2040,39 @@ class ModbusManager(QObject):
         current_time = time.time()
         for fan_index, bit_pos in fan_mapping.items():
             new_state = bool(value_int & (1 << bit_pos))
-            if new_state != self._fan_states[fan_index]:
-                # Для начальных значений после подключения применяем напрямую
-                if is_initial_connection:
+            current_state = self._fan_states[fan_index]
+            
+            if new_state != current_state:
+                # Временно применяем ВСЕГДА напрямую
+                if True:
                     self._fan_states[fan_index] = new_state
-                    logger.info(f"✅ [1131] Начальное значение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (применено напрямую)")
+                    logger.info(f"✅ [1131] Изменение вентилятора {fan_index}: {current_state} -> {new_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
                     self.fanStateChanged.emit(fan_index, new_state)
-                else:
-                    # Для остальных значений сохраняем в кэш для последующего применения
-                    self._pending_fan_updates[fan_index] = (new_state, current_time)
-                    logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
+                # if is_initial_connection:
+                #     self._fan_states[fan_index] = new_state
+                #     logger.info(f"✅ [1131] Начальное значение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (применено напрямую)")
+                #     self.fanStateChanged.emit(fan_index, new_state)
+                # else:
+                #     self._pending_fan_updates[fan_index] = (new_state, current_time)
+                #     logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
 
         # laser fan: bit 15
         new_laser_fan_state = bool(value_int & (1 << 15))
-        if new_laser_fan_state != self._fan_states[10]:
-            # Для начальных значений после подключения применяем напрямую
-            if is_initial_connection:
+        current_laser_fan_state = self._fan_states[10]
+        if new_laser_fan_state != current_laser_fan_state:
+             # Временно применяем ВСЕГДА напрямую
+             if True:
                 self._fan_states[10] = new_laser_fan_state
-                logger.info(f"✅ [1131] Начальное значение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (применено напрямую)")
+                logger.info(f"✅ [1131] Изменение Laser Fan: {current_laser_fan_state} -> {new_laser_fan_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
                 self.fanStateChanged.emit(10, new_laser_fan_state)
-            else:
-                # Для остальных значений сохраняем в кэш для последующего применения
-                self._pending_fan_updates[10] = (new_laser_fan_state, current_time)
-                logger.debug(f"📝 [1131] Изменение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (добавлено в кэш)")
+            # if is_initial_connection:
+            #     self._fan_states[10] = new_laser_fan_state
+            #     logger.info(f"✅ [1131] Начальное значение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (применено напрямую)")
+            #     self.fanStateChanged.emit(10, new_laser_fan_state)
+            # else:
+            #     # Для остальных значений сохраняем в кэш для последующего применения
+            #     self._pending_fan_updates[10] = (new_laser_fan_state, current_time)
+            #     logger.debug(f"📝 [1131] Изменение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (добавлено в кэш)")
 
     def _applyPowerSupplyValue(self, value: object):
         """Применение результатов чтения Power Supply (Laser PSU и Magnet PSU)"""
@@ -3174,7 +3184,7 @@ class ModbusManager(QObject):
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         
         req_time = time.time()
-        logger.info(f"📤 [REQ] Запрос чтения реле 1021 отправлен в очередь в {req_time:.3f}")
+        logger.debug(f"📤 [REQ] Запрос чтения реле 1021 отправлен в очередь в {req_time:.3f}")
         
         self._enqueue_read("1021", lambda: client.read_input_register(1021))
     
