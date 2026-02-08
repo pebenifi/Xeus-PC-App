@@ -8,8 +8,15 @@ import logging
 import socket
 import time
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING) # Было INFO, ставим WARNING чтобы убрать DEBUG/INFO от pymodbus
+# Явно глушим болтливые логгеры pymodbus
+logging.getLogger("pymodbus").setLevel(logging.WARNING)
+logging.getLogger("pymodbus.logging").setLevel(logging.WARNING)
+logging.getLogger("pymodbus.client").setLevel(logging.WARNING)
+logging.getLogger("pymodbus.transaction").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Для нашего логгера оставляем INFO
 
 
 class ModbusClient:
@@ -80,7 +87,8 @@ class ModbusClient:
                     self.client = ModbusTcpClient(
                         host=self.host, 
                         port=self.port, 
-                        framer=actual_framer
+                        framer=actual_framer,
+                        timeout=0.5  # Уменьшаем таймаут до 0.5с для быстрой реакции на обрывы
                     )
                     
                     # Настраиваем TCP keep-alive на уровне сокета после подключения
@@ -302,6 +310,9 @@ class ModbusClient:
             return None
         
         try:
+            # Сбрасываем мусор из сокета, чтобы не прочитать старые ответы
+            self._flush_socket()
+
             # Таймаут устанавливается при создании клиента, не передается в read_holding_registers
             result = self.client.read_holding_registers(
                 address, 
@@ -320,7 +331,15 @@ class ModbusClient:
                 else:
                     logger.error(f"Ошибка чтения регистра {address}: {result}")
                 return None
-            return result.registers[0] if result.registers else None
+            value = None
+            if result.registers:
+                if len(result.registers) == 1:
+                    value = result.registers[0]
+                else:
+                    logger.warning(f"⚠️ Ошибка длины ответа holding регистра {address}: запрошено 1, получено {len(result.registers)}. Игнорируем.")
+                    return None
+            
+            return value
         except (ConnectionError, OSError) as e:
             error_str = str(e)
             error_code = getattr(e, 'errno', None)
@@ -389,6 +408,9 @@ class ModbusClient:
                 self._connected = False
                 return False
             
+            # Сбрасываем мусор из сокета, чтобы не прочитать старые ответы
+            self._flush_socket()
+            
             # Для socket framer (Modbus RTU over TCP) unit_id должен быть указан
             # В документации указан Slave ID = 1, поэтому используем unit_id=1
             # Функция 06 (Write Single Register) используется по умолчанию в write_register
@@ -409,11 +431,16 @@ class ModbusClient:
                     logger.warning(f"Таймаут при записи в регистр {address} значение {value}")
                 return False
             
-            # Проверяем, что запись действительно успешна
+            # Проверяем, что запись действительно успешна и пришел ответ с правильной функцией (06)
             if hasattr(result, 'function_code'):
+                if result.function_code != 6:
+                    logger.error(f"❌ ОШИБКА ЗАПИСИ: Ожидалась функция 6, получена {result.function_code}. Ответ: {result}")
+                    return False
                 logger.info(f"Успешно записано в регистр {address} значение {value}, function_code={result.function_code}")
             else:
-                logger.info(f"Успешно записано в регистр {address} значение {value}")
+                # Если function_code нет, это подозрительно для pymodbus responses
+                logger.warning(f"Успешно записано в регистр {address}, но отсутствует function_code в ответе. Ответ: {result}")
+            
             return True
         except (ConnectionError, OSError) as e:
             error_str = str(e)
@@ -499,6 +526,10 @@ class ModbusClient:
         
         try:
             logger.debug(f"Чтение input регистра {address} (0x{address:04X}), unit_id={self.unit_id}")
+            
+            # Сбрасываем мусор из сокета, чтобы не прочитать старые ответы
+            self._flush_socket()
+            
             # Используем точно такой же вызов, как в test_pymodbus.py
             result = self.client.read_input_registers(
                 address=address, 
@@ -514,7 +545,14 @@ class ModbusClient:
                     self._problematic_registers.add(address)
                     logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
                 return None
-            value = result.registers[0] if result.registers else None
+            value = None
+            if result.registers:
+                if len(result.registers) == 1:
+                    value = result.registers[0]
+                else:
+                    logger.warning(f"⚠️ Ошибка длины ответа регистра {address}: запрошено 1, получено {len(result.registers)}. Игнорируем.")
+                    return None
+            
             logger.debug(f"Прочитано из input регистра {address} (0x{address:04X}): значение = {value}")
             return value
         except (ConnectionError, OSError) as e:
@@ -2336,8 +2374,50 @@ class ModbusClient:
             # Выключаем вентилятор - сбрасываем бит
             new_value = current_value & ~(1 << fan_bit)
         
+        # Сбрасываем мусор перед записью
+        self._flush_socket()
+        
         # Записываем новое значение
         return self.write_register_1131_direct(new_value)
+
+    def _flush_socket(self):
+        """Вычитывание и сброс всех данных из входного буфера сокета"""
+        if self.client is None:
+            return
+        sock = self._get_socket()
+        if sock is None:
+            return
+        
+        try:
+            # Получаем текущий таймаут
+            old_timeout = sock.gettimeout()
+            # Ставим 0 (non-blocking)
+            sock.settimeout(0)
+            
+            total_flushed = 0
+            while True:
+                try:
+                    data = sock.recv(4096)
+                    if not data:
+                        break
+                    total_flushed += len(data)
+                except BlockingIOError:
+                    # Больше данных нет
+                    break
+                except socket.error:
+                    break
+            
+            if total_flushed > 0:
+                logger.debug(f"🗑️ Сброшено {total_flushed} байт мусора из сокета перед операцией")
+                
+        except Exception as e:
+            logger.debug(f"Ошибка при сбросе сокета: {e}")
+        finally:
+            # Возвращаем старый таймаут
+            try:
+                sock.settimeout(old_timeout)
+            except:
+                pass
 
     # ===== Generic direct multi-read (IR/NMR) =====
     def _get_underlying_socket(self):
