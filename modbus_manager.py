@@ -596,7 +596,7 @@ class ModbusManager(QObject):
         # Таймер для чтения регистра 1701 (давление Vacuum) - быстрое обновление
         self._vacuum_pressure_timer = QTimer(self)
         self._vacuum_pressure_timer.timeout.connect(self._readVacuumPressure)
-        # self._vacuum_pressure_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._vacuum_pressure_timer.setInterval(300)
         
         # Таймер для чтения регистра 1131 (fans) - быстрое обновление
         self._fan_1131_timer = QTimer(self)
@@ -1497,7 +1497,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
         QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
-        # QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
+        QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
 
         # Таймеры автообновления setpoint (UI-логика)
@@ -1604,6 +1604,8 @@ class ModbusManager(QObject):
             self._applyN2PressureValue(value)
         elif key == "1661":
             self._applyN2SetpointValue(value)
+        elif key == "1701":
+            self._applyVacuumPressureValue(value)
         elif key == "1701":
             self._applyVacuumPressureValue(value)
         elif key == "1131":
@@ -2095,18 +2097,16 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        # КРИТИЧНО: Блокировка обновлений при активной записи (защита от мусора на шине)
-        time_since_write = time.time() - self._last_write_time
-        if self._write_in_progress or time_since_write < 2.0:
-            return
-            
         try:
+            # Прямое применение, без проверок времени записи
+            # Давление Vacuum, делитель 100 (проверить спецификацию, но пока так)
             pressure = float(int(value)) / 100.0
         except Exception:
             return
         if self._vacuum_pressure != pressure:
             self._vacuum_pressure = pressure
             self.vacuumPressureChanged.emit(pressure)
+            logger.debug(f"✅ [1701] Vacuum Pressure обновлено: {pressure} Torr")
 
     def _applyFan1131Value(self, value: object):
         # logger.debug(f"🔍 [1131] RAW VALUE: {value} (type={type(value)})")
