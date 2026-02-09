@@ -274,7 +274,7 @@ class ModbusManager(QObject):
         self._water_chiller_temperature = 0.0  # Текущая температура Water Chiller (регистр 1511) - использует inlet temp
         self._water_chiller_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._water_chiller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._autoUpdateWaterChillerSetpoint)
+        self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._readWaterChillerSetpoint)
         self._water_chiller_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._seop_cell_temperature = 0.0  # Температура SEOP Cell (регистр 1411)
         self._seop_cell_setpoint = 0.0  # Заданная температура SEOP Cell (регистр 1421)
@@ -295,25 +295,25 @@ class ModbusManager(QObject):
         self._magnet_psu_setpoint = 0.0  # Заданная температура Magnet PSU (регистр 1331)
         self._magnet_psu_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._magnet_psu_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._magnet_psu_setpoint_auto_update_timer.timeout.connect(self._autoUpdateMagnetPSUSetpoint)
+        self._magnet_psu_setpoint_auto_update_timer.timeout.connect(self._readMagnetPSUSetpoint)
         self._magnet_psu_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._laser_psu_current = 0.0  # Ток Laser PSU в амперах (регистр 1251)
         self._laser_psu_setpoint = 0.0  # Заданная температура Laser PSU (регистр 1241)
         self._laser_psu_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._laser_psu_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._laser_psu_setpoint_auto_update_timer.timeout.connect(self._autoUpdateLaserPSUSetpoint)
+        self._laser_psu_setpoint_auto_update_timer.timeout.connect(self._readLaserPSUSetpoint)
         self._laser_psu_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._xenon_pressure = 0.0  # Давление Xenon в Torr (регистр 1611)
         self._xenon_setpoint = 0.0  # Заданное давление Xenon в Torr (регистр 1621)
         self._xenon_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._xenon_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._xenon_setpoint_auto_update_timer.timeout.connect(self._autoUpdateXenonSetpoint)
+        self._xenon_setpoint_auto_update_timer.timeout.connect(self._readXenonSetpoint)
         self._xenon_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._n2_pressure = 0.0  # Давление N2 в Torr (регистр 1651)
         self._n2_setpoint = 0.0  # Заданное давление N2 (регистр 1661)
         self._n2_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._n2_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._n2_setpoint_auto_update_timer.timeout.connect(self._autoUpdateN2Setpoint)
+        self._n2_setpoint_auto_update_timer.timeout.connect(self._readN2Setpoint)
         self._n2_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._vacuum_pressure = 0.0  # Давление Vacuum в Torr (регистр 1701)
         self._vacuum_controller_pressure = 0.0  # Давление Vacuum Controller в mTorr (регистр 1701)
@@ -537,11 +537,6 @@ class ModbusManager(QObject):
         self._water_chiller_temp_timer = QTimer(self)
         self._water_chiller_temp_timer.timeout.connect(self._readWaterChillerTemperature)
         self._water_chiller_temp_timer.setInterval(300)
-        
-        # Таймер для чтения регистра 1531 (setpoint Water Chiller) - быстрое обновление
-        self._water_chiller_setpoint_auto_update_timer = QTimer(self)
-        self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._readWaterChillerSetpoint)
-        self._water_chiller_setpoint_auto_update_timer.setInterval(1000)
         
         # Таймер для чтения регистров Water Chiller (1511, 1521, 1531, 1541) - быстрое обновление
         self._water_chiller_timer = QTimer(self)
