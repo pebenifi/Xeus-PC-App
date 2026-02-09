@@ -556,7 +556,12 @@ class ModbusManager(QObject):
         # Таймер для чтения регистра 1341 (ток Magnet PSU) - быстрое обновление
         self._magnet_psu_current_timer = QTimer(self)
         self._magnet_psu_current_timer.timeout.connect(self._readMagnetPSUCurrent)
-        # self._magnet_psu_current_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._magnet_psu_current_timer.setInterval(300)
+
+        # Таймер для чтения регистра 1331 (setpoint Magnet PSU) - быстрое обновление
+        self._magnet_psu_setpoint_auto_update_timer = QTimer(self)
+        self._magnet_psu_setpoint_auto_update_timer.timeout.connect(self._readMagnetPSUSetpoint)
+        self._magnet_psu_setpoint_auto_update_timer.setInterval(1000)
         
         # Таймер для чтения регистра 1251 (ток Laser PSU) - быстрое обновление
         self._laser_psu_current_timer = QTimer(self)
@@ -1473,7 +1478,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
         QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
         QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
-        # QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
+        QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
         # QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
         # QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
         # QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
@@ -1482,7 +1487,7 @@ class ModbusManager(QObject):
 
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
-        # self._magnet_psu_setpoint_auto_update_timer.start()
+        self._magnet_psu_setpoint_auto_update_timer.start()
         # self._laser_psu_setpoint_auto_update_timer.start()
         self._seop_cell_setpoint_auto_update_timer.start()
         # self._pid_controller_setpoint_auto_update_timer.start()
@@ -1517,12 +1522,16 @@ class ModbusManager(QObject):
                 self._reading_1111 = False
             elif key == "1511":
                 self._reading_1511 = False
+            elif key == "1531":
+                self._reading_1531 = False # (если используем флаг)
             elif key == "1411":
                 self._reading_1411 = False
             elif key == "1421":
                 self._reading_1421 = False
             elif key == "1341":
                 self._reading_1341 = False
+            elif key == "1331":
+                self._reading_1331 = False # (если используем флаг)
             elif key == "1251":
                 self._reading_1251 = False
             elif key == "1611":
@@ -1560,6 +1569,8 @@ class ModbusManager(QObject):
             self._applySeopCellSetpointValue(value)
         elif key == "1341":
             self._applyMagnetPSUCurrentValue(value)
+        elif key == "1331":
+            self._applyMagnetPSUSetpointValue(value)
         elif key == "1251":
             self._applyLaserPSUCurrentValue(value)
         elif key == "1611":
@@ -1912,18 +1923,37 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        # КРИТИЧНО: Блокировка обновлений при активной записи (защита от мусора на шине)
-        time_since_write = time.time() - self._last_write_time
-        if self._write_in_progress or time_since_write < 2.0:
-            return
-            
         try:
+            # Прямое применение, без проверок времени записи
+            # Проверяем масштаб: ток обычно требует делителя 100
             current = float(int(value)) / 100.0
         except Exception:
             return
+            
         if self._magnet_psu_current != current:
             self._magnet_psu_current = current
             self.magnetPSUCurrentChanged.emit(current)
+            logger.debug(f"✅ [1341] Magnet PSU Current обновлен: {current} A")
+
+    def _applyMagnetPSUSetpointValue(self, value: object):
+        if value is None:
+            return
+
+        # Если пользователь сейчас редактирует поле, не обновляем его из устройства
+        if self._magnet_psu_setpoint_user_interaction:
+            return
+
+        try:
+            # Прямое применение, без проверок времени записи
+            # Проверяем масштаб: setpoint тока тоже делитель 100
+            setpoint = float(int(value)) / 100.0
+        except Exception:
+            return
+
+        if self._magnet_psu_setpoint != setpoint:
+            self._magnet_psu_setpoint = setpoint
+            self.magnetPSUSetpointChanged.emit(setpoint)
+            logger.info(f"✅ [1331] Magnet PSU Setpoint обновлен из устройства: {setpoint} A (применено напрямую)")
 
     def _applyLaserPSUCurrentValue(self, value: object):
         self._reading_1251 = False
@@ -3279,17 +3309,21 @@ class ModbusManager(QObject):
         # Регистр 1531 - Holding Register (записываемый)
         self._enqueue_read("1531", lambda: client.read_holding_register(1531))
     
-    def _autoUpdateMagnetPSUSetpoint(self):
+    def _readMagnetPSUSetpoint(self):
         """
-        Автоматическое обновление setpoint для Magnet PSU
-        Вызывается каждые 20 секунд
-        Для Magnet PSU нет текущей температуры (есть только ток), поэтому просто сбрасываем флаг взаимодействия
+        Чтение регистра 1331 (setpoint Magnet PSU) из устройства
         """
-        if not self._is_connected:
+        if not self._is_connected or self._modbus_client is None:
             return
         
-        # Сбрасываем флаг взаимодействия для следующего цикла
-        self._magnet_psu_setpoint_user_interaction = False
+        # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
+        if self._magnet_psu_setpoint_user_interaction:
+            return
+
+        client = self._modbus_client
+        # Используем обычный pymodbus
+        # Регистр 1331 - Holding Register (записываемый)
+        self._enqueue_read("1331", lambda: client.read_holding_register(1331))
     
     def _autoUpdateLaserPSUSetpoint(self):
         """
