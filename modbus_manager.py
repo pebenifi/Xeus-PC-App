@@ -536,7 +536,12 @@ class ModbusManager(QObject):
         # Таймер для чтения регистра 1511 (температура Water Chiller) - быстрое обновление (старый, для обратной совместимости)
         self._water_chiller_temp_timer = QTimer(self)
         self._water_chiller_temp_timer.timeout.connect(self._readWaterChillerTemperature)
-        # self._water_chiller_temp_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._water_chiller_temp_timer.setInterval(300)
+        
+        # Таймер для чтения регистра 1531 (setpoint Water Chiller) - быстрое обновление
+        self._water_chiller_setpoint_auto_update_timer = QTimer(self)
+        self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._readWaterChillerSetpoint)
+        self._water_chiller_setpoint_auto_update_timer.setInterval(1000)
         
         # Таймер для чтения регистров Water Chiller (1511, 1521, 1531, 1541) - быстрое обновление
         self._water_chiller_timer = QTimer(self)
@@ -1466,7 +1471,7 @@ class ModbusManager(QObject):
         # Запускаем таймер последовательного обновления UI
         self._ui_update_timer.start()
         QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
-        # QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
+        QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
         QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
         # QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
         # QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
@@ -1476,7 +1481,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
 
         # Таймеры автообновления setpoint (UI-логика)
-        # self._water_chiller_setpoint_auto_update_timer.start()
+        self._water_chiller_setpoint_auto_update_timer.start()
         # self._magnet_psu_setpoint_auto_update_timer.start()
         # self._laser_psu_setpoint_auto_update_timer.start()
         self._seop_cell_setpoint_auto_update_timer.start()
@@ -1547,6 +1552,8 @@ class ModbusManager(QObject):
             self._applyValve1111Value(value)
         elif key == "1511":
             self._applyWaterChillerTemperatureValue(value)
+        elif key == "1531":
+            self._applyWaterChillerSetpointValue(value)
         elif key == "1411":
             self._applySeopCellTemperatureValue(value)
         elif key == "1421":
@@ -1826,19 +1833,39 @@ class ModbusManager(QObject):
         self._reading_1511 = False
         if value is None:
             return
-        
-        # КРИТИЧНО: Блокировка обновлений при активной записи (защита от мусора на шине)
-        time_since_write = time.time() - self._last_write_time
-        if self._write_in_progress or time_since_write < 2.0:
-            return
             
         try:
-            temperature = float(int(value)) / 100.0
+            # Прямое применение, без проверок времени записи
+            # Исправлено масштабирование: делим на 10.0, как и в SEOP Cell
+            temperature = float(int(value)) / 10.0
         except Exception:
             return
+            
         if self._water_chiller_temperature != temperature:
             self._water_chiller_temperature = temperature
             self.waterChillerTemperatureChanged.emit(temperature)
+            logger.debug(f"✅ [1511] Water Chiller Temperature обновлена: {temperature}°C")
+
+    def _applyWaterChillerSetpointValue(self, value: object):
+        # self._reading_1531 = False (если такой флаг есть)
+        if value is None:
+            return
+
+        # Если пользователь сейчас редактирует поле, не обновляем его из устройства
+        if self._water_chiller_setpoint_user_interaction:
+            return
+
+        try:
+            # Прямое применение, без проверок времени записи
+            # Исправлено масштабирование: делим на 10.0
+            setpoint = float(int(value)) / 10.0
+        except Exception:
+            return
+
+        if self._water_chiller_setpoint != setpoint:
+            self._water_chiller_setpoint = setpoint
+            self.waterChillerSetpointChanged.emit(setpoint)
+            logger.info(f"✅ [1531] Water Chiller Setpoint обновлен из устройства: {setpoint}°C (применено напрямую)")
 
     def _applySeopCellTemperatureValue(self, value: object):
         self._reading_1411 = False
@@ -3235,24 +3262,22 @@ class ModbusManager(QObject):
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1511", lambda: client.read_input_register(1511))
     
-    def _autoUpdateWaterChillerSetpoint(self):
+    def _readWaterChillerSetpoint(self):
         """
-        Автоматическое обновление setpoint из текущей температуры, если пользователь не взаимодействует с полем
-        Вызывается каждые 20 секунд
+        Чтение регистра 1531 (setpoint Water Chiller) из устройства
         """
-        if not self._is_connected:
+        if not self._is_connected or self._modbus_client is None:
             return
         
-        # Если пользователь не взаимодействовал с полем, обновляем setpoint из текущей температуры
-        if not self._water_chiller_setpoint_user_interaction:
-            # Не обновляем если текущая температура равна 0.0 или невалидная (устройство только подключено)
-            if self._water_chiller_temperature > 0.1 and abs(self._water_chiller_temperature - self._water_chiller_setpoint) > 0.1:  # Обновляем только если разница > 0.1°C и температура валидная
-                logger.info(f"Автообновление setpoint: {self._water_chiller_setpoint}°C -> {self._water_chiller_temperature}°C")
-                self._water_chiller_setpoint = self._water_chiller_temperature
-                self.waterChillerSetpointChanged.emit(self._water_chiller_temperature)
-        else:
-            # Сбрасываем флаг взаимодействия для следующего цикла
-            self._water_chiller_setpoint_user_interaction = False
+        # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
+        if self._water_chiller_setpoint_user_interaction:
+            return
+
+        # self._reading_1531 = True # (можно добавить флаг если нужен)
+        client = self._modbus_client
+        # Используем обычный pymodbus
+        # Регистр 1531 - Holding Register (записываемый)
+        self._enqueue_read("1531", lambda: client.read_holding_register(1531))
     
     def _autoUpdateMagnetPSUSetpoint(self):
         """
