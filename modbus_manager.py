@@ -576,7 +576,12 @@ class ModbusManager(QObject):
         # Таймер для чтения регистра 1611 (давление Xenon) - быстрое обновление
         self._xenon_pressure_timer = QTimer(self)
         self._xenon_pressure_timer.timeout.connect(self._readXenonPressure)
-        # self._xenon_pressure_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._xenon_pressure_timer.setInterval(300)
+
+        # Таймер для чтения регистра 1621 (setpoint Xenon) - быстрое обновление
+        self._xenon_setpoint_auto_update_timer = QTimer(self)
+        self._xenon_setpoint_auto_update_timer.timeout.connect(self._readXenonSetpoint)
+        self._xenon_setpoint_auto_update_timer.setInterval(1000)
         
         # Таймер для чтения регистра 1651 (давление N2) - быстрое обновление
         self._n2_pressure_timer = QTimer(self)
@@ -1490,7 +1495,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
         QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
         QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
-        # QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
+        QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         # QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
@@ -1501,7 +1506,7 @@ class ModbusManager(QObject):
         self._laser_psu_setpoint_auto_update_timer.start()
         self._seop_cell_setpoint_auto_update_timer.start()
         # self._pid_controller_setpoint_auto_update_timer.start()
-        # self._xenon_setpoint_auto_update_timer.start()
+        self._xenon_setpoint_auto_update_timer.start()
         self._n2_setpoint_auto_update_timer.start()
 
         logger.info("Успешное подключение к Modbus устройству (I/O в фоне)")
@@ -1548,6 +1553,8 @@ class ModbusManager(QObject):
                 self._reading_1241 = False # (если используем флаг)
             elif key == "1611":
                 self._reading_1611 = False
+            elif key == "1621":
+                self._reading_1621 = False # (если используем флаг)
             elif key == "1651":
                 self._reading_1651 = False
             elif key == "1661":
@@ -1591,6 +1598,8 @@ class ModbusManager(QObject):
             self._applyLaserPSUSetpointValue(value)
         elif key == "1611":
             self._applyXenonPressureValue(value)
+        elif key == "1621":
+            self._applyXenonSetpointValue(value)
         elif key == "1651":
             self._applyN2PressureValue(value)
         elif key == "1661":
@@ -2014,18 +2023,36 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        # КРИТИЧНО: Блокировка обновлений при активной записи (защита от мусора на шине)
-        time_since_write = time.time() - self._last_write_time
-        if self._write_in_progress or time_since_write < 2.0:
-            return
-            
         try:
+            # Прямое применение, без проверок времени записи
+            # Давление Xenon, делитель 100
             pressure = float(int(value)) / 100.0
         except Exception:
             return
         if self._xenon_pressure != pressure:
             self._xenon_pressure = pressure
             self.xenonPressureChanged.emit(pressure)
+            logger.debug(f"✅ [1611] Xenon Pressure обновлено: {pressure} Torr")
+
+    def _applyXenonSetpointValue(self, value: object):
+        if value is None:
+            return
+
+        # Если пользователь сейчас редактирует поле, не обновляем его из устройства
+        if self._xenon_setpoint_user_interaction:
+            return
+
+        try:
+            # Прямое применение, без проверок времени записи
+            # Setpoint Xenon, делитель 100
+            setpoint = float(int(value)) / 100.0
+        except Exception:
+            return
+
+        if self._xenon_setpoint != setpoint:
+            self._xenon_setpoint = setpoint
+            self.xenonSetpointChanged.emit(setpoint)
+            logger.info(f"✅ [1621] Xenon Setpoint обновлен из устройства: {setpoint} Torr (применено напрямую)")
 
     def _applyN2PressureValue(self, value: object):
         self._reading_1651 = False
@@ -3528,17 +3555,21 @@ class ModbusManager(QObject):
             # Сбрасываем флаг взаимодействия для следующего цикла
             self._pid_controller_setpoint_user_interaction = False
     
-    def _autoUpdateXenonSetpoint(self):
-        """Автоматическое обновление setpoint Xenon из устройства (если пользователь не взаимодействует с полем)"""
-        if not self._xenon_setpoint_user_interaction:
-            # Пользователь не взаимодействует с полем - можно обновить из устройства
-            logger.debug("Автообновление setpoint Xenon из устройства")
-            # Чтение будет выполнено через таймер _alicats_timer
-        else:
-            # Пользователь взаимодействует с полем - не обновляем
-            logger.debug("Автообновление setpoint Xenon пропущено (пользователь взаимодействует с полем)")
-        # Сбрасываем флаг взаимодействия пользователя
-        self._xenon_setpoint_user_interaction = False
+    def _readXenonSetpoint(self):
+        """
+        Чтение регистра 1621 (setpoint Xenon) из устройства
+        """
+        if not self._is_connected or self._modbus_client is None:
+            return
+        
+        # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
+        if self._xenon_setpoint_user_interaction:
+            return
+
+        client = self._modbus_client
+        # Используем обычный pymodbus
+        # Регистр 1621 - Holding Register (записываемый)
+        self._enqueue_read("1621", lambda: client.read_holding_register(1621))
     
     def _autoUpdateN2Setpoint(self):
         """Автоматическое обновление setpoint N2 из устройства (если пользователь не взаимодействует с полем)"""
