@@ -288,12 +288,9 @@ class ModbusManager(QObject):
         self._reading_water_chiller = False  # Флаг для предотвращения параллельного чтения Water Chiller
         self._seop_cell_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._seop_cell_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
-        self._seop_cell_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
-        self._seop_cell_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
-        self._seop_cell_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
-        self._seop_cell_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
+        self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._readSeopCellSetpoint)
+        self._seop_cell_setpoint_auto_update_timer.setInterval(1000)  # 1 секунда
+        self._reading_1421 = False  # Флаг для предотвращения параллельного чтения setpoint SEOP Cell
         self._magnet_psu_current = 0.0  # Ток Magnet PSU в амперах (регистр 1341)
         self._magnet_psu_setpoint = 0.0  # Заданная температура Magnet PSU (регистр 1331)
         self._magnet_psu_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
@@ -549,7 +546,7 @@ class ModbusManager(QObject):
         # Таймер для чтения регистра 1411 (температура SEOP Cell) - быстрое обновление
         self._seop_cell_temp_timer = QTimer(self)
         self._seop_cell_temp_timer.timeout.connect(self._readSeopCellTemperature)
-        # self._seop_cell_temp_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._seop_cell_temp_timer.setInterval(300)
         
         # Таймер для чтения регистра 1341 (ток Magnet PSU) - быстрое обновление
         self._magnet_psu_current_timer = QTimer(self)
@@ -1470,7 +1467,7 @@ class ModbusManager(QObject):
         self._ui_update_timer.start()
         QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
         # QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
-        # QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
+        QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
         # QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
         # QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
         # QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
@@ -1482,7 +1479,7 @@ class ModbusManager(QObject):
         # self._water_chiller_setpoint_auto_update_timer.start()
         # self._magnet_psu_setpoint_auto_update_timer.start()
         # self._laser_psu_setpoint_auto_update_timer.start()
-        # self._seop_cell_setpoint_auto_update_timer.start()
+        self._seop_cell_setpoint_auto_update_timer.start()
         # self._pid_controller_setpoint_auto_update_timer.start()
         # self._xenon_setpoint_auto_update_timer.start()
         # self._n2_setpoint_auto_update_timer.start()
@@ -1517,6 +1514,8 @@ class ModbusManager(QObject):
                 self._reading_1511 = False
             elif key == "1411":
                 self._reading_1411 = False
+            elif key == "1421":
+                self._reading_1421 = False
             elif key == "1341":
                 self._reading_1341 = False
             elif key == "1251":
@@ -1550,6 +1549,8 @@ class ModbusManager(QObject):
             self._applyWaterChillerTemperatureValue(value)
         elif key == "1411":
             self._applySeopCellTemperatureValue(value)
+        elif key == "1421":
+            self._applySeopCellSetpointValue(value)
         elif key == "1341":
             self._applyMagnetPSUCurrentValue(value)
         elif key == "1251":
@@ -1844,18 +1845,36 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        # КРИТИЧНО: Блокировка обновлений при активной записи (защита от мусора на шине)
-        time_since_write = time.time() - self._last_write_time
-        if self._write_in_progress or time_since_write < 2.0:
-            return
-            
         try:
+            # Прямое применение, без проверок времени записи
             temperature = float(int(value)) / 100.0
         except Exception:
             return
+            
         if self._seop_cell_temperature != temperature:
             self._seop_cell_temperature = temperature
             self.seopCellTemperatureChanged.emit(temperature)
+            logger.debug(f"✅ [1411] SEOP Cell Temperature обновлена: {temperature}°C")
+
+    def _applySeopCellSetpointValue(self, value: object):
+        self._reading_1421 = False
+        if value is None:
+            return
+
+        # Если пользователь сейчас редактирует поле, не обновляем его из устройства
+        if self._seop_cell_setpoint_user_interaction:
+            return
+
+        try:
+            # Прямое применение, без проверок времени записи
+            setpoint = float(int(value)) / 100.0
+        except Exception:
+            return
+
+        if self._seop_cell_setpoint != setpoint:
+            self._seop_cell_setpoint = setpoint
+            self.seopCellSetpointChanged.emit(setpoint)
+            logger.info(f"✅ [1421] SEOP Cell Setpoint обновлен из устройства: {setpoint}°C (применено напрямую)")
 
     def _applyMagnetPSUCurrentValue(self, value: object):
         self._reading_1341 = False
@@ -3293,15 +3312,16 @@ class ModbusManager(QObject):
             logger.warning("Попытка установки температуры SEOP Cell без подключения")
             return False
         
+        # ОТКЛЮЧЕНО: Оптимистичное обновление UI
         # Обновляем внутреннее значение setpoint сразу (до отправки на устройство)
         # Это нужно для того, чтобы стрелки работали с актуальным значением
         # Всегда обновляем и эмитируем сигнал, даже если значение не изменилось
         # Это гарантирует обновление UI при нажатии на стрелки
-        logger.info(f"🔵 Обновление _seop_cell_setpoint: {self._seop_cell_setpoint}°C -> {temperature}°C")
-        self._seop_cell_setpoint = temperature
+        # logger.info(f"🔵 Обновление _seop_cell_setpoint: {self._seop_cell_setpoint}°C -> {temperature}°C")
+        # self._seop_cell_setpoint = temperature
         # Отправляем сигнал для обновления UI (setpoint)
-        logger.info(f"🔵 Эмитируем сигнал seopCellSetpointChanged: {temperature}°C")
-        self.seopCellSetpointChanged.emit(temperature)
+        # logger.info(f"🔵 Эмитируем сигнал seopCellSetpointChanged: {temperature}°C")
+        # self.seopCellSetpointChanged.emit(temperature)
         
         # Преобразуем температуру в значение для регистра (умножаем на 100)
         # Например, 23.0°C -> 2300
@@ -3352,24 +3372,21 @@ class ModbusManager(QObject):
         self._seop_cell_setpoint_auto_update_timer.start()
         return self.setSeopCellTemperature(new_temp)
     
-    def _autoUpdateSeopCellSetpoint(self):
+    def _readSeopCellSetpoint(self):
         """
-        Автоматическое обновление setpoint из текущей температуры, если пользователь не взаимодействует с полем
-        Вызывается каждые 20 секунд
+        Чтение регистра 1421 (setpoint SEOP Cell) из устройства
         """
-        if not self._is_connected:
+        if not self._is_connected or self._modbus_client is None or self._reading_1421:
             return
         
-        # Если пользователь не взаимодействовал с полем, обновляем setpoint из текущей температуры
-        if not self._seop_cell_setpoint_user_interaction:
-            # Не обновляем если текущая температура равна 0.0 или невалидная (устройство только подключено)
-            if self._seop_cell_temperature > 0.1 and abs(self._seop_cell_temperature - self._seop_cell_setpoint) > 0.1:  # Обновляем только если разница > 0.1°C и температура валидная
-                logger.info(f"Автообновление setpoint SEOP Cell: {self._seop_cell_setpoint}°C -> {self._seop_cell_temperature}°C")
-                self._seop_cell_setpoint = self._seop_cell_temperature
-                self.seopCellSetpointChanged.emit(self._seop_cell_temperature)
-        else:
-            # Сбрасываем флаг взаимодействия для следующего цикла
-            self._seop_cell_setpoint_user_interaction = False
+        # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
+        if self._seop_cell_setpoint_user_interaction:
+            return
+
+        self._reading_1421 = True
+        client = self._modbus_client
+        # Используем обычный pymodbus
+        self._enqueue_read("1421", lambda: client.read_holding_register(1421))
     
     def _autoUpdatePIDControllerSetpoint(self):
         """
