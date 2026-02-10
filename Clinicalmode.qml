@@ -438,7 +438,7 @@ Item {
             
             // Привязываем текст к тексту кнопки подключения из modbusManager (только "Connect" или "Disconnect")
             text: modbusManager ? modbusManager.connectionButtonText : qsTr("Connect")
-            font: Constants.fontSmallPx
+            font: Constants.fontButtonSmallPx
             // font.weight: Font.Normal // Using Constant font which is not bold by default
             
             // Делаем кнопку кликабельной и видимой
