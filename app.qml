@@ -6,12 +6,10 @@ Window {
     id: mainWindow
     width: 1920
     height: 1080
-    minimumWidth: 1920
-    minimumHeight: 1080
-    maximumWidth: 1920
-    maximumHeight: 1080
+    // Removed fixed size constraints to allow resizing
     visible: true
     title: "Xeus"
+    color: "#293555" // Match border color from Screen01 or generic dark background
     flags: Qt.Window
 
     // Функция для смены экрана - пауза опросов первой страницы, затем мгновенное переключение через z-order
@@ -47,30 +45,39 @@ Window {
     }
 
     Item {
-        id: screen01Item
-        anchors.fill: parent
-        visible: true
-        enabled: true
-        z: 1
-        Screen01 { anchors.fill: parent }
-    }
+        id: appScaler
+        width: 1920
+        height: 1080
+        anchors.centerIn: parent
+        // Scale the content to fit the window while maintaining aspect ratio
+        scale: Math.min(parent.width / 1920, parent.height / 1080)
 
-    Loader {
-        id: clinicalModeLoader
-        anchors.fill: parent
-        source: "Clinicalmode.qml"
-        active: true
-        asynchronous: true
-        visible: true
-        enabled: true
-        z: 0
-        onLoaded: { 
-            if (item) {
-                item.visible = true
-                // Когда Clinicalmode загружен и виден, возобновляем опросы для работы вкладок
-                if (clinicalModeLoader.z === 1 && typeof modbusManager !== 'undefined' && modbusManager) {
-                    modbusManager.resumePolling()
-                    console.log("✅ Clinicalmode загружен, опросы возобновлены")
+        Item {
+            id: screen01Item
+            anchors.fill: parent
+            visible: true
+            enabled: true
+            z: 1
+            Screen01 { anchors.fill: parent }
+        }
+
+        Loader {
+            id: clinicalModeLoader
+            anchors.fill: parent
+            source: "Clinicalmode.qml"
+            active: true
+            asynchronous: true
+            visible: true
+            enabled: true
+            z: 0
+            onLoaded: { 
+                if (item) {
+                    item.visible = true
+                    // Когда Clinicalmode загружен и виден, возобновляем опросы для работы вкладок
+                    if (clinicalModeLoader.z === 1 && typeof modbusManager !== 'undefined' && modbusManager) {
+                        modbusManager.resumePolling()
+                        console.log("✅ Clinicalmode загружен, опросы возобновлены")
+                    }
                 }
             }
         }
