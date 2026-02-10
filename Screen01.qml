@@ -396,7 +396,7 @@ Rectangle {
         width: 160
         height: 70
         text: qsTr("Mode")
-        font: Constants.fontLargePt
+        font: Constants.fontButtonSmallPx
 
         // Custom background
         background: Rectangle {
@@ -1194,7 +1194,7 @@ Rectangle {
             height: 29
             color: Constants.colorWhite
             text: qsTr("Status:")
-            font: Constants.fontLargePx
+            font: Constants.fontButtonSmallPx
             horizontalAlignment: Text.AlignLeft
             textFormat: Text.AutoText
             scale: 1
@@ -4230,7 +4230,7 @@ Rectangle {
             anchors.centerIn: parent
             color: Constants.colorLightGrey
             text: qsTr("Research")
-            font: Constants.fontMediumPx
+            font: Constants.fontButtonSmallPx
         }
     }
 
