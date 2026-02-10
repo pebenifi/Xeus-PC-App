@@ -430,7 +430,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 3")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -477,7 +477,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 2")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -522,7 +522,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 1")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -565,7 +565,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OutLet Fan - 2")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -607,7 +607,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OutLet Fan - 1")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         rotation: 0
         topPadding: 6
 
@@ -650,7 +650,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 4")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -692,7 +692,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 3")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -734,7 +734,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 2")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -776,7 +776,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 1")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -818,7 +818,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Laser PSU")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -860,7 +860,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Laser Fans")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -902,7 +902,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 4")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -944,7 +944,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Magnet PSU")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -986,7 +986,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("PID Controller")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -1027,7 +1027,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Water Chiller")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -1069,7 +1069,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Reserve")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         topPadding: 6
         // Делаем кнопку переключаемой
         checkable: true
@@ -1093,7 +1093,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Vacuum Gauge")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         icon.color: "#7a7a7a"
         topPadding: 6
 
@@ -1136,7 +1136,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Vacuum Pump")
-        font: Constants.fontSmallPx
+        font: Constants.fontButtonSmallPx
         icon.color: "#7a7a7a"
         topPadding: 6
 
@@ -1210,10 +1210,10 @@ Rectangle {
             width: 148
             height: 30
             
-        // Привязываем текст к тексту кнопки подключения из modbusManager (только "Connect" или "Disconnect")
-        text: modbusManager ? modbusManager.connectionButtonText : qsTr("Connect")
-        font: Constants.fontTinyPx
-        // font.weight: Font.Normal // Removed to avoid conflicts
+            // Привязываем текст к тексту кнопки подключения из modbusManager (только "Connect" или "Disconnect")
+            text: modbusManager ? modbusManager.connectionButtonText : qsTr("Connect")
+            font: Constants.fontButtonSmallPx
+            // font.weight: Font.Normal // Removed to avoid conflicts
             
             // Делаем кнопку кликабельной и видимой
             enabled: true
@@ -1304,7 +1304,7 @@ Rectangle {
                     anchors.centerIn: parent
                     color: Constants.colorWhite
                     text: qsTr("IR spectrum")
-                    font: Constants.fontSmallPx
+                    font: Constants.fontButtonSmallPx
                 }
             }
 
@@ -1397,7 +1397,7 @@ Rectangle {
                     anchors.centerIn: parent
                     color: Constants.colorWhite
                     text: qsTr("NMR spectrum")
-                    font: Constants.fontSmallPx
+                    font: Constants.fontButtonSmallPx
                 }
             }
 
