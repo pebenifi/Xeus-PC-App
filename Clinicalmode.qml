@@ -421,7 +421,7 @@ Item {
             height: 29
             color: Constants.colorWhite
             text: qsTr("Status:")
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
             horizontalAlignment: Text.AlignLeft
             textFormat: Text.AutoText
             scale: 1
@@ -487,7 +487,7 @@ Item {
             text: qsTr("Label")
             layer.enabled: false
             // font.styleName: "Regular" // Conflict
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
             // font.capitalization: Font.MixedCase // Conflict
             clip: false
         }
@@ -565,7 +565,7 @@ Item {
             width: 160
             height: 70
             text: qsTr("Mode")
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
 
             // Custom background
             background: Rectangle {
@@ -597,7 +597,7 @@ Item {
             anchors.centerIn: parent
             color: Constants.colorLightGrey
             text: qsTr("Clinical")
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
         }
     }
 
