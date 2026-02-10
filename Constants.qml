@@ -56,6 +56,14 @@ QtObject {
         bold: false
     })
 
+    // New font size for Status, Mode, Research labels (requested by user)
+    // Updated to 24px per user request
+    property var fontTitlePx: Qt.font({
+        family: fontFamily,
+        pixelSize: 24,
+        bold: false
+    })
+
     // Originally pixelSize: 22
     property var fontMediumPx: Qt.font({
         family: fontFamily,

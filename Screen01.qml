@@ -396,7 +396,7 @@ Rectangle {
         width: 160
         height: 70
         text: qsTr("Mode")
-        font: Constants.fontButtonSmallPx
+        font: Constants.fontTitlePx
 
         // Custom background
         background: Rectangle {
@@ -1194,7 +1194,7 @@ Rectangle {
             height: 29
             color: Constants.colorWhite
             text: qsTr("Status:")
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
             horizontalAlignment: Text.AlignLeft
             textFormat: Text.AutoText
             scale: 1
@@ -1258,7 +1258,7 @@ Rectangle {
             visible: true
             color: Constants.colorWhite
             text: modbusManager ? modbusManager.statusText : qsTr("Disconnected")
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
             // font.styleName: "Regular" // Conflicting with font assignment via Constants
             
             Connections {
@@ -4230,7 +4230,7 @@ Rectangle {
             anchors.centerIn: parent
             color: Constants.colorLightGrey
             text: qsTr("Research")
-            font: Constants.fontButtonSmallPx
+            font: Constants.fontTitlePx
         }
     }
 
