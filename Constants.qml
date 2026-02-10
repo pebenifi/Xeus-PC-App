@@ -136,9 +136,10 @@ QtObject {
 
     // New smaller font for buttons (requested by user)
     // Reduced to 14px for "buttons on the right and disconnect"
+    // Updated to 16px per user request
     property var fontButtonSmallPx: Qt.font({
         family: fontFamily,
-        pixelSize: 14,
+        pixelSize: 16,
         bold: false
     })
 }
