@@ -487,7 +487,7 @@ Item {
             text: qsTr("Label")
             layer.enabled: false
             // font.styleName: "Regular" // Conflict
-            font: Constants.fontLargePt
+            font: Constants.fontButtonSmallPx
             // font.capitalization: Font.MixedCase // Conflict
             clip: false
         }
