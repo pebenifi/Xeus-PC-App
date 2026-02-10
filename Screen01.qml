@@ -1258,7 +1258,7 @@ Rectangle {
             visible: true
             color: Constants.colorWhite
             text: modbusManager ? modbusManager.statusText : qsTr("Disconnected")
-            font: Constants.fontLargePt
+            font: Constants.fontButtonSmallPx
             // font.styleName: "Regular" // Conflicting with font assignment via Constants
             
             Connections {
