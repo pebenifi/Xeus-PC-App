@@ -7,6 +7,11 @@ Item {
     id: root
     anchors.fill: parent
     
+    // Explicitly set palette
+    palette.buttonText: Constants.buttonText
+    palette.windowText: Constants.colorBlack
+    palette.text: Constants.colorBlack
+    
     // Кэшируем состояние подключения для мгновенного доступа без синхронных операций
     // Инициализируем через сигнал после загрузки компонента, чтобы не блокировать рендеринг
     property bool cachedIsConnected: false
@@ -391,7 +396,7 @@ Item {
     Rectangle {
         id: rectangle
         anchors.fill: parent
-        color: "#ffffff"
+        color: Constants.colorWhite
 
     }
 
@@ -404,7 +409,7 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: 28
         height: 37
-        color: "#979797"
+        color: Constants.colorGrey
         radius: 8
         border.width: 0
         Text {
@@ -414,9 +419,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: 71
             height: 29
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Status:")
-            font.pixelSize: 24
+            font: Constants.fontLargePx
             horizontalAlignment: Text.AlignLeft
             textFormat: Text.AutoText
             scale: 1
@@ -433,8 +438,8 @@ Item {
             
             // Привязываем текст к тексту кнопки подключения из modbusManager (только "Connect" или "Disconnect")
             text: modbusManager ? modbusManager.connectionButtonText : qsTr("Connect")
-            font.pointSize: 20
-            font.weight: Font.Normal
+            font: Constants.fontSmallPx
+            // font.weight: Font.Normal // Using Constant font which is not bold by default
             
             // Делаем кнопку кликабельной и видимой
             enabled: true
@@ -478,12 +483,12 @@ Item {
             width: 435
             height: 30
             visible: true
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Label")
             layer.enabled: false
-            font.styleName: "Regular"
-            font.pointSize: 24
-            font.capitalization: Font.MixedCase
+            // font.styleName: "Regular" // Conflict
+            font: Constants.fontLargePt
+            // font.capitalization: Font.MixedCase // Conflict
             clip: false
         }
     }
@@ -496,14 +501,14 @@ Item {
         anchors.topMargin: 19
         width: 480
         height: 33
-        color: "#979797"
+        color: Constants.colorGrey
 
         Text {
             id: text3
             anchors.centerIn: parent
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("NMR spectrum ")
-            font.pixelSize: 20
+            font: Constants.fontSmallPx
         }
     }
 
@@ -515,14 +520,14 @@ Item {
         anchors.topMargin: 19
         width: 478
         height: 33
-        color: "#979797"
+        color: Constants.colorGrey
 
         Text {
             id: text4
             anchors.centerIn: parent
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("IR spectrum ")
-            font.pixelSize: 20
+            font: Constants.fontSmallPx
         }
     }
 
@@ -534,13 +539,13 @@ Item {
         anchors.topMargin: 27
         width: 478
         height: 33
-        color: "#979797"
+        color: Constants.colorGrey
         Text {
             id: text5
             anchors.centerIn: parent
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("PXE Chart")
-            font.pixelSize: 20
+            font: Constants.fontSmallPx
         }
     }
 
@@ -560,7 +565,7 @@ Item {
             width: 160
             height: 70
             text: qsTr("Mode")
-            font.pointSize: 24
+            font: Constants.fontLargePt
 
             // Custom background
             background: Rectangle {
@@ -590,9 +595,9 @@ Item {
         Text {
             id: text2
             anchors.centerIn: parent
-            color: "#fafafa"
+            color: Constants.colorLightGrey
             text: qsTr("Clinical")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
     }
 
@@ -719,17 +724,16 @@ Item {
             Text {
                 id: infoTitle
                 width: parent.width
-                font.pixelSize: 18
-                font.bold: true
-                color: "#000000"
+                font: Constants.fontHeaderPx
+                color: Constants.colorBlack
                 text: "Select a parameter"
             }
 
             Text {
                 id: infoSubtitle
                 width: parent.width
-                font.pixelSize: 12
-                color: "#666666"
+                font: Constants.fontDetailPx
+                color: Constants.colorTextGrey
                 text: "no item selected"
             }
 
@@ -752,8 +756,8 @@ Item {
                         id: infoContent
                         width: parent.width
                         wrapMode: Text.WordWrap
-                        font.pixelSize: 13
-                        color: "#000000"
+                        font: Constants.fontBodyPx
+                        color: Constants.colorBlack
                         text: "Use the menu on the left to open groups and parameters."
                     }
 
@@ -765,20 +769,20 @@ Item {
                         rowSpacing: 8
                         visible: false
 
-                        Text { text: "ID:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramId; text: ""; font.pixelSize: 12; color: "#000000" }
-                        Text { text: "Type:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramType; text: ""; font.pixelSize: 12; color: "#000000" }
-                        Text { text: "Units:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramUnits; text: "—"; font.pixelSize: 12; color: "#000000" }
-                        Text { text: "Default:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramDefault; text: "—"; font.pixelSize: 12; color: "#000000" }
-                        Text { text: "Min:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramMin; text: "—"; font.pixelSize: 12; color: "#000000" }
-                        Text { text: "Max:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramMax; text: "—"; font.pixelSize: 12; color: "#000000" }
-                        Text { text: "Data Type:"; font.pixelSize: 12; color: "#666666" }
-                        Text { id: paramDtype; text: "—"; font.pixelSize: 12; color: "#000000" }
+                        Text { text: "ID:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramId; text: ""; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                        Text { text: "Type:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramType; text: ""; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                        Text { text: "Units:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramUnits; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                        Text { text: "Default:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramDefault; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                        Text { text: "Min:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramMin; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                        Text { text: "Max:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramMax; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                        Text { text: "Data Type:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
+                        Text { id: paramDtype; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
                     }
 
                     // Таблица реле для External Relays (в стиле paramGrid с кнопками on/off справа)
@@ -793,7 +797,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Water Chiller:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Water Chiller:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -802,7 +806,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: relayWaterChiller.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -830,7 +834,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Magnet PSU:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Magnet PSU:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -839,7 +843,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: relayMagnetPSU.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -867,7 +871,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Laser PSU:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Laser PSU:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -876,7 +880,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: relayLaserPSU.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -904,7 +908,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Vacuum Pump:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Vacuum Pump:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -913,7 +917,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: relayVacuumPump.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -941,7 +945,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Vacuum Gauge:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Vacuum Gauge:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -950,7 +954,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: relayVacuumGauge.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -978,7 +982,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "PID Controller:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "PID Controller:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -987,7 +991,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: relayPIDController.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1020,9 +1024,8 @@ Item {
                         // Valves (X6-X12)
                         Text {
                             text: "Valves:"
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: "#666666"
+                            font: Constants.fontDetailBoldPx
+                            color: Constants.colorTextGrey
                             width: parent.width
                             padding: 4
                         }
@@ -1033,7 +1036,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X6:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X6:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1042,7 +1045,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX6.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1070,7 +1073,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X7:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X7:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1079,7 +1082,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX7.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1107,7 +1110,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X8:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X8:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1116,7 +1119,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX8.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1144,7 +1147,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X9:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X9:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1153,7 +1156,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX9.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1181,7 +1184,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X10:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X10:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1190,7 +1193,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX10.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1218,7 +1221,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X11:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X11:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1227,7 +1230,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX11.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1255,7 +1258,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "X12:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "X12:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1264,7 +1267,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: valveX12.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1290,9 +1293,8 @@ Item {
                         // Fans (Inlet, Outlet, OpCell, Laser)
                         Text {
                             text: "Fans:"
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: "#666666"
+                            font: Constants.fontDetailBoldPx
+                            color: Constants.colorTextGrey
                             width: parent.width
                             padding: 4
                         }
@@ -1303,7 +1305,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Inlet Fan 1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Inlet Fan 1:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1312,7 +1314,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanInlet1.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1340,7 +1342,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Inlet Fan 2:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Inlet Fan 2:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1349,7 +1351,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanInlet2.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1377,7 +1379,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Inlet Fan 3:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Inlet Fan 3:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1386,7 +1388,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanInlet3.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1414,7 +1416,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Inlet Fan 4:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Inlet Fan 4:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1423,7 +1425,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanInlet4.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1451,7 +1453,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Outlet Fan 1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Outlet Fan 1:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1460,7 +1462,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanOutlet1.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1488,7 +1490,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Outlet Fan 2:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Outlet Fan 2:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1497,7 +1499,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanOutlet2.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1525,7 +1527,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "OpCell Fan 1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "OpCell Fan 1:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1534,7 +1536,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanOpCell1.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1562,7 +1564,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "OpCell Fan 2:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "OpCell Fan 2:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1571,7 +1573,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanOpCell2.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1599,7 +1601,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "OpCell Fan 3:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "OpCell Fan 3:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1608,7 +1610,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanOpCell3.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1636,7 +1638,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "OpCell Fan 4:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "OpCell Fan 4:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1645,7 +1647,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanOpCell4.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1673,7 +1675,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Laser Fan:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Laser Fan:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1682,7 +1684,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: fanLaser.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1715,9 +1717,8 @@ Item {
                         // Laser PSU
                         Text {
                             text: "Laser PSU:"
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: "#666666"
+                            font: Constants.fontDetailBoldPx
+                            color: Constants.colorTextGrey
                             width: parent.width
                             padding: 4
                         }
@@ -1728,12 +1729,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Voltage Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Voltage Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserVoltageValue
                                 text: "0.00 V"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -1745,7 +1746,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Voltage Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Voltage Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1753,13 +1754,13 @@ Item {
                                     id: laserVoltageSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "V"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "V"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
                         }
@@ -1770,12 +1771,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Current Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Current Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserCurrentValue
                                 text: "0.00 A"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -1787,7 +1788,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Current Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Current Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1795,13 +1796,13 @@ Item {
                                     id: laserCurrentSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
                         }
@@ -1812,7 +1813,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1821,7 +1822,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: laserPSUPower.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -1847,9 +1848,8 @@ Item {
                         // Magnet PSU
                         Text {
                             text: "Magnet PSU:"
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: "#666666"
+                            font: Constants.fontDetailBoldPx
+                            color: Constants.colorTextGrey
                             width: parent.width
                             padding: 4
                         }
@@ -1860,12 +1860,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Voltage Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Voltage Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: magnetVoltageValue
                                 text: "0.00 V"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -1877,7 +1877,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Voltage Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Voltage Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1885,13 +1885,13 @@ Item {
                                     id: magnetVoltageSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "V"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "V"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
                         }
@@ -1902,12 +1902,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Current Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Current Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: magnetCurrentValue
                                 text: "0.00 A"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -1919,7 +1919,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Current Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Current Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1927,13 +1927,13 @@ Item {
                                     id: magnetCurrentSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 120 - 16; height: 0 }
                         }
@@ -1944,7 +1944,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -1953,7 +1953,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: magnetPSUPower.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -2030,12 +2030,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Temperature Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Temperature Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: pidControllerTemperatureValue
                                 text: "0.00 °C"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -2047,7 +2047,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Temperature Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Temperature Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2055,20 +2055,20 @@ Item {
                                     id: pidControllerSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increasePIDControllerTemperature()
@@ -2078,9 +2078,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreasePIDControllerTemperature()
@@ -2096,7 +2096,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2105,7 +2105,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: pidControllerPower.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -2153,12 +2153,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Alicat 1 Xenon Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Alicat 1 Xenon Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: xenonPressure
                                 text: "0.00 Torr"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -2170,7 +2170,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Alicat 1 Xenon Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Alicat 1 Xenon Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2178,20 +2178,20 @@ Item {
                                     id: xenonSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "Torr"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseXenonSetpoint()
@@ -2201,9 +2201,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseXenonSetpoint()
@@ -2219,12 +2219,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Alicat 2 N2 Value:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Alicat 2 N2 Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: n2Pressure
                                 text: "0.00 Torr"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -2236,7 +2236,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Alicat 2 N2 Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Alicat 2 N2 Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2244,20 +2244,20 @@ Item {
                                     id: n2Setpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "Torr"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseN2Setpoint()
@@ -2267,9 +2267,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseN2Setpoint()
@@ -2313,12 +2313,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Vacuum Pressure:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Vacuum Pressure:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: vacuumControllerPressure
                                 text: "0.00 mTorr"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -2346,7 +2346,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Laser Max Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Laser Max Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2354,10 +2354,10 @@ Item {
                                     id: seopLaserMaxTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2367,14 +2367,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPLaserMaxTemp()
@@ -2384,9 +2384,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPLaserMaxTemp()
@@ -2402,7 +2402,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Laser Min Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Laser Min Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2410,10 +2410,10 @@ Item {
                                     id: seopLaserMinTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2423,14 +2423,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPLaserMinTemp()
@@ -2440,9 +2440,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPLaserMinTemp()
@@ -2458,7 +2458,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP Cell Max Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "SEOP Cell Max Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2466,10 +2466,10 @@ Item {
                                     id: seopCellMaxTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2479,14 +2479,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPCellMaxTemp()
@@ -2496,9 +2496,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPCellMaxTemp()
@@ -2514,7 +2514,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP Cell Min Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "SEOP Cell Min Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2522,10 +2522,10 @@ Item {
                                     id: seopCellMinTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2535,14 +2535,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPCellMinTemp()
@@ -2552,9 +2552,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPCellMinTemp()
@@ -2570,7 +2570,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP Ramp Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "SEOP Ramp Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2578,20 +2578,20 @@ Item {
                                     id: seopRampTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPRampTemp()
@@ -2601,9 +2601,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPRampTemp()
@@ -2619,7 +2619,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "SEOP Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2627,10 +2627,10 @@ Item {
                                     id: seopTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2640,14 +2640,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPTemp()
@@ -2657,9 +2657,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPTemp()
@@ -2675,7 +2675,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Cell Refill Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Cell Refill Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2683,20 +2683,20 @@ Item {
                                     id: seopCellRefillTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPCellRefillTemp()
@@ -2706,9 +2706,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPCellRefillTemp()
@@ -2724,7 +2724,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP loop time:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "SEOP loop time:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2732,10 +2732,10 @@ Item {
                                     id: seopLoopTime
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2745,14 +2745,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "s"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "s"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPLoopTime()
@@ -2762,9 +2762,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPLoopTime()
@@ -2780,7 +2780,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP process duration:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "SEOP process duration:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2788,10 +2788,10 @@ Item {
                                     id: seopProcessDuration
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0:00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         // Парсим формат m:s (например, "5:30" -> 330 секунд)
@@ -2809,9 +2809,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPProcessDuration()
@@ -2821,9 +2821,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPProcessDuration()
@@ -2839,7 +2839,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Laser Max Output Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Laser Max Output Power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2847,10 +2847,10 @@ Item {
                                     id: seopLaserMaxOutputPower
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2860,14 +2860,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "W"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "W"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPLaserMaxOutputPower()
@@ -2877,9 +2877,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPLaserMaxOutputPower()
@@ -2895,7 +2895,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Laser PSU Max Current:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Laser PSU Max Current:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2903,10 +2903,10 @@ Item {
                                     id: seopLaserPSUMaxCurrent
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2916,14 +2916,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPLaserPSUMaxCurrent()
@@ -2933,9 +2933,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPLaserPSUMaxCurrent()
@@ -2951,7 +2951,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Water Chiller Max Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Water Chiller Max Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -2959,10 +2959,10 @@ Item {
                                     id: seopWaterChillerMaxTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -2972,14 +2972,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPWaterChillerMaxTemp()
@@ -2989,9 +2989,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPWaterChillerMaxTemp()
@@ -3007,7 +3007,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Water Chiller Min Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Water Chiller Min Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -3015,10 +3015,10 @@ Item {
                                     id: seopWaterChillerMinTemp
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3028,14 +3028,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPWaterChillerMinTemp()
@@ -3045,9 +3045,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPWaterChillerMinTemp()
@@ -3063,7 +3063,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "129Xe concentration of the gas mixture:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "129Xe concentration of the gas mixture:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -3071,10 +3071,10 @@ Item {
                                     id: seopXeConcentration
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3084,14 +3084,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "mMol"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "mMol"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPXeConcentration()
@@ -3101,9 +3101,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPXeConcentration()
@@ -3119,7 +3119,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Water Proton Concentration:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Water Proton Concentration:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -3127,10 +3127,10 @@ Item {
                                     id: seopWaterProtonConcentration
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3140,14 +3140,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "Mol"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "Mol"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPWaterProtonConcentration()
@@ -3157,9 +3157,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPWaterProtonConcentration()
@@ -3175,7 +3175,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Cell number:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Cell number:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -3183,10 +3183,10 @@ Item {
                                     id: seopCellNumber
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseInt(text)
@@ -3200,9 +3200,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPCellNumber()
@@ -3212,9 +3212,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPCellNumber()
@@ -3230,7 +3230,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Refill cycle:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 150 }
+                            Text { text: "Refill cycle:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 150 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -3238,10 +3238,10 @@ Item {
                                     id: seopRefillCycle
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseInt(text)
@@ -3255,9 +3255,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseSEOPRefillCycle()
@@ -3267,9 +3267,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseSEOPRefillCycle()
@@ -3384,7 +3384,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Electron Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Electron Polarization:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3393,12 +3393,12 @@ Item {
                                     id: calculatedElectronPolarization
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3408,7 +3408,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "129Xe Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "129Xe Polarization:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3417,12 +3417,12 @@ Item {
                                     id: calculatedXePolarization
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3432,7 +3432,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "The buildup rate:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "The buildup rate:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3441,12 +3441,12 @@ Item {
                                     id: calculatedBuildupRate
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "1/min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "1/min"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3456,7 +3456,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for Electron Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Error bar for Electron Polarization:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3465,12 +3465,12 @@ Item {
                                     id: calculatedElectronPolarizationError
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3480,7 +3480,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for 129Xe Polarization:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Error bar for 129Xe Polarization:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3489,12 +3489,12 @@ Item {
                                     id: calculatedXePolarizationError
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3504,7 +3504,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for the buildup rate:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Error bar for the buildup rate:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3513,12 +3513,12 @@ Item {
                                     id: calculatedBuildupRateError
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "1/min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "1/min"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3528,7 +3528,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Fitted 129Xe Polarization maximum:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Fitted 129Xe Polarization maximum:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3537,12 +3537,12 @@ Item {
                                     id: calculatedFittedXePolarizationMax
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3552,7 +3552,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Fitted 129Xe Polarization max error bar:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Fitted 129Xe Polarization max error bar:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3561,12 +3561,12 @@ Item {
                                     id: calculatedFittedXePolarizationMaxError
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3576,7 +3576,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "HP 129Xe T1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "HP 129Xe T1:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3585,12 +3585,12 @@ Item {
                                     id: calculatedHPXeT1
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "min"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#e0e0e0" }
@@ -3600,7 +3600,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Error bar for 129Xe T1:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Error bar for 129Xe T1:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3609,12 +3609,12 @@ Item {
                                     id: calculatedHPXeT1Error
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0.00"
                                     verticalAlignment: Text.AlignVCenter
                                 }
-                                Text { text: "min"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "min"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
 
@@ -3666,7 +3666,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Current IR Signal:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Current IR Signal:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3675,8 +3675,8 @@ Item {
                                     id: measuredCurrentIRSignal
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0"
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -3689,7 +3689,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Cold Cell IR Signal:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Cold Cell IR Signal:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3698,10 +3698,10 @@ Item {
                                     id: measuredColdCellIRSignal
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3715,9 +3715,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseMeasuredColdCellIRSignal()
@@ -3727,9 +3727,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseMeasuredColdCellIRSignal()
@@ -3744,7 +3744,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Hot Cell IR Signal:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Hot Cell IR Signal:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3753,10 +3753,10 @@ Item {
                                     id: measuredHotCellIRSignal
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3770,9 +3770,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseMeasuredHotCellIRSignal()
@@ -3782,9 +3782,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseMeasuredHotCellIRSignal()
@@ -3799,7 +3799,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Water 1H NMR Reference Signal:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Water 1H NMR Reference Signal:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3808,10 +3808,10 @@ Item {
                                     id: measuredWater1HNMRReferenceSignal
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3825,9 +3825,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseMeasuredWater1HNMRReferenceSignal()
@@ -3837,9 +3837,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseMeasuredWater1HNMRReferenceSignal()
@@ -3854,7 +3854,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Water T2:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Water T2:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3863,10 +3863,10 @@ Item {
                                     id: measuredWaterT2
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3876,14 +3876,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "ms"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseMeasuredWaterT2()
@@ -3893,9 +3893,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseMeasuredWaterT2()
@@ -3910,7 +3910,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "HP 129Xe NMR Signal:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "HP 129Xe NMR Signal:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3919,8 +3919,8 @@ Item {
                                     id: measuredHP129XeNMRSignal
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0"
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -3933,7 +3933,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "HP 129Xe T2:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "HP 129Xe T2:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3942,10 +3942,10 @@ Item {
                                     id: measuredHP129XeT2
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -3955,14 +3955,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "ms"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseMeasuredHP129XeT2()
@@ -3972,9 +3972,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseMeasuredHP129XeT2()
@@ -3989,7 +3989,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "T2* correction factor:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "T2* correction factor:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -3998,8 +3998,8 @@ Item {
                                     id: measuredT2CorrectionFactor
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
-                                    color: "#000000"
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorBlack
                                     text: "0"
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -4058,7 +4058,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Magnet PSU current for proton NMR:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Magnet PSU current for proton NMR:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4067,10 +4067,10 @@ Item {
                                     id: additionalMagnetPSUCurrentProtonNMR
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4080,14 +4080,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalMagnetPSUCurrentProtonNMR()
@@ -4097,9 +4097,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalMagnetPSUCurrentProtonNMR()
@@ -4114,7 +4114,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Magnet PSU current for 129Xe NMR:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Magnet PSU current for 129Xe NMR:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4123,10 +4123,10 @@ Item {
                                     id: additionalMagnetPSUCurrent129XeNMR
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4136,14 +4136,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalMagnetPSUCurrent129XeNMR()
@@ -4153,9 +4153,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalMagnetPSUCurrent129XeNMR()
@@ -4170,7 +4170,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Operational Laser PSU current:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Operational Laser PSU current:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4179,10 +4179,10 @@ Item {
                                     id: additionalOperationalLaserPSUCurrent
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4192,14 +4192,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalOperationalLaserPSUCurrent()
@@ -4209,9 +4209,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalOperationalLaserPSUCurrent()
@@ -4226,7 +4226,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "RF pulse duration:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "RF pulse duration:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4235,10 +4235,10 @@ Item {
                                     id: additionalRFPulseDuration
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4252,9 +4252,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalRFPulseDuration()
@@ -4264,9 +4264,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalRFPulseDuration()
@@ -4281,7 +4281,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Resonance frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Resonance frequency:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4290,10 +4290,10 @@ Item {
                                     id: additionalResonanceFrequency
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4303,14 +4303,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "kHz"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalResonanceFrequency()
@@ -4320,9 +4320,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalResonanceFrequency()
@@ -4337,7 +4337,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Proton RF pulse power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Proton RF pulse power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4346,10 +4346,10 @@ Item {
                                     id: additionalProtonRFPulsePower
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4359,14 +4359,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalProtonRFPulsePower()
@@ -4376,9 +4376,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalProtonRFPulsePower()
@@ -4393,7 +4393,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "HP 129Xe RF pulse power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "HP 129Xe RF pulse power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4402,10 +4402,10 @@ Item {
                                     id: additionalHP129XeRFPulsePower
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4415,14 +4415,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalHP129XeRFPulsePower()
@@ -4432,9 +4432,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalHP129XeRFPulsePower()
@@ -4449,7 +4449,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Step size during B0 field sweep for HP 129Xe:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Step size during B0 field sweep for HP 129Xe:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4458,10 +4458,10 @@ Item {
                                     id: additionalStepSizeB0SweepHP129Xe
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4471,14 +4471,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalStepSizeB0SweepHP129Xe()
@@ -4488,9 +4488,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalStepSizeB0SweepHP129Xe()
@@ -4505,7 +4505,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Step size during B0 field sweep for protons:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Step size during B0 field sweep for protons:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4514,10 +4514,10 @@ Item {
                                     id: additionalStepSizeB0SweepProtons
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4527,14 +4527,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "A"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalStepSizeB0SweepProtons()
@@ -4544,9 +4544,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalStepSizeB0SweepProtons()
@@ -4561,7 +4561,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Xe ALICATS pressure:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Xe ALICATS pressure:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4570,10 +4570,10 @@ Item {
                                     id: additionalXeAlicatsPressure
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4583,14 +4583,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "Torr"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalXeAlicatsPressure()
@@ -4600,9 +4600,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalXeAlicatsPressure()
@@ -4617,7 +4617,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Nitrogen ALICATS pressure:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Nitrogen ALICATS pressure:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4626,10 +4626,10 @@ Item {
                                     id: additionalNitrogenAlicatsPressure
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4639,14 +4639,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "Torr"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalNitrogenAlicatsPressure()
@@ -4656,9 +4656,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalNitrogenAlicatsPressure()
@@ -4673,7 +4673,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Chiller Temp setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Chiller Temp setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4682,10 +4682,10 @@ Item {
                                     id: additionalChillerTempSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4699,9 +4699,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalChillerTempSetpoint()
@@ -4711,9 +4711,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalChillerTempSetpoint()
@@ -4728,7 +4728,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP Resonance Frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "SEOP Resonance Frequency:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4737,10 +4737,10 @@ Item {
                                     id: additionalSEOPResonanceFrequency
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4750,14 +4750,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "nm"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "nm"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalSEOPResonanceFrequency()
@@ -4767,9 +4767,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalSEOPResonanceFrequency()
@@ -4784,7 +4784,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "SEOP Resonance Frequency Tolerance:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "SEOP Resonance Frequency Tolerance:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4793,10 +4793,10 @@ Item {
                                     id: additionalSEOPResonanceFrequencyTolerance
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4810,9 +4810,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalSEOPResonanceFrequencyTolerance()
@@ -4822,9 +4822,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalSEOPResonanceFrequencyTolerance()
@@ -4839,7 +4839,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "IR spectrometer number of scans:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "IR spectrometer number of scans:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4848,10 +4848,10 @@ Item {
                                     id: additionalIRSpectrometerNumberOfScans
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4865,9 +4865,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalIRSpectrometerNumberOfScans()
@@ -4877,9 +4877,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalIRSpectrometerNumberOfScans()
@@ -4894,7 +4894,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "IR spectrometer exposure duration:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "IR spectrometer exposure duration:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4903,10 +4903,10 @@ Item {
                                     id: additionalIRSpectrometerExposureDuration
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4916,14 +4916,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "ms"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalIRSpectrometerExposureDuration()
@@ -4933,9 +4933,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalIRSpectrometerExposureDuration()
@@ -4950,7 +4950,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "1H Reference N Scans:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "1H Reference N Scans:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -4959,10 +4959,10 @@ Item {
                                     id: additional1HReferenceNScans
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -4976,9 +4976,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditional1HReferenceNScans()
@@ -4988,9 +4988,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditional1HReferenceNScans()
@@ -5005,7 +5005,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "1H Current Sweep N Scans:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "1H Current Sweep N Scans:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5014,10 +5014,10 @@ Item {
                                     id: additional1HCurrentSweepNScans
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5031,9 +5031,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditional1HCurrentSweepNScans()
@@ -5043,9 +5043,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditional1HCurrentSweepNScans()
@@ -5060,7 +5060,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Baseline correction min frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Baseline correction min frequency:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5069,10 +5069,10 @@ Item {
                                     id: additionalBaselineCorrectionMinFrequency
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5082,14 +5082,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "kHz"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalBaselineCorrectionMinFrequency()
@@ -5099,9 +5099,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalBaselineCorrectionMinFrequency()
@@ -5116,7 +5116,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Baseline correction max frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Baseline correction max frequency:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5125,10 +5125,10 @@ Item {
                                     id: additionalBaselineCorrectionMaxFrequency
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5138,14 +5138,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "kHz"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseAdditionalBaselineCorrectionMaxFrequency()
@@ -5155,9 +5155,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseAdditionalBaselineCorrectionMaxFrequency()
@@ -5284,7 +5284,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "RF pulse frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "RF pulse frequency:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5293,10 +5293,10 @@ Item {
                                     id: manualModeRFPulseFrequency
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5306,14 +5306,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "kHz"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeRFPulseFrequency()
@@ -5323,9 +5323,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeRFPulseFrequency()
@@ -5340,7 +5340,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "RF pulse power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "RF pulse power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5349,10 +5349,10 @@ Item {
                                     id: manualModeRFPulsePower
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5362,14 +5362,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "%"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "%"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeRFPulsePower()
@@ -5379,9 +5379,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeRFPulsePower()
@@ -5396,7 +5396,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "RF pulse duration:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "RF pulse duration:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5405,10 +5405,10 @@ Item {
                                     id: manualModeRFPulseDuration
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5418,14 +5418,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "T/2"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "T/2"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeRFPulseDuration()
@@ -5435,9 +5435,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeRFPulseDuration()
@@ -5452,7 +5452,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Pre acquisition:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Pre acquisition:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5461,10 +5461,10 @@ Item {
                                     id: manualModePreAcquisition
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5474,14 +5474,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "ms"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModePreAcquisition()
@@ -5491,9 +5491,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModePreAcquisition()
@@ -5508,7 +5508,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "NMR gain:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "NMR gain:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5517,10 +5517,10 @@ Item {
                                     id: manualModeNMRGain
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5530,14 +5530,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "dB"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "dB"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeNMRGain()
@@ -5547,9 +5547,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeNMRGain()
@@ -5564,7 +5564,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "NMR number of scans:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "NMR number of scans:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5573,10 +5573,10 @@ Item {
                                     id: manualModeNMRNumberOfScans
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5590,9 +5590,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeNMRNumberOfScans()
@@ -5602,9 +5602,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeNMRNumberOfScans()
@@ -5619,7 +5619,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "NMR recovery:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "NMR recovery:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5628,10 +5628,10 @@ Item {
                                     id: manualModeNMRRecovery
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5641,14 +5641,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "ms"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "ms"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeNMRRecovery()
@@ -5658,9 +5658,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeNMRRecovery()
@@ -5675,7 +5675,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Center frequency:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Center frequency:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5684,10 +5684,10 @@ Item {
                                     id: manualModeCenterFrequency
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5697,14 +5697,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "kHz"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeCenterFrequency()
@@ -5714,9 +5714,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeCenterFrequency()
@@ -5731,7 +5731,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Frequency span:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 200 }
+                            Text { text: "Frequency span:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 200 }
                             Item { width: 20; height: 1 } // Spacer
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5740,10 +5740,10 @@ Item {
                                     id: manualModeFrequencySpan
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
                                         var val = parseFloat(text)
@@ -5753,14 +5753,14 @@ Item {
                                         }
                                     }
                                 }
-                                Text { text: "kHz"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "kHz"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseManualModeFrequencySpan()
@@ -5770,9 +5770,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseManualModeFrequencySpan()
@@ -5844,7 +5844,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Beam:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Beam:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -5853,7 +5853,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: laserBeam.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -5881,12 +5881,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "MPD:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "MPD:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserMPD
                                 text: "0.00 uA"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -5898,12 +5898,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Output Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Output Power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserOutputPower
                                 text: "0.00"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -5915,12 +5915,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserTemp
                                 text: "0.00"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -5956,12 +5956,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Inlet Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Inlet Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: waterChillerInletTemp
                                 text: "0.00 °C"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -5973,12 +5973,12 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Outlet Temp:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Outlet Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: waterChillerOutletTemp
                                 text: "0.00 °C"
-                                font.pixelSize: 12
-                                color: "#000000"
+                                font: Constants.fontDetailPx
+                                color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Rectangle { width: parent.width - parent.padding * 2 - 120 - 100 - 16; height: 0 }
@@ -5990,7 +5990,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Temperature Setpoint:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Temperature Setpoint:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -5998,20 +5998,20 @@ Item {
                                     id: waterChillerSetpoint
                                     width: 100
                                     height: 28
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     placeholderText: "0.00"
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                 }
-                                Text { text: "°C"; font.pixelSize: 11; color: "#666666"; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
                                     width: 30
                                     height: 28
                                     text: "▲"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.increaseWaterChillerTemperature()
@@ -6021,9 +6021,9 @@ Item {
                                     width: 30
                                     height: 28
                                     text: "▼"
-                                    font.pixelSize: 10
+                                    font: Constants.fontNanoPx
                                     background: Rectangle {
-                                        color: "#979797"
+                                        color: Constants.colorGrey
                                     }
                                     onClicked: {
                                         if (modbusManager) modbusManager.decreaseWaterChillerTemperature()
@@ -6039,7 +6039,7 @@ Item {
                             width: parent.width
                             spacing: 16
                             padding: 4
-                            Text { text: "Power:"; font.pixelSize: 12; color: "#666666"; anchors.verticalCenter: parent.verticalCenter; width: 120 }
+                            Text { text: "Power:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 8
@@ -6048,7 +6048,7 @@ Item {
                                     width: 80
                                     height: 28
                                     text: waterChillerPower.checked ? "ON" : "OFF"
-                                    font.pixelSize: 11
+                                    font: Constants.fontMicroPx
                                     checkable: true
                                     property color normalColor: "#979797"
                                     property color pressedColor: "#38691e"
@@ -6113,9 +6113,8 @@ Item {
 
             Text {
                 width: parent.width
-                font.pixelSize: 18
-                font.bold: true
-                color: "#000000"
+                font: Constants.fontHeaderPx
+                color: Constants.colorBlack
                 text: "Logs"
             }
 
@@ -6135,10 +6134,10 @@ Item {
                     id: logsTextArea
                     width: valuesPanel.width - 32
                     readOnly: true
-                    font.pixelSize: 10
+                    font: Constants.fontNanoPx
                     // Используем системный моноширинный шрифт по умолчанию (без указания family)
                     // Это избегает проблем с отсутствующими шрифтами на разных платформах
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     wrapMode: TextArea.Wrap
                     background: Rectangle {
                         color: "#424242"
@@ -6176,9 +6175,9 @@ Item {
 
             Text {
                 width: parent.width
-                font.pixelSize: 14
+                font: Constants.fontSubHeaderPx
                 font.bold: true
-                color: "#000000"
+                color: Constants.colorBlack
                 text: "Current Values"
             }
 
@@ -6204,16 +6203,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "Cell number(#317)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: modbusManager ? String(modbusManager.seopCellNumber).padStart(3, '0') : "000"
                         }
                     }
@@ -6231,16 +6229,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "Cell Refill(#318)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: modbusManager ? String(modbusManager.seopRefillCycle) : "0"
                         }
                     }
@@ -6258,16 +6255,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "PXe(fitted value#407)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: {
                                 if (!modbusManager) return "0 - 0%"
                                 var value = modbusManager.calculatedFittedXePolarizationMax || 0
@@ -6290,16 +6286,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "PXe(Most recent#402)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: {
                                 if (!modbusManager) return "0 - 0%"
                                 var value = modbusManager.calculatedXePolarization || 0
@@ -6322,16 +6317,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "g-SEOP(#403+#406)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: {
                                 if (!modbusManager) return "0 - 0 min⁻¹"
                                 var value = modbusManager.calculatedBuildupRate || 0
@@ -6354,16 +6348,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "T1(Most recent#409+#410)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: {
                                 if (!modbusManager) return "0 - 0 mins"
                                 var value = modbusManager.calculatedHPXeT1 || 0
@@ -6386,16 +6379,15 @@ Item {
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 10
-                            color: "#666666"
+                            font: Constants.fontNanoPx
+                            color: Constants.colorTextGrey
                             text: "Prb(most recent#401+#404)"
                         }
 
                         Text {
                             width: parent.width
-                            font.pixelSize: 11
-                            font.bold: true
-                            color: "#000000"
+                            font: Constants.fontMicroBoldPx
+                            color: Constants.colorBlack
                             text: {
                                 if (!modbusManager) return "0 - 0%"
                                 var value = modbusManager.calculatedElectronPolarization || 0
@@ -6419,7 +6411,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 5
         width: 300
-        color: "#ffffff"
+        color: Constants.colorWhite
         border.color: "#d3d3d3"
         border.width: 0
 
@@ -6472,15 +6464,15 @@ Item {
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: menuItemContainer.expanded ? "▼" : "▶"
-                                    color: "#ffffff"
-                                    font.pixelSize: 10
+                                    color: Constants.colorWhite
+                                    font: Constants.fontNanoPx
                                 }
 
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    color: "#ffffff"
+                                    color: Constants.colorWhite
                                     text: modelData
-                                    font.pixelSize: 13
+                                    font: Constants.fontBodyPx
                                     font.bold: menuItemContainer.expanded
                                 }
                             }
@@ -6713,9 +6705,9 @@ Item {
 
                                         Text {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            color: "#ffffff"
+                                            color: Constants.colorWhite
                                             text: modelData
-                                            font.pixelSize: 12
+                                            font: Constants.fontDetailPx
                                             font.bold: paramItem.isActive
                                         }
                                     }
@@ -7135,18 +7127,18 @@ Item {
         LineSeries { id: irMarkerResFreq11; color: "#ffd400"; width: 2 }
 
         // 2) freq — белый
-        LineSeries { id: irMarkerFreq0; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq1; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq2; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq3; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq4; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq5; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq6; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq7; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq8; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq9; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq10; color: "#ffffff"; width: 2 }
-        LineSeries { id: irMarkerFreq11; color: "#ffffff"; width: 2 }
+        LineSeries { id: irMarkerFreq0; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq1; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq2; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq3; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq4; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq5; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq6; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq7; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq8; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq9; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq10; color: Constants.colorWhite; width: 2 }
+        LineSeries { id: irMarkerFreq11; color: Constants.colorWhite; width: 2 }
     }
 
     GraphsView {
@@ -7201,9 +7193,9 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: 8
             anchors.verticalCenter: parent.verticalCenter
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Progress: Now")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
 
         Label {
@@ -7211,9 +7203,9 @@ Item {
             anchors.left: text14.right
             anchors.leftMargin: 8
             anchors.verticalCenter: parent.verticalCenter
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Label synthesis, NEXT: label synthesis")
-            font.pointSize: 22
+            font: Constants.fontMediumPt
         }
     }
 

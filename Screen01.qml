@@ -13,10 +13,15 @@ import QtGraphs
 Rectangle {
     id: rectangle67
     anchors.fill: parent
-    color: "#ffffff"
-    border.color: "#293555"
+    color: Constants.colorWhite
+    border.color: Constants.colorDarkBlue
     border.width: 0
     enabled: true
+    
+    // Explicitly set palette for all controls to ensure consistent look
+    palette.buttonText: Constants.buttonText
+    palette.windowText: Constants.colorBlack
+    palette.text: Constants.colorBlack
 
  Item {
     id: screen01
@@ -391,7 +396,7 @@ Rectangle {
         width: 160
         height: 70
         text: qsTr("Mode")
-        font.pointSize: 24
+        font: Constants.fontLargePt
 
         // Custom background
         background: Rectangle {
@@ -402,7 +407,7 @@ Rectangle {
         contentItem: Text {
             text: modeButton.text
             font: modeButton.font
-            color: "#ffffff" // White text for contrast
+            color: Constants.colorWhite // White text for contrast
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -425,7 +430,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 3")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -472,7 +477,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 2")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -517,7 +522,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 1")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -560,7 +565,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OutLet Fan - 2")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -602,7 +607,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OutLet Fan - 1")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         rotation: 0
         topPadding: 6
 
@@ -645,7 +650,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("InLet Fan - 4")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -687,7 +692,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 3")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -729,7 +734,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 2")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -771,7 +776,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 1")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -813,7 +818,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Laser PSU")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -855,7 +860,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Laser Fans")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -897,7 +902,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("OpCell Fan - 4")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -939,7 +944,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Magnet PSU")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -981,7 +986,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("PID Controller")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -1022,7 +1027,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Water Chiller")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
 
         // Делаем кнопку переключаемой
@@ -1064,7 +1069,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Reserve")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         topPadding: 6
         // Делаем кнопку переключаемой
         checkable: true
@@ -1088,7 +1093,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Vacuum Gauge")
-        font.pointSize: 21
+        font: Constants.fontMediumPt
         icon.color: "#7a7a7a"
         topPadding: 6
 
@@ -1131,7 +1136,7 @@ Rectangle {
         width: 155
         height: 50
         text: qsTr("Vacuum Pump")
-        font.pointSize: 22
+        font: Constants.fontMediumPt
         icon.color: "#7a7a7a"
         topPadding: 6
 
@@ -1176,7 +1181,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.topMargin: 28
         height: 37
-        color: "#979797"
+        color: Constants.colorGrey
         radius: 8
         border.width: 0
 
@@ -1187,9 +1192,9 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 71
             height: 29
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Status:")
-            font.pixelSize: 24
+            font: Constants.fontLargePx
             horizontalAlignment: Text.AlignLeft
             textFormat: Text.AutoText
             scale: 1
@@ -1207,8 +1212,8 @@ Rectangle {
             
             // Привязываем текст к тексту кнопки подключения из modbusManager (только "Connect" или "Disconnect")
             text: modbusManager ? modbusManager.connectionButtonText : qsTr("Connect")
-            font.pointSize: 20
-            font.weight: Font.Normal
+            font: Constants.fontSmallPx
+            // font.weight: Font.Normal // Removed to avoid conflicts
             
             // Делаем кнопку кликабельной и видимой
             enabled: true
@@ -1251,10 +1256,10 @@ Rectangle {
             width: 435
             height: 30
             visible: true
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? modbusManager.statusText : qsTr("Disconnected")
-            font.pointSize: 24
-            font.styleName: "Regular"
+            font: Constants.fontLargePt
+            // font.styleName: "Regular" // Conflicting with font assignment via Constants
             
             Connections {
                 target: modbusManager
@@ -1264,7 +1269,7 @@ Rectangle {
             }
             clip: false
             layer.enabled: false
-            font.capitalization: Font.MixedCase
+            // font.capitalization: Font.MixedCase // Removed to avoid conflicts
         }
     }
 
@@ -1293,13 +1298,13 @@ Rectangle {
                 id: rectangle1
                 width: 480
                 height: 33
-                color: "#979797"
+                color: Constants.colorGrey
                 Text {
                     id: text2
                     anchors.centerIn: parent
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: qsTr("IR spectrum")
-                    font.pixelSize: 20
+                    font: Constants.fontSmallPx
                 }
             }
 
@@ -1367,18 +1372,18 @@ Rectangle {
                 LineSeries { id: irMarkerResFreqMain10; color: "#ffd400"; width: 2 }
                 LineSeries { id: irMarkerResFreqMain11; color: "#ffd400"; width: 2 }
 
-                LineSeries { id: irMarkerFreqMain0; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain1; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain2; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain3; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain4; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain5; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain6; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain7; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain8; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain9; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain10; color: "#ffffff"; width: 2 }
-                LineSeries { id: irMarkerFreqMain11; color: "#ffffff"; width: 2 }
+                LineSeries { id: irMarkerFreqMain0; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain1; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain2; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain3; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain4; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain5; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain6; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain7; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain8; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain9; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain10; color: Constants.colorWhite; width: 2 }
+                LineSeries { id: irMarkerFreqMain11; color: Constants.colorWhite; width: 2 }
             }
 
             // NMR title
@@ -1386,13 +1391,13 @@ Rectangle {
                 id: rectangle2
                 width: 480
                 height: 33
-                color: "#979797"
+                color: Constants.colorGrey
                 Text {
                     id: text3
                     anchors.centerIn: parent
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: qsTr("NMR spectrum")
-                    font.pixelSize: 20
+                    font: Constants.fontSmallPx
                 }
             }
 
@@ -1462,9 +1467,9 @@ Rectangle {
             id: text30
             x: 65
             y: 8
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("N2")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
         }
 
         // Поле ввода с стрелками (как у Xenon)
@@ -1500,7 +1505,7 @@ Rectangle {
                     id: textInput3
                     width: parent.width - 48
                     height: parent.height
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.n2Setpoint !== undefined) {
                             return (modbusManager.n2Setpoint / 1000.0).toFixed(3)
@@ -1508,7 +1513,7 @@ Rectangle {
                             return "0.000"
                         }
                     }
-                    font.pixelSize: 15
+                    font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
@@ -1586,7 +1591,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "+"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -1594,7 +1599,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: n2TempUpButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: n2TempUpButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1625,7 +1630,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "-"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -1633,7 +1638,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: n2TempDownButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: n2TempDownButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1671,7 +1676,7 @@ Rectangle {
                 anchors.rightMargin: 25
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font.pixelSize: 10
+                font: Constants.fontNanoPx
                 
                 background: Rectangle {
                     color: n2SetButton.pressed ? "#555555" : "transparent"
@@ -1680,7 +1685,7 @@ Rectangle {
                 
                 contentItem: Text {
                     text: n2SetButton.text
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     font: n2SetButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -1706,9 +1711,9 @@ Rectangle {
             y: 27
             width: 77
             height: 18
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? ((modbusManager.n2Pressure / 1000.0).toFixed(3) + " Torr") : qsTr("--")
-            font.pointSize: 15
+            font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
@@ -1732,18 +1737,18 @@ Rectangle {
             id: text33
             x: 34
             y: 9
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Magnet PSU")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
         }
 
         Label {
             id: label5
             x: 51
             y: 30
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? (modbusManager.magnetPSUCurrent.toFixed(2) + "A") : qsTr("--")
-            font.pointSize: 15
+            font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
@@ -1786,7 +1791,7 @@ Rectangle {
                     id: textInput5
                     width: parent.width - 48
                     height: parent.height
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.magnetPSUSetpoint !== undefined) {
                             return modbusManager.magnetPSUSetpoint.toFixed(3)
@@ -1794,7 +1799,7 @@ Rectangle {
                             return "0.000"
                         }
                     }
-                    font.pixelSize: 15
+                    font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
@@ -1870,7 +1875,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "+"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -1878,7 +1883,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: magnetPSUTempUpButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: magnetPSUTempUpButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1908,7 +1913,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "-"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -1916,7 +1921,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: magnetPSUTempDownButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: magnetPSUTempDownButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1953,7 +1958,7 @@ Rectangle {
                 anchors.rightMargin: 25
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font.pixelSize: 10
+                font: Constants.fontNanoPx
                 
                 background: Rectangle {
                     color: magnetPSUSetButton.pressed ? "#555555" : "transparent"
@@ -1962,7 +1967,7 @@ Rectangle {
                 
                 contentItem: Text {
                     text: magnetPSUSetButton.text
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     font: magnetPSUSetButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -1994,18 +1999,18 @@ Rectangle {
             id: text34
             x: 41
             y: 8
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Laser PSU")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
         }
 
         Label {
             id: label6
             x: 51
             y: 29
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? (modbusManager.laserPSUCurrent.toFixed(2) + "A") : qsTr("--")
-            font.pointSize: 15
+            font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
@@ -2048,7 +2053,7 @@ Rectangle {
                     id: textInput6
                     width: parent.width - 48
                     height: parent.height
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.laserPSUSetpoint !== undefined) {
                             return modbusManager.laserPSUSetpoint.toFixed(2)
@@ -2056,7 +2061,7 @@ Rectangle {
                             return "0.00"
                         }
                     }
-                    font.pixelSize: 15
+                    font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
@@ -2132,7 +2137,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "+"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -2140,7 +2145,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: laserPSUTempUpButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: laserPSUTempUpButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2170,7 +2175,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "-"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -2178,7 +2183,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: laserPSUTempDownButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: laserPSUTempDownButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2215,7 +2220,7 @@ Rectangle {
                 anchors.rightMargin: 25
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font.pixelSize: 10
+                font: Constants.fontNanoPx
                 
                 background: Rectangle {
                     color: laserPSUSetButton.pressed ? "#555555" : "transparent"
@@ -2224,7 +2229,7 @@ Rectangle {
                 
                 contentItem: Text {
                     text: laserPSUSetButton.text
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     font: laserPSUSetButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -2256,18 +2261,18 @@ Rectangle {
             id: text31
             x: 53
             y: 8
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Xenon")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
         }
 
         Label {
             id: label3
             x: 42
             y: 28
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? (modbusManager.xenonPressure.toFixed(2) + " Torr") : qsTr("--")
-            font.pointSize: 15
+            font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
@@ -2310,7 +2315,7 @@ Rectangle {
                     id: textInput4
                     width: parent.width - 48  // Освобождаем место для стрелок (16px) и кнопки "set" (30px) + отступы
                     height: parent.height
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.xenonSetpoint !== undefined) {
                             return (modbusManager.xenonSetpoint / 1000.0).toFixed(3)
@@ -2318,7 +2323,7 @@ Rectangle {
                             return "0.000"
                         }
                     }
-                    font.pixelSize: 15
+                    font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
@@ -2414,7 +2419,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "+"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -2422,7 +2427,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: xenonTempUpButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: xenonTempUpButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2460,7 +2465,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "-"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -2468,7 +2473,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: xenonTempDownButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: xenonTempDownButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2512,7 +2517,7 @@ Rectangle {
                 anchors.rightMargin: 25  // Сдвигаем кнопку влево на 25 пикселей (было 20, теперь 25)
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font.pixelSize: 10
+                font: Constants.fontNanoPx
                 
                 background: Rectangle {
                     color: xenonSetButton.pressed ? "#555555" : "transparent"
@@ -2521,7 +2526,7 @@ Rectangle {
                 
                 contentItem: Text {
                     text: xenonSetButton.text
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     font: xenonSetButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -2557,18 +2562,18 @@ Rectangle {
             id: text32
             x: 48
             y: 17
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Vacuum")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
         }
 
         Label {
             id: label4
             x: 42
             y: 43
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? (modbusManager.vacuumPressure.toFixed(2) + " mTorr") : qsTr("--")
-            font.pointSize: 15
+            font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
@@ -2592,17 +2597,17 @@ Rectangle {
             id: text35
             x: 33
             y: 9
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Water Chiller")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
 
             Label {
                 id: label7
                 x: 17
                 y: 19
-                color: "#ffffff"
+                color: Constants.colorWhite
                 text: modbusManager ? (modbusManager.waterChillerTemperature.toFixed(1) + "°C") : qsTr("--")
-                font.pointSize: 15
+                font: Constants.fontTinyPx
                 
                 Connections {
                     target: modbusManager
@@ -2646,9 +2651,9 @@ Rectangle {
                     id: textInput7
                     width: parent.width - 48  // Освобождаем место для стрелок (16px) и кнопки "set" (30px) + отступы
                     height: parent.height
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     text: modbusManager ? modbusManager.waterChillerSetpoint.toFixed(1) : qsTr("--")
-                    font.pixelSize: 15
+                    font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
@@ -2740,7 +2745,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "+"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -2748,7 +2753,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: tempUpButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: tempUpButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2786,7 +2791,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "-"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -2794,7 +2799,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: tempDownButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: tempDownButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -2838,7 +2843,7 @@ Rectangle {
                 anchors.rightMargin: 25  // Сдвигаем кнопку влево на 25 пикселей (было 20, теперь 25)
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font.pixelSize: 10
+                font: Constants.fontNanoPx
                 
                 background: Rectangle {
                     color: setButton.pressed ? "#555555" : "transparent"
@@ -2847,7 +2852,7 @@ Rectangle {
                 
                 contentItem: Text {
                     text: setButton.text
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     font: setButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -2881,18 +2886,18 @@ Rectangle {
             id: text36
             x: 42
             y: 9
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("SEOP Cell")
-            font.pixelSize: 15
+            font: Constants.fontTinyPx
         }
 
         Label {
             id: label8
             x: 50
             y: 28
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: modbusManager ? (modbusManager.seopCellTemperature.toFixed(1) + "°C") : qsTr("--")
-            font.pointSize: 15
+            font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
@@ -2935,10 +2940,10 @@ Rectangle {
                     id: textInput8
                     width: parent.width - 48  // Освобождаем место для стрелок (16px) и кнопки "set" (30px) + отступы
                     height: parent.height
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     // Убираем биндинг text, чтобы избежать циклической зависимости
                     // Инициализируем значение через Connections
-                    font.pixelSize: 15
+                    font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
@@ -3039,7 +3044,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "+"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -3047,7 +3052,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: seopTempUpButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: seopTempUpButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -3085,7 +3090,7 @@ Rectangle {
                         width: parent.width
                         height: parent.height / 2
                         text: "-"
-                        font.pixelSize: 14
+                        font: Constants.fontSubHeaderPx
                         
                         background: Rectangle {
                             color: "transparent"
@@ -3093,7 +3098,7 @@ Rectangle {
                         
                         contentItem: Text {
                             text: seopTempDownButton.text
-                            color: "#ffffff"
+                            color: Constants.colorWhite
                             font: seopTempDownButton.font
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -3136,7 +3141,7 @@ Rectangle {
                 anchors.rightMargin: 25  // Сдвигаем кнопку влево на 25 пикселей (было 20, теперь 25)
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font.pixelSize: 10
+                font: Constants.fontNanoPx
                 
                 background: Rectangle {
                     color: seopSetButton.pressed ? "#555555" : "transparent"
@@ -3145,7 +3150,7 @@ Rectangle {
                 
                 contentItem: Text {
                     text: seopSetButton.text
-                    color: "#ffffff"
+                    color: Constants.colorWhite
                     font: seopSetButton.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -3179,7 +3184,7 @@ Rectangle {
 
         // Стилизация кнопки как круга
         background: Rectangle {
-            color: "#293555"
+            color: Constants.colorDarkBlue
             radius: 25
             border.color: button20.checked ? "#fb0000" : "#676767"
             border.width: button20.checked ? 5 : 1
@@ -3188,8 +3193,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button20.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -3227,7 +3232,7 @@ Rectangle {
 
         // Стилизация кнопки как круга
         background: Rectangle {
-            color: "#293555"
+            color: Constants.colorDarkBlue
             radius: 25
             border.color: button21.checked ? "#fb0000" : "#676767"
             border.width: button21.checked ? 5 : 1
@@ -3236,8 +3241,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button21.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -3288,9 +3293,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3311,9 +3316,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3334,9 +3339,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3357,9 +3362,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3386,8 +3391,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button26.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -3428,9 +3433,9 @@ Rectangle {
             y: 24
             width: 109
             height: 27
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("O2 filter")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3449,7 +3454,7 @@ Rectangle {
 
         // Стилизация кнопки как круга
         background: Rectangle {
-            color: "#293555"
+            color: Constants.colorDarkBlue
             radius: 25
             border.color: button22.checked ? "#fb0000" : "#676767"
             border.width: button22.checked ? 5 : 1
@@ -3458,8 +3463,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button22.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -3498,9 +3503,9 @@ Rectangle {
             y: 28
             width: 100
             height: 20
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("RB filter")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3521,9 +3526,9 @@ Rectangle {
             y: 28
             width: 100
             height: 20
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("Collection")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
             horizontalAlignment: Text.AlignHCenter
         }
 
@@ -3542,7 +3547,7 @@ Rectangle {
 
         // Стилизация кнопки как круга
         background: Rectangle {
-            color: "#293555"
+            color: Constants.colorDarkBlue
             radius: 25
             border.color: button23.checked ? "#fb0000" : "#676767"
             border.width: button23.checked ? 5 : 1
@@ -3551,8 +3556,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button23.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -3592,9 +3597,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3615,9 +3620,9 @@ Rectangle {
             y: 24
             width: 109
             height: 27
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("O2 filter")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3638,9 +3643,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -3658,7 +3663,7 @@ Rectangle {
 
         // Стилизация кнопки как круга
         background: Rectangle {
-            color: "#293555"
+            color: Constants.colorDarkBlue
             radius: 25
             border.color: button24.checked ? "#fb0000" : "#676767"
             border.width: button24.checked ? 5 : 1
@@ -3667,8 +3672,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button24.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -3705,7 +3710,7 @@ Rectangle {
 
         // Стилизация кнопки как круга
         background: Rectangle {
-            color: "#293555"
+            color: Constants.colorDarkBlue
             radius: 25
             border.color: button25.checked ? "#fb0000" : "#676767"
             border.width: button25.checked ? 5 : 1
@@ -3714,8 +3719,8 @@ Rectangle {
         // Стилизация текста
         contentItem: Text {
             text: button25.text
-            color: "#ffffff"
-            font.pixelSize: 30
+            color: Constants.colorWhite
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -4049,7 +4054,7 @@ Rectangle {
         y: 903
         width: 1376
         height: 157
-        color: "#ffffff"
+        color: Constants.colorWhite
         radius: 12
         border.width: 5
 
@@ -4058,7 +4063,7 @@ Rectangle {
             x: 21
             y: 101
             text: qsTr("Normally Closed (opened)")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
 
         Text {
@@ -4066,7 +4071,7 @@ Rectangle {
             x: 350
             y: 101
             text: qsTr("Normally Closed (closed)")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
 
         Text {
@@ -4074,7 +4079,7 @@ Rectangle {
             x: 638
             y: 101
             text: qsTr("Normally Open (closed)")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
 
         Text {
@@ -4082,7 +4087,7 @@ Rectangle {
             x: 911
             y: 101
             text: qsTr("Normally Open (opened)")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
 
         Text {
@@ -4090,7 +4095,7 @@ Rectangle {
             x: 1201
             y: 101
             text: qsTr("Manual Valve")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
     }
 
@@ -4100,7 +4105,7 @@ Rectangle {
         y: 925
         width: 70
         height: 75
-        color: "#293555"
+        color: Constants.colorDarkBlue
         radius: 25
         border.color: "#fb0000"
         border.width: 5
@@ -4111,9 +4116,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("10")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -4124,7 +4129,7 @@ Rectangle {
         y: 925
         width: 70
         height: 75
-        color: "#293555"
+        color: Constants.colorDarkBlue
         radius: 25
         border.color: "#676767"
 
@@ -4134,9 +4139,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("X10")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -4158,9 +4163,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("X9")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -4181,9 +4186,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("9")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -4203,9 +4208,9 @@ Rectangle {
             y: 17
             width: 70
             height: 58
-            color: "#ffffff"
+            color: Constants.colorWhite
             text: qsTr("M")
-            font.pixelSize: 30
+            font: Constants.fontHugePx
             horizontalAlignment: Text.AlignHCenter
         }
     }
@@ -4223,9 +4228,9 @@ Rectangle {
         Text {
             id: text29
             anchors.centerIn: parent
-            color: "#fafafa"
+            color: Constants.colorLightGrey
             text: qsTr("Research")
-            font.pixelSize: 22
+            font: Constants.fontMediumPx
         }
     }
 
