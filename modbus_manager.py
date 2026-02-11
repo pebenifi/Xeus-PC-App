@@ -6882,8 +6882,23 @@ class ModbusManager(QObject):
         if self._is_connected and self._modbus_client is not None:
             logger.info(f"🔴 [SET] setLaserPSU: отправляем команду на устройство (реле 3, бит 2)")
             self._setRelayAsync(3, state, "Laser PSU")
+            
+            # Если включаем, запускаем отложенную запись
+            if state:
+                logger.info("⏳ Запуск таймера: через 3 секунды будет отправлено 1 на регистр 1251")
+                QTimer.singleShot(3000, self._writeLaserPSUDelayed)
+            
             return True
         return False
+    
+    def _writeLaserPSUDelayed(self):
+        """Отложенная запись 1 в регистр 1251 для Laser PSU"""
+        if self._is_connected and self._modbus_client is not None:
+            logger.info("🚀 [DELAYED] Выполнение отложенной записи: 1 -> 1251 (Laser PSU)")
+            # Используем существующий метод записи регистра
+            self.writeRegister(1251, 1)
+        else:
+            logger.warning("⚠️ [DELAYED] Не удалось выполнить отложенную запись 1251: нет подключения")
     
     @Slot(bool, result=bool)
     def setMagnetPSU(self, state: bool) -> bool:
