@@ -598,6 +598,11 @@ class ModbusManager(QObject):
         self._fan_1131_timer.timeout.connect(self._readFan1131)
         self._fan_1131_timer.setInterval(200)  # Чтение каждые 200 мс для быстрой синхронизации
         
+        # Таймер для чтения IR спектра (регистры 400..414, 420..477)
+        self._ir_spectrum_timer = QTimer(self)
+        self._ir_spectrum_timer.timeout.connect(self.requestIrSpectrum)
+        self._ir_spectrum_timer.setInterval(1000)  # Чтение раз в секунду
+        
         # Таймер для чтения регистров Power Supply (Laser PSU и Magnet PSU) - быстрое обновление
         self._power_supply_timer = QTimer(self)
         self._power_supply_timer.timeout.connect(self._readPowerSupply)
@@ -1334,6 +1339,7 @@ class ModbusManager(QObject):
             self._n2_pressure_timer.stop()  # Останавливаем чтение давления N2
             self._vacuum_pressure_timer.stop()  # Останавливаем чтение давления Vacuum
             self._fan_1131_timer.stop()  # Останавливаем чтение регистра 1131 (fans)
+            self._ir_spectrum_timer.stop()  # Останавливаем чтение IR спектра
             self._ui_update_timer.stop()  # Останавливаем таймер обновления UI
             # Очищаем кэш при отключении
             self._pending_relay_updates.clear()
@@ -1494,6 +1500,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
+        QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
 
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
@@ -2558,19 +2565,15 @@ class ModbusManager(QObject):
         - 400..414 (15) метаданные
         - 420..477 (58) данные
         """
-        # ВРЕМЕННО ОТКЛЮЧЕНО
-        # logger.info("requestIrSpectrum (IR) временно отключен")
-        return False
-        
         if not self._is_connected or self._modbus_client is None:
-            logger.debug("IR spectrum request ignored: not connected")
+            # logger.debug("IR spectrum request ignored: not connected")
             return False
         if self._ir_request_in_flight:
-            logger.debug("IR spectrum request ignored: previous request still in flight")
+            # logger.debug("IR spectrum request ignored: previous request still in flight")
             return False
 
         self._ir_request_in_flight = True
-        logger.debug("IR spectrum request queued")
+        # logger.debug("IR spectrum request queued")
 
         client = self._modbus_client
 
