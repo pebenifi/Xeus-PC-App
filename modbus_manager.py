@@ -1506,7 +1506,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
-        # QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
+        QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
         
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
@@ -2564,17 +2564,14 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def requestIrSpectrum(self) -> bool:
         """
-        Чтение IR данных как команда `ir` из test_modbus, но безопасно:
-        отправляем запросы чанками по 10 регистров, иначе устройство может "уронить" сокет.
+        Чтение IR данных как команда `ir` из test_modbus.
+        Используем стандартный метод read_input_registers (через pymodbus), 
+        чтобы избежать segmentation fault при прямом доступе к сокету.
 
         Регистры:
         - 400..414 (15) метаданные
         - 420..477 (58) данные
         """
-        # ВРЕМЕННО ОТКЛЮЧЕНО из-за segmentation fault
-        # logger.info("requestIrSpectrum (IR) временно отключен")
-        return False
-        
         if not self._is_connected or self._modbus_client is None:
             logger.debug("IR spectrum request ignored: not connected")
             return False
@@ -2590,55 +2587,65 @@ class ModbusManager(QObject):
         def task():
             import math
             import struct
-            # Читаем 400..414 и 420..477 (как в test_modbus при ir)
-            # Метаданные лучше читать одним блоком (15 регистров) — иначе иногда "плывут" поля.
-            meta = client.read_input_registers_direct(400, 15, max_chunk=15)
+            
+            # Вспомогательная функция для безопасного чтения (чанками)
+            def safe_read_chunked(start_addr, count, chunk_size=10):
+                result = []
+                remaining = count
+                current = start_addr
+                while remaining > 0:
+                    read_count = min(chunk_size, remaining)
+                    # Используем безопасный метод client.read_input_registers
+                    # Он уже содержит логику обработки ошибок и не лезет в сокет напрямую
+                    # Примечание: client.read_input_registers возвращает Optional[int] для одного регистра,
+                    # но здесь нам нужно читать блоками. У нас нет метода read_input_registers_safe_batch в ModbusClient,
+                    # но есть client.client.read_input_registers из pymodbus.
+                    # Лучше использовать client.read_input_registers_direct, но переписать его 
+                    # или реализовать здесь безопасный аналог через pymodbus client.
+                    
+                    try:
+                        # Используем pymodbus client напрямую через обертку
+                        # Важно: ModbusClient.client это pymodbus.client.ModbusTcpClient
+                        if client.client is None:
+                            return None
+                            
+                        # Читаем блок
+                        rr = client.client.read_input_registers(current, read_count, device_id=client.unit_id)
+                        
+                        if rr.isError():
+                            logger.warning(f"Ошибка чтения IR чанка {current} (count={read_count}): {rr}")
+                            return None
+                            
+                        if not hasattr(rr, 'registers') or len(rr.registers) != read_count:
+                            logger.warning(f"Неверная длина ответа IR чанка {current}: ожидали {read_count}, получили {len(rr.registers) if hasattr(rr, 'registers') else 0}")
+                            return None
+                            
+                        result.extend(rr.registers)
+                        current += read_count
+                        remaining -= read_count
+                        
+                    except Exception as e:
+                        logger.error(f"Исключение при чтении IR чанка {current}: {e}")
+                        return None
+                        
+                return result
+
+            # Читаем 400..414 (метаданные)
+            # 15 регистров можно попробовать прочитать за раз или разбить
+            # Для безопасности разобьем на 10 + 5
+            meta = safe_read_chunked(400, 15, chunk_size=10)
+            
             if meta is None or len(meta) < 15:
                 logger.debug(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
-            # Основной режим: безопасно по 10 регистров.
-            data_regs = client.read_input_registers_direct(420, 58, max_chunk=10)
+            # Читаем 420..477 (данные) - 58 регистров
+            # Читаем чанками по 10
+            data_regs = safe_read_chunked(420, 58, chunk_size=10)
+            
             if data_regs is None or len(data_regs) < 58:
                 logger.debug(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
-
-            # Диагностика качества: если почти все значения нулевые (часто это признак, что устройство
-            # не поддерживает чтение под-диапазонов 430.. и т.п.), пробуем один раз читать весь блок 58.
-            try:
-                nz_indices = [i for i, v in enumerate(data_regs) if int(v) != 0]
-                last_nz_idx = nz_indices[-1] if nz_indices else -1
-                nz_count = len(nz_indices)
-            except Exception:
-                last_nz_idx = -1
-                nz_count = 0
-
-            if last_nz_idx >= 0 and last_nz_idx <= 9:
-                logger.debug(
-                    f"IR spectrum: suspicious tail zeros (last_nonzero_idx={last_nz_idx}, nonzero_count={nz_count}). "
-                    f"Trying single-block read (58 regs) once."
-                )
-                data_full = client.read_input_registers_direct(420, 58, max_chunk=58)
-                if data_full is not None and len(data_full) >= 58:
-                    try:
-                        nz_full = [i for i, v in enumerate(data_full) if int(v) != 0]
-                        last_nz_full = nz_full[-1] if nz_full else -1
-                        nz_count_full = len(nz_full)
-                    except Exception:
-                        last_nz_full = -1
-                        nz_count_full = 0
-
-                    if last_nz_full > last_nz_idx or nz_count_full > nz_count:
-                        logger.debug(
-                            f"IR spectrum: single-block read looks better "
-                            f"(last_nonzero_idx {last_nz_idx}->{last_nz_full}, nonzero_count {nz_count}->{nz_count_full})"
-                        )
-                        data_regs = data_full
-                    else:
-                        logger.debug(
-                            f"IR spectrum: single-block read did not improve "
-                            f"(last_nonzero_idx={last_nz_full}, nonzero_count={nz_count_full}). Keeping chunked."
-                        )
 
             logger.debug(
                 f"IR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
