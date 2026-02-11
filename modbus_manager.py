@@ -2595,37 +2595,36 @@ class ModbusManager(QObject):
             import math
             import struct
             
-            # Вспомогательная функция для безопасного чтения (чанками)
+            # Вспомогательная функция для безопасного чтения (по одному регистру)
+            # Чтение блоками вызывает segmentation fault в pymodbus/Qt, поэтому читаем по одному
             def safe_read_chunked(start_addr, count, chunk_size=10):
                 result = []
-                remaining = count
-                current = start_addr
-                while remaining > 0:
-                    read_count = min(chunk_size, remaining)
+                for i in range(count):
+                    addr = start_addr + i
+                    # Используем проверенный метод чтения одного регистра (как везде в приложении)
+                    val = client_wrapper.read_input_register(addr)
                     
-                    # Используем метод обертки, который мы добавили в modbus_client.py
-                    # Он безопасен и не требует прямого доступа к pymodbus
-                    chunk_data = client_wrapper.read_input_registers(current, read_count)
-                    
-                    if chunk_data is None:
-                        logger.warning(f"Не удалось прочитать чанк IR {current}")
+                    if val is None:
+                        logger.warning(f"Не удалось прочитать IR регистр {addr}")
+                        # Если не удалось прочитать один регистр, возвращаем None для всего блока
+                        # (или можно попробовать заполнить нулем/NaN, но лучше знать об ошибке)
                         return None
                         
-                    result.extend(chunk_data)
-                    current += read_count
-                    remaining -= read_count
+                    result.append(val)
                     
                 return result
 
             # Читаем 400..414 (метаданные)
-            meta = safe_read_chunked(400, 15, chunk_size=10)
+            # Читаем по одному регистру (медленно, но надежно)
+            meta = safe_read_chunked(400, 15, chunk_size=1)
             
             if meta is None or len(meta) < 15:
                 logger.debug(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
             # Читаем 420..477 (данные) - 58 регистров
-            data_regs = safe_read_chunked(420, 58, chunk_size=10)
+            # Читаем по одному регистру (медленно, но надежно)
+            data_regs = safe_read_chunked(420, 58, chunk_size=1)
             
             if data_regs is None or len(data_regs) < 58:
                 logger.debug(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
