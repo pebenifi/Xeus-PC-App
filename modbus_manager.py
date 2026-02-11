@@ -1506,7 +1506,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
-        QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
+        # QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
         
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
@@ -2571,6 +2571,10 @@ class ModbusManager(QObject):
         - 400..414 (15) метаданные
         - 420..477 (58) данные
         """
+        # ВРЕМЕННО ОТКЛЮЧЕНО из-за segmentation fault
+        # logger.info("requestIrSpectrum (IR) временно отключен")
+        return False
+        
         if not self._is_connected or self._modbus_client is None:
             logger.debug("IR spectrum request ignored: not connected")
             return False
