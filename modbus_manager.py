@@ -2610,7 +2610,9 @@ class ModbusManager(QObject):
                             return None
                             
                         # Читаем блок
-                        rr = client.client.read_input_registers(current, read_count, device_id=client.unit_id)
+                        # Исправляем вызов: используем именованные аргументы для совместимости с разными версиями pymodbus
+                        # В некоторых версиях pymodbus сигнатура: read_input_registers(address, count=1, **kwargs)
+                        rr = client.client.read_input_registers(address=current, count=read_count, slave=client.unit_id)
                         
                         if rr.isError():
                             logger.warning(f"Ошибка чтения IR чанка {current} (count={read_count}): {rr}")
