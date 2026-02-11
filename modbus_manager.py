@@ -691,8 +691,6 @@ class ModbusManager(QObject):
             self._measured_parameters_timer,
             self._additional_parameters_timer,
             self._manual_mode_settings_timer,
-            self._ir_spectrum_timer,
-            self._nmr_spectrum_timer,
         ]
         
         # Worker-поток для Modbus I/O (чтобы UI не подвисал)
@@ -1509,8 +1507,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
         QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
-        QTimer.singleShot(380, lambda: self._nmr_spectrum_timer.start())
-
+        
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
         self._magnet_psu_setpoint_auto_update_timer.start()
@@ -2575,14 +2572,14 @@ class ModbusManager(QObject):
         - 420..477 (58) данные
         """
         if not self._is_connected or self._modbus_client is None:
-            # logger.debug("IR spectrum request ignored: not connected")
+            logger.debug("IR spectrum request ignored: not connected")
             return False
         if self._ir_request_in_flight:
-            # logger.debug("IR spectrum request ignored: previous request still in flight")
+            logger.debug("IR spectrum request ignored: previous request still in flight")
             return False
 
         self._ir_request_in_flight = True
-        # logger.debug("IR spectrum request queued")
+        logger.debug("IR spectrum request queued")
 
         client = self._modbus_client
 
@@ -2987,15 +2984,19 @@ class ModbusManager(QObject):
         - 100..116 (17) метаданные
         - 120..375 (256) данные
         """
+        # ВРЕМЕННО ОТКЛЮЧЕНО
+        # logger.info("requestNmrSpectrum (NMR) временно отключен")
+        return False
+
         if not self._is_connected or self._modbus_client is None:
-            # logger.debug("NMR spectrum request ignored: not connected")
+            logger.debug("NMR spectrum request ignored: not connected")
             return False
         if self._nmr_request_in_flight:
-            # logger.debug("NMR spectrum request ignored: previous request still in flight")
+            logger.debug("NMR spectrum request ignored: previous request still in flight")
             return False
 
         self._nmr_request_in_flight = True
-        # logger.debug("NMR spectrum request queued")
+        logger.debug("NMR spectrum request queued")
 
         client = self._modbus_client
 
