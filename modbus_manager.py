@@ -2564,9 +2564,9 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def requestIrSpectrum(self) -> bool:
         """
-        Чтение IR данных как команда `ir` из test_modbus.
-        Переписано на использование стандартного pymodbus с именованными аргументами,
-        которые работают в текущей версии (positional arguments only или unit=).
+        Чтение IR данных.
+        Использует безопасный метод read_input_registers из обертки ModbusClient,
+        который обрабатывает ошибки и совместимость версий pymodbus.
         """
         if not self._is_connected or self._modbus_client is None:
             logger.debug("IR spectrum request ignored: not connected")
@@ -2578,7 +2578,8 @@ class ModbusManager(QObject):
         self._ir_request_in_flight = True
         logger.debug("IR spectrum request queued")
 
-        client = self._modbus_client
+        # Получаем ссылку на обертку (ModbusClient), а не внутренний pymodbus клиент
+        client_wrapper = self._modbus_client
 
         def task():
             import math
@@ -2592,41 +2593,18 @@ class ModbusManager(QObject):
                 while remaining > 0:
                     read_count = min(chunk_size, remaining)
                     
-                    try:
-                        if client.client is None:
-                            return None
-                            
-                        # Пробуем разные варианты вызова для совместимости с разными версиями pymodbus
-                        # Вариант 1: Позиционные аргументы (самый старый и надежный)
-                        # read_input_registers(address, count=1, **kwargs)
-                        # В kwargs может быть unit= или slave=
-                        try:
-                            # Пытаемся передать unit через kwargs, так как 'slave' не сработал
-                            rr = client.client.read_input_registers(current, read_count, unit=client.unit_id)
-                        except TypeError:
-                             try:
-                                # Если unit не работает, пробуем slave (для старых версий)
-                                rr = client.client.read_input_registers(current, read_count, slave=client.unit_id)
-                             except TypeError:
-                                # Если и это не работает, пробуем только позиционные (если unit берется из клиента по умолчанию)
-                                rr = client.client.read_input_registers(current, read_count)
-                        
-                        if rr.isError():
-                            logger.warning(f"Ошибка чтения IR чанка {current} (count={read_count}): {rr}")
-                            return None
-                            
-                        if not hasattr(rr, 'registers') or len(rr.registers) != read_count:
-                            logger.warning(f"Неверная длина ответа IR чанка {current}: ожидали {read_count}, получили {len(rr.registers) if hasattr(rr, 'registers') else 0}")
-                            return None
-                            
-                        result.extend(rr.registers)
-                        current += read_count
-                        remaining -= read_count
-                        
-                    except Exception as e:
-                        logger.error(f"Исключение при чтении IR чанка {current}: {e}")
+                    # Используем метод обертки, который мы добавили в modbus_client.py
+                    # Он безопасен и не требует прямого доступа к pymodbus
+                    chunk_data = client_wrapper.read_input_registers(current, read_count)
+                    
+                    if chunk_data is None:
+                        logger.warning(f"Не удалось прочитать чанк IR {current}")
                         return None
                         
+                    result.extend(chunk_data)
+                    current += read_count
+                    remaining -= read_count
+                    
                 return result
 
             # Читаем 400..414 (метаданные)
