@@ -585,6 +585,78 @@ class ModbusClient:
                 logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
             return None
     
+    def read_input_registers(self, address: int, count: int) -> Optional[list[int]]:
+        """
+        Чтение нескольких input registers (для IR спектра и т.д.)
+        
+        Args:
+            address: Начальный адрес
+            count: Количество регистров
+            
+        Returns:
+            Список значений или None в случае ошибки
+        """
+        # Проверяем, не является ли регистр проблемным
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address}")
+            return None
+        
+        self._last_read_register = address
+        
+        if self.client is None or not self.client.is_socket_open():
+            logger.debug(f"Сокет закрыт при чтении {count} регистров с {address}")
+            self._connected = False
+            return None
+        
+        try:
+            # Сбрасываем мусор из сокета
+            self._flush_socket()
+            
+            # Пробуем разные варианты вызова для совместимости версий pymodbus
+            # (так как в разных версиях аргументы unit/slave/device_id отличаются)
+            result = None
+            try:
+                # Вариант 1: device_id (как в read_input_register выше)
+                result = self.client.read_input_registers(
+                    address=address, 
+                    count=count, 
+                    device_id=self.unit_id
+                )
+            except TypeError:
+                try:
+                    # Вариант 2: slave
+                    result = self.client.read_input_registers(
+                        address=address, 
+                        count=count, 
+                        slave=self.unit_id
+                    )
+                except TypeError:
+                    try:
+                        # Вариант 3: unit
+                        result = self.client.read_input_registers(
+                            address=address, 
+                            count=count, 
+                            unit=self.unit_id
+                        )
+                    except TypeError:
+                        # Вариант 4: только позиционные
+                        result = self.client.read_input_registers(address, count)
+
+            if result.isError():
+                logger.debug(f"Ошибка чтения регистров {address}..{address+count-1}: {result}")
+                return None
+            
+            if result.registers and len(result.registers) == count:
+                return result.registers
+            else:
+                logger.warning(f"Неверное количество данных: ожидалось {count}, получено {len(result.registers) if result.registers else 0}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Ошибка при чтении регистров {address}: {e}")
+            self._connected = False
+            return None
+
     def _get_socket(self):
         """
         Получение сокета из pymodbus клиента
