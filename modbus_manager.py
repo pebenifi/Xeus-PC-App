@@ -6895,8 +6895,23 @@ class ModbusManager(QObject):
         # Отправляем команду на устройство асинхронно через очередь задач (только если подключено)
         if self._is_connected and self._modbus_client is not None:
             self._setRelayAsync(2, state, "Magnet PSU")
+            
+            # Если включаем, запускаем отложенную запись
+            if state:
+                logger.info("⏳ Запуск таймера: через 3 секунды будет отправлено 1 на регистр 1341")
+                QTimer.singleShot(3000, self._writeMagnetPSUDelayed)
+            
             return True
         return False
+
+    def _writeMagnetPSUDelayed(self):
+        """Отложенная запись 1 в регистр 1341 для Magnet PSU"""
+        if self._is_connected and self._modbus_client is not None:
+            logger.info("🚀 [DELAYED] Выполнение отложенной записи: 1 -> 1341 (Magnet PSU)")
+            # Используем существующий метод записи регистра
+            self.writeRegister(1341, 1)
+        else:
+            logger.warning("⚠️ [DELAYED] Не удалось выполнить отложенную запись 1341: нет подключения")
     
     @Slot(bool, result=bool)
     def setPIDController(self, state: bool) -> bool:
