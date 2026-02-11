@@ -1506,7 +1506,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
-        # QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
+        QTimer.singleShot(350, lambda: self._ir_spectrum_timer.start())
         
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
@@ -2565,16 +2565,9 @@ class ModbusManager(QObject):
     def requestIrSpectrum(self) -> bool:
         """
         Чтение IR данных как команда `ir` из test_modbus.
-        ВРЕМЕННО ОТКЛЮЧЕНО: вызывает segmentation fault и проблемы с аргументами pymodbus.
-        
-        Регистры:
-        - 400..414 (15) метаданные
-        - 420..477 (58) данные
+        Переписано на использование стандартного pymodbus с именованными аргументами,
+        которые работают в текущей версии (positional arguments only или unit=).
         """
-        # ВРЕМЕННО ОТКЛЮЧЕНО из-за segmentation fault
-        # logger.info("requestIrSpectrum (IR) временно отключен")
-        return False
-
         if not self._is_connected or self._modbus_client is None:
             logger.debug("IR spectrum request ignored: not connected")
             return False
@@ -2588,8 +2581,75 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task():
-            # Заглушка, код ниже пока недоступен
-            return None
+            import math
+            import struct
+            
+            # Вспомогательная функция для безопасного чтения (чанками)
+            def safe_read_chunked(start_addr, count, chunk_size=10):
+                result = []
+                remaining = count
+                current = start_addr
+                while remaining > 0:
+                    read_count = min(chunk_size, remaining)
+                    
+                    try:
+                        if client.client is None:
+                            return None
+                            
+                        # Пробуем разные варианты вызова для совместимости с разными версиями pymodbus
+                        # Вариант 1: Позиционные аргументы (самый старый и надежный)
+                        # read_input_registers(address, count=1, **kwargs)
+                        # В kwargs может быть unit= или slave=
+                        try:
+                            # Пытаемся передать unit через kwargs, так как 'slave' не сработал
+                            rr = client.client.read_input_registers(current, read_count, unit=client.unit_id)
+                        except TypeError:
+                             try:
+                                # Если unit не работает, пробуем slave (для старых версий)
+                                rr = client.client.read_input_registers(current, read_count, slave=client.unit_id)
+                             except TypeError:
+                                # Если и это не работает, пробуем только позиционные (если unit берется из клиента по умолчанию)
+                                rr = client.client.read_input_registers(current, read_count)
+                        
+                        if rr.isError():
+                            logger.warning(f"Ошибка чтения IR чанка {current} (count={read_count}): {rr}")
+                            return None
+                            
+                        if not hasattr(rr, 'registers') or len(rr.registers) != read_count:
+                            logger.warning(f"Неверная длина ответа IR чанка {current}: ожидали {read_count}, получили {len(rr.registers) if hasattr(rr, 'registers') else 0}")
+                            return None
+                            
+                        result.extend(rr.registers)
+                        current += read_count
+                        remaining -= read_count
+                        
+                    except Exception as e:
+                        logger.error(f"Исключение при чтении IR чанка {current}: {e}")
+                        return None
+                        
+                return result
+
+            # Читаем 400..414 (метаданные)
+            meta = safe_read_chunked(400, 15, chunk_size=10)
+            
+            if meta is None or len(meta) < 15:
+                logger.debug(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
+                return None
+
+            # Читаем 420..477 (данные) - 58 регистров
+            data_regs = safe_read_chunked(420, 58, chunk_size=10)
+            
+            if data_regs is None or len(data_regs) < 58:
+                logger.debug(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                return None
+
+            logger.debug(
+                f"IR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
+                f"data_length={len(data_regs)} data_first10={data_regs[0:10]} data_last10={data_regs[-10:] if len(data_regs) >= 10 else data_regs} "
+                f"data_nonzero_count={sum(1 for v in data_regs if int(v) != 0)}"
+            )
+
+            status = int(meta[0])
             # Метаданные IR (как в test_modbus): устройство реально хранит x/y range в регистрах
             # 401-408, но порядок слов/байт может отличаться. Подбираем вариант по x_min/x_max,
             # чтобы далее декодировать остальные float (y_min/y_max/res_freq/freq/integral) в том же формате.
