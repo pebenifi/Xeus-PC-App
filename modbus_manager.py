@@ -691,6 +691,8 @@ class ModbusManager(QObject):
             self._measured_parameters_timer,
             self._additional_parameters_timer,
             self._manual_mode_settings_timer,
+            self._ir_spectrum_timer,
+            self._nmr_spectrum_timer,
         ]
         
         # Worker-поток для Modbus I/O (чтобы UI не подвисал)
