@@ -1571,6 +1571,8 @@ class ModbusManager(QObject):
                 self._reading_1701 = False
             elif key == "1131":
                 self._reading_1131 = False
+            elif key == "ir":
+                self._ir_request_in_flight = False
             return
         
         # Если регистр успешно прочитан и он был в списке проблемных - удаляем его
@@ -2533,6 +2535,14 @@ class ModbusManager(QObject):
         """
         Применяет результат чтения IR спектра (GUI поток) и дергает сигнал для QML графика.
         """
+        if isinstance(value, str):
+            try:
+                import json
+                value = json.loads(value)
+            except Exception as e:
+                logger.error(f"IR spectrum: failed to parse JSON payload: {e}")
+                return
+
         if not value or not isinstance(value, dict):
             logger.debug("IR spectrum: empty/invalid payload (not a dict or None)")
             return
@@ -2954,7 +2964,10 @@ class ModbusManager(QObject):
                 logger.error(f"IR spectrum: failed to verify data_json: {e}")
             
             logger.debug(f"IR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
-            return result
+            
+            # Возвращаем JSON-строку, чтобы избежать проблем с конвертацией сложных структур в QVariant
+            # и потенциальных segmentation fault при передаче через сигналы
+            return json.dumps(result)
 
         self._enqueue_read("ir", task)
         return True
