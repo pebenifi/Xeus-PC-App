@@ -1949,8 +1949,8 @@ class ModbusManager(QObject):
             
         try:
             # Прямое применение, без проверок времени записи
-            # Проверяем масштаб: ток обычно требует делителя 100
-            current = float(int(value)) / 100.0
+            # Проверяем масштаб: ток обычно требует делителя 1000
+            current = float(int(value)) / 1000.0
         except Exception:
             return
             
@@ -1969,8 +1969,8 @@ class ModbusManager(QObject):
 
         try:
             # Прямое применение, без проверок времени записи
-            # Проверяем масштаб: setpoint тока тоже делитель 100
-            setpoint = float(int(value)) / 100.0
+            # Проверяем масштаб: setpoint тока тоже делитель 1000
+            setpoint = float(int(value)) / 1000.0
         except Exception:
             return
 
@@ -6681,8 +6681,8 @@ class ModbusManager(QObject):
         self._magnet_psu_setpoint = temperature
         self.magnetPSUSetpointChanged.emit(temperature)
         
-        # Преобразуем температуру в значение для регистра (умножаем на 100)
-        register_value = int(temperature * 100)
+        # Преобразуем температуру в значение для регистра (умножаем на 1000)
+        register_value = int(temperature * 1000)
         
         logger.info(f"Установка температуры Magnet PSU: {temperature}°C (регистр 1331 = {register_value})")
         
