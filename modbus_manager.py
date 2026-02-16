@@ -2058,8 +2058,8 @@ class ModbusManager(QObject):
             
         try:
             # Прямое применение, без проверок времени записи
-            # Давление N2, делитель 100
-            pressure = float(int(value)) / 100.0
+            # Давление N2, делитель 10000
+            pressure = float(int(value)) / 10000.0
         except Exception:
             return
         if self._n2_pressure != pressure:
@@ -2077,8 +2077,8 @@ class ModbusManager(QObject):
 
         try:
             # Прямое применение, без проверок времени записи
-            # Setpoint N2, делитель 100
-            setpoint = float(int(value)) / 100.0
+            # Setpoint N2, делитель 10000
+            setpoint = float(int(value)) / 10000.0
         except Exception:
             return
 
@@ -3727,8 +3727,8 @@ class ModbusManager(QObject):
         self._n2_setpoint = pressure
         self.n2SetpointChanged.emit(pressure)
         
-        # Преобразуем давление в значение для регистра (умножаем на 100)
-        register_value = int(pressure * 100)
+        # Преобразуем давление в значение для регистра (умножаем на 10000)
+        register_value = int(pressure * 10000)
         
         logger.info(f"Установка давления N2: {pressure} Torr (регистр 1661 = {register_value})")
         
