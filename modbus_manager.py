@@ -2022,8 +2022,8 @@ class ModbusManager(QObject):
             
         try:
             # Прямое применение, без проверок времени записи
-            # Давление Xenon, делитель 100
-            pressure = float(int(value)) / 100.0
+            # Давление Xenon, делитель 10000
+            pressure = float(int(value)) / 10000.0
         except Exception:
             return
         if self._xenon_pressure != pressure:
@@ -2041,8 +2041,8 @@ class ModbusManager(QObject):
 
         try:
             # Прямое применение, без проверок времени записи
-            # Setpoint Xenon, делитель 100
-            setpoint = float(int(value)) / 100.0
+            # Setpoint Xenon, делитель 10000
+            setpoint = float(int(value)) / 10000.0
         except Exception:
             return
 
@@ -3628,9 +3628,9 @@ class ModbusManager(QObject):
         logger.info(f"🔵 Эмитируем сигнал xenonSetpointChanged: {pressure} Torr")
         self.xenonSetpointChanged.emit(pressure)
         
-        # Преобразуем давление в значение для регистра (умножаем на 100)
-        # Например, 23.00 Torr -> 2300
-        register_value = int(pressure * 100)
+        # Преобразуем давление в значение для регистра (умножаем на 10000)
+        # Например, 0.2000 Torr -> 2000
+        register_value = int(pressure * 10000)
         
         logger.info(f"Установка давления Xenon: {pressure} Torr (регистр 1621 = {register_value})")
         
