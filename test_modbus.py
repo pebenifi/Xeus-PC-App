@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import socket, time
+import socket
+import time
+
+from modbus_client import ModbusClient
 
 IP   = "192.168.4.1"
 PORT = 503
@@ -325,28 +328,263 @@ def registers_to_float_ir(registers: list, index: int) -> float:
     
     return float_val
 
-def read_ir_data(sock):
+
+def _decode_ir_registers(meta, data_regs):
     """
-    Чтение IR данных с правильным декодированием float (алгоритм из основной программы):
-    - автоматически определяем формат float по x_min/x_max
-    - правильно декодируем все метаданные
-    - преобразуем y_values из uint16 в int16 и делим на 100.0
-    
-    Регистры:
-    - 400: статус/флаг
-    - 401-402: x min (float)
-    - 403-404: x max (float)
-    - 405-406: y min (float)
-    - 407-408: y max (float)
-    - 409-410: res_freq (float)
-    - 411-412: freq (float)
-    - 413-414: integral (float)
-    - 420-477: data (ushort) - 58 регистров
+    Декодирование IR метаданных и данных.
+    meta: 15 регистров (400-414), data_regs: 58 регистров (420-477).
     """
     import math
     import struct
-    
-    print(f"\n=== Чтение IR данных ===")
+
+    status = int(meta[0])
+
+    def _float_variants_from_regs(reg1: int, reg2: int) -> dict:
+        """Декодируем float из двух uint16 во всех популярных Modbus byte/word order."""
+        A = (reg1 >> 8) & 0xFF
+        B = reg1 & 0xFF
+        C = (reg2 >> 8) & 0xFF
+        D = reg2 & 0xFF
+        orders = {
+            "ABCD": bytes([A, B, C, D]),
+            "BADC": bytes([B, A, D, C]),
+            "CDAB": bytes([C, D, A, B]),
+            "DCBA": bytes([D, C, B, A]),
+        }
+        out: dict[str, float] = {}
+        for k, bb in orders.items():
+            try:
+                v = float(struct.unpack(">f", bb)[0])
+            except Exception:
+                continue
+            if math.isfinite(v):
+                out[k] = v
+        return out
+
+    def _float_from_regs_with_key(reg1: int, reg2: int, key: str) -> float:
+        vmap = _float_variants_from_regs(reg1, reg2)
+        return float(vmap.get(key, float("nan")))
+
+    xmin_r1, xmin_r2 = int(meta[1]), int(meta[2])
+    xmax_r1, xmax_r2 = int(meta[3]), int(meta[4])
+    x_min_variants = _float_variants_from_regs(xmin_r1, xmin_r2)
+    x_max_variants = _float_variants_from_regs(xmax_r1, xmax_r2)
+    common_keys = sorted(set(x_min_variants.keys()) & set(x_max_variants.keys()))
+
+    meta_float_key = None
+    x_min = float("nan")
+    x_max = float("nan")
+    candidates = []
+    for k in common_keys:
+        xv0 = float(x_min_variants[k])
+        xv1 = float(x_max_variants[k])
+        if not (math.isfinite(xv0) and math.isfinite(xv1)):
+            continue
+        if xv1 <= xv0:
+            continue
+        if abs(xv0) > 1e6 or abs(xv1) > 1e6:
+            continue
+        rng = xv1 - xv0
+        if rng <= 0 or rng > 1e6:
+            continue
+        score = abs(rng - 6.0) + 0.1 * abs(xv0 - 792.0) + 0.1 * abs(xv1 - 798.0)
+        candidates.append((score, k, xv0, xv1))
+
+    if candidates:
+        candidates.sort(key=lambda t: t[0])
+        _, meta_float_key, x_min, x_max = candidates[0]
+        print(f"✓ Определен формат float: {meta_float_key}, x_min={x_min:.6f}, x_max={x_max:.6f}")
+    else:
+        x_min = 792.0
+        x_max = 798.0
+        print(f"⚠️  Не удалось определить формат, используем fallback: x_min={x_min}, x_max={x_max}")
+
+    y_min_meta = float("nan")
+    y_max_meta = float("nan")
+    res_freq = float("nan")
+    freq = float("nan")
+    integral = float("nan")
+
+    y_min_r1, y_min_r2 = int(meta[5]), int(meta[6])
+    y_max_r1, y_max_r2 = int(meta[7]), int(meta[8])
+    res_r1, res_r2 = int(meta[9]), int(meta[10])
+    freq_r1, freq_r2 = int(meta[11]), int(meta[12])
+    int_r1, int_r2 = int(meta[13]), int(meta[14])
+
+    if meta_float_key:
+        y_min_meta = _float_from_regs_with_key(y_min_r1, y_min_r2, meta_float_key)
+        y_max_meta = _float_from_regs_with_key(y_max_r1, y_max_r2, meta_float_key)
+        res_freq = _float_from_regs_with_key(res_r1, res_r2, meta_float_key)
+        freq = _float_from_regs_with_key(freq_r1, freq_r2, meta_float_key)
+        integral = _float_from_regs_with_key(int_r1, int_r2, meta_float_key)
+
+        def _pick_any_in_range(reg1: int, reg2: int, lo: float, hi: float) -> float:
+            vmap = _float_variants_from_regs(reg1, reg2)
+            in_range = [v for v in vmap.values() if lo <= v <= hi]
+            if not in_range:
+                return float("nan")
+            mid = (lo + hi) / 2.0
+            in_range.sort(key=lambda v: abs(v - mid))
+            return float(in_range[0])
+
+        if not (math.isfinite(res_freq) and x_min <= res_freq <= x_max):
+            rf2 = _pick_any_in_range(res_r1, res_r2, x_min, x_max)
+            if math.isfinite(rf2):
+                res_freq = rf2
+        if not (math.isfinite(freq) and x_min <= freq <= x_max):
+            f2 = _pick_any_in_range(freq_r1, freq_r2, x_min, x_max)
+            if math.isfinite(f2):
+                freq = f2
+    else:
+        y_min_meta = registers_to_float_ir(meta, 5)
+        y_max_meta = registers_to_float_ir(meta, 7)
+
+        def _pick_variant_in_range(variants: dict, lo: float, hi: float) -> float:
+            if not variants:
+                return float("nan")
+            in_range = [(k, v) for k, v in variants.items() if lo <= v <= hi]
+            if not in_range:
+                return float("nan")
+            mid = (lo + hi) / 2.0
+            in_range.sort(key=lambda kv: abs(kv[1] - mid))
+            return float(in_range[0][1])
+
+        res_variants = _float_variants_from_regs(res_r1, res_r2)
+        freq_variants = _float_variants_from_regs(freq_r1, freq_r2)
+        res_freq = _pick_variant_in_range(res_variants, x_min, x_max)
+        freq = _pick_variant_in_range(freq_variants, x_min, x_max)
+        if not math.isfinite(res_freq):
+            res_freq = registers_to_float_ir(meta, 9)
+        if not math.isfinite(freq):
+            freq = registers_to_float_ir(meta, 11)
+        integral = registers_to_float_ir(meta, 13)
+
+    y_min = float(y_min_meta) if math.isfinite(y_min_meta) else 0.0
+    y_max = float(y_max_meta) if math.isfinite(y_max_meta) else 1.0
+
+    y_values_raw_u16 = [int(v) for v in data_regs[:58]]
+    if not y_values_raw_u16:
+        print("⚠️  Предупреждение: y_values пустые")
+
+    # Шаг 1: Преобразуем uint16 в float (умножаем на 100, делим на 65535)
+    points_float = [float(v) * 100.0 / 65535.0 for v in y_values_raw_u16]
+    n = len(points_float)
+    n_avg = int(n * 0.2)
+    if n_avg == 0:
+        n_avg = 1
+
+    m = 0.0
+    for i in range(n_avg):
+        m += points_float[i]
+    m /= float(n_avg)
+
+    print(f"  Baseline correction: n={n}, n_avg={n_avg}, baseline={m:.6f}")
+
+    max_val = 0.0
+    imax = 0
+    for i in range(n):
+        f = points_float[i] - m
+        points_float[i] = f
+        if f > max_val:
+            max_val = f
+            imax = i
+
+    # На устройстве значения от -40 до 60, у нас после baseline correction примерно -0.1 до 0.13
+    scale_factor = 460.0  # Подбираем для получения диапазона -40 до 60
+    y_values = [v * scale_factor for v in points_float]
+    max_scaled = max_val * scale_factor
+
+    print(f"  After baseline correction: max={max_val:.6f} at index={imax}")
+    print(f"  After scaling (factor={scale_factor}): max={max_scaled:.6f}, range=[{min(y_values):.6f}, {max(y_values):.6f}]")
+
+    y_values_raw_i16 = y_values_raw_u16
+
+    if y_values:
+        y_min = float(min(y_values))
+        y_max = float(max(y_values))
+
+    points = []
+    if len(y_values) >= 2 and x_max != x_min:
+        step = (x_max - x_min) / float(len(y_values) - 1)
+        for i, y in enumerate(y_values):
+            points.append({"x": x_min + step * i, "y": float(y)})
+    else:
+        for i, y in enumerate(y_values):
+            points.append({"x": float(i), "y": float(y)})
+
+    print(f"\n✓ IR спектр декодирован:")
+    print(f"  Статус: {status}")
+    print(f"  X диапазон: [{x_min:.6f}, {x_max:.6f}]")
+    print(f"  Y диапазон: [{y_min:.6f}, {y_max:.6f}]")
+    print(f"  Res freq: {res_freq:.6f}")
+    print(f"  Freq: {freq:.6f}")
+    print(f"  Integral: {integral:.6f}")
+    print(f"  Точек: {len(points)}")
+    print(f"  Raw u16 диапазон: [{min(y_values_raw_u16) if y_values_raw_u16 else 'n/a'}, {max(y_values_raw_u16) if y_values_raw_u16 else 'n/a'}]")
+    print(f"  Raw i16 диапазон: [{min(y_values_raw_i16) if y_values_raw_i16 else 'n/a'}, {max(y_values_raw_i16) if y_values_raw_i16 else 'n/a'}]")
+    print(f"  Scaled y диапазон: [{y_min:.6f}, {y_max:.6f}]")
+    print(f"  Первые 10 значений данных: {y_values[:10]}")
+    print(f"  Последние 10 значений данных: {y_values[-10:]}")
+    print(f"\n  Все 58 значений Y (после baseline correction):")
+    for i, y_val in enumerate(y_values):
+        print(f"    [{i:2d}] = {y_val:.6f}")
+    print()
+
+    return {
+        "status": status,
+        "x_min": float(x_min),
+        "x_max": float(x_max),
+        "y_min": float(y_min),
+        "y_max": float(y_max),
+        "res_freq": float(res_freq),
+        "freq": float(freq),
+        "integral": float(integral),
+        "meta_float_key": meta_float_key,
+        "data_raw_u16": y_values_raw_u16,
+        "data_raw_i16": y_values_raw_i16,
+        "data": y_values,
+        "points": points,
+    }
+
+
+def read_ir_data_direct():
+    """
+    Чтение IR данных через ModbusClient (без сокетов в test_modbus).
+    Регистры 400-414 (метаданные), 420-477 (данные).
+    """
+    print(f"\n=== Чтение IR данных (ModbusClient) ===")
+
+    client = ModbusClient(host=IP, port=PORT, unit_id=UNIT_ID)
+    if not client.connect():
+        print("❌ Ошибка подключения к устройству")
+        return None
+
+    try:
+        meta = client.read_input_registers_direct(400, 15, max_chunk=15)
+        if not meta or len(meta) < 15:
+            print(f"❌ Ошибка чтения метаданных: получено {len(meta) if meta else 0} регистров вместо 15")
+            return None
+
+        # Читаем все 58 регистров одним запросом (как сокет) — чанки по 10 дают нули для индексов 10-57
+        data_regs = client.read_input_registers_direct(420, 58, max_chunk=58)
+        if not data_regs or len(data_regs) < 58:
+            print(f"❌ Ошибка чтения данных: получено {len(data_regs) if data_regs else 0} регистров вместо 58")
+            return None
+
+        print(f"Метаданные [0..4]: {meta[0:5]} (hex: {[hex(int(x)) for x in meta[0:5]]})")
+        print(f"Данные первые 10: {data_regs[0:10]}, последние 3: {data_regs[-3:]}")
+
+        return _decode_ir_registers(meta, data_regs)
+    finally:
+        client.disconnect()
+
+
+def read_ir_data(sock):
+    """
+    Чтение IR данных через сокет (legacy).
+    Регистры 400-414 (метаданные), 420-477 (данные).
+    """
+    print(f"\n=== Чтение IR данных (сокет) ===")
     
     # Варианты для проверки (если первый не сработает)
     address_variants = [400, 399, 0]  # 400, 399 (0-based), 0 (относительная адресация)
@@ -515,250 +753,8 @@ def read_ir_data(sock):
     meta = all_registers[0:15]  # Метаданные (400-414)
     data_regs = all_registers[20:78]  # Данные (420-477)
     
-    print(f"Метаданные [0..4]: {meta[0:5]} (hex: {[hex(int(x)) for x in meta[0:5]]})")
-    print(f"Данные первые 10: {data_regs[0:10]}, последние 3: {data_regs[-3:]}")
-    
-    status = int(meta[0])
-    
-    # Функция для декодирования float из двух uint16 во всех вариантах порядка байтов
-    def _float_variants_from_regs(reg1: int, reg2: int) -> dict:
-        """Декодируем float из двух uint16 во всех популярных Modbus byte/word order.
-        A,B = bytes of reg1 (hi,lo); C,D = bytes of reg2 (hi,lo)
-        Variants: ABCD, BADC (swap bytes in words), CDAB (swap words), DCBA (full reverse)
-        """
-        A = (reg1 >> 8) & 0xFF
-        B = reg1 & 0xFF
-        C = (reg2 >> 8) & 0xFF
-        D = reg2 & 0xFF
-        orders = {
-            "ABCD": bytes([A, B, C, D]),
-            "BADC": bytes([B, A, D, C]),
-            "CDAB": bytes([C, D, A, B]),
-            "DCBA": bytes([D, C, B, A]),
-        }
-        out: dict[str, float] = {}
-        for k, bb in orders.items():
-            try:
-                v = float(struct.unpack(">f", bb)[0])
-            except Exception:
-                continue
-            if math.isfinite(v):
-                out[k] = v
-        return out
-    
-    def _float_from_regs_with_key(reg1: int, reg2: int, key: str) -> float:
-        vmap = _float_variants_from_regs(reg1, reg2)
-        return float(vmap.get(key, float("nan")))
-    
-    # Определяем формат метаданных по x_min/x_max (401-404)
-    xmin_r1, xmin_r2 = int(meta[1]), int(meta[2])
-    xmax_r1, xmax_r2 = int(meta[3]), int(meta[4])
-    x_min_variants = _float_variants_from_regs(xmin_r1, xmin_r2)
-    x_max_variants = _float_variants_from_regs(xmax_r1, xmax_r2)
-    common_keys = sorted(set(x_min_variants.keys()) & set(x_max_variants.keys()))
-    
-    meta_float_key = None
-    x_min = float("nan")
-    x_max = float("nan")
-    candidates = []
-    for k in common_keys:
-        xv0 = float(x_min_variants[k])
-        xv1 = float(x_max_variants[k])
-        if not (math.isfinite(xv0) and math.isfinite(xv1)):
-            continue
-        if xv1 <= xv0:
-            continue
-        if abs(xv0) > 1e6 or abs(xv1) > 1e6:
-            continue
-        rng = xv1 - xv0
-        if rng <= 0 or rng > 1e6:
-            continue
-        # IR обычно 792..798 (range ~6). Если несколько кандидатов — выбираем ближе к этому.
-        score = abs(rng - 6.0) + 0.1 * abs(xv0 - 792.0) + 0.1 * abs(xv1 - 798.0)
-        candidates.append((score, k, xv0, xv1))
-    
-    if candidates:
-        candidates.sort(key=lambda t: t[0])
-        _, meta_float_key, x_min, x_max = candidates[0]
-        print(f"✓ Определен формат float: {meta_float_key}, x_min={x_min:.6f}, x_max={x_max:.6f}")
-    else:
-        # fallback (старое поведение)
-        x_min = 792.0
-        x_max = 798.0
-        print(f"⚠️  Не удалось определить формат, используем fallback: x_min={x_min}, x_max={x_max}")
-    
-    # Декодируем остальные float-метаданные в том же формате
-    y_min_meta = float("nan")
-    y_max_meta = float("nan")
-    res_freq = float("nan")
-    freq = float("nan")
-    integral = float("nan")
-    
-    y_min_r1, y_min_r2 = int(meta[5]), int(meta[6])
-    y_max_r1, y_max_r2 = int(meta[7]), int(meta[8])
-    res_r1, res_r2 = int(meta[9]), int(meta[10])
-    freq_r1, freq_r2 = int(meta[11]), int(meta[12])
-    int_r1, int_r2 = int(meta[13]), int(meta[14])
-    
-    if meta_float_key:
-        y_min_meta = _float_from_regs_with_key(y_min_r1, y_min_r2, meta_float_key)
-        y_max_meta = _float_from_regs_with_key(y_max_r1, y_max_r2, meta_float_key)
-        res_freq = _float_from_regs_with_key(res_r1, res_r2, meta_float_key)
-        freq = _float_from_regs_with_key(freq_r1, freq_r2, meta_float_key)
-        integral = _float_from_regs_with_key(int_r1, int_r2, meta_float_key)
-        
-        # Иногда отдельные поля могут приехать "битые". Тогда добираем res_freq/freq из вариантов
-        def _pick_any_in_range(reg1: int, reg2: int, lo: float, hi: float) -> float:
-            vmap = _float_variants_from_regs(reg1, reg2)
-            in_range = [v for v in vmap.values() if lo <= v <= hi]
-            if not in_range:
-                return float("nan")
-            mid = (lo + hi) / 2.0
-            in_range.sort(key=lambda v: abs(v - mid))
-            return float(in_range[0])
-        
-        if not (math.isfinite(res_freq) and x_min <= res_freq <= x_max):
-            rf2 = _pick_any_in_range(res_r1, res_r2, x_min, x_max)
-            if math.isfinite(rf2):
-                res_freq = rf2
-        if not (math.isfinite(freq) and x_min <= freq <= x_max):
-            f2 = _pick_any_in_range(freq_r1, freq_r2, x_min, x_max)
-            if math.isfinite(f2):
-                freq = f2
-    else:
-        # Fallback: старый IR байтсвап
-        y_min_meta = registers_to_float_ir(meta, 5)
-        y_max_meta = registers_to_float_ir(meta, 7)
-        
-        def _pick_variant_in_range(variants: dict, lo: float, hi: float) -> float:
-            if not variants:
-                return float("nan")
-            in_range = [(k, v) for k, v in variants.items() if lo <= v <= hi]
-            if not in_range:
-                return float("nan")
-            mid = (lo + hi) / 2.0
-            in_range.sort(key=lambda kv: abs(kv[1] - mid))
-            return float(in_range[0][1])
-        
-        res_variants = _float_variants_from_regs(res_r1, res_r2)
-        freq_variants = _float_variants_from_regs(freq_r1, freq_r2)
-        res_freq = _pick_variant_in_range(res_variants, x_min, x_max)
-        freq = _pick_variant_in_range(freq_variants, x_min, x_max)
-        if not math.isfinite(res_freq):
-            res_freq = registers_to_float_ir(meta, 9)
-        if not math.isfinite(freq):
-            freq = registers_to_float_ir(meta, 11)
-        integral = registers_to_float_ir(meta, 13)
-    
-    # Для отображения: y_min/y_max по умолчанию берем из метаданных
-    y_min = float(y_min_meta) if math.isfinite(y_min_meta) else 0.0
-    y_max = float(y_max_meta) if math.isfinite(y_max_meta) else 1.0
-    
-    # y values (raw uint16 from device)
-    y_values_raw_u16 = [int(v) for v in data_regs[:58]]
-    if not y_values_raw_u16:
-        print("⚠️  Предупреждение: y_values пустые")
-    
-    # Алгоритм обработки IR данных (как на устройстве):
-    # 1. Умножаем на 100 и делим на 65535 - получаем float массив
-    # 2. Вычисляем среднее значение: количество точек делим на 5, 
-    #    суммируем первые n/5 точек, делим на n/5
-    # 3. От каждой точки отнимаем среднее - данные смещаются в ноль
-    
-    # Шаг 1: Преобразуем uint16 в float (умножаем на 100, делим на 65535)
-    points_float = [float(v) * 100.0 / 65535.0 for v in y_values_raw_u16]
-    
-    # Шаг 2: Вычисляем среднее m по первым n*0.2 точкам (20%) - как в устройстве: n = pointsN * 0.2
-    n = len(points_float)
-    n_avg = int(n * 0.2)  # pointsN * 0.2 (как в устройстве)
-    if n_avg == 0:
-        n_avg = 1  # Минимум 1 точка
-    
-    m = 0.0
-    for i in range(n_avg):
-        m += points_float[i]
-    m /= float(n_avg)
-    
-    print(f"  Baseline correction: n={n}, n_avg={n_avg}, baseline={m:.6f}")
-    
-    # Шаг 3: От каждой точки отнимаем m и обновляем массив на месте (как в устройстве)
-    # Одновременно ищем максимум max и его индекс imax
-    max_val = 0.0
-    imax = 0
-    for i in range(n):
-        f = points_float[i] - m
-        points_float[i] = f  # Обновляем массив на месте (как pointsAvg[i] = f в устройстве)
-        if f > max_val:
-            max_val = f
-            imax = i
-    
-    # Теперь points_float содержит обработанные данные (после baseline correction)
-    # Шаг 4: Масштабирование для отображения (подбираем коэффициент)
-    # На устройстве значения от -40 до 60, у нас после baseline correction примерно -0.1 до 0.13
-    # Если max ≈ 0.13 должен стать ≈ 60, то коэффициент ≈ 60/0.13 ≈ 460-470
-    # Пробуем разные коэффициенты:
-    # - 500: для max=0.13 получим 65 (близко к 60)
-    # - 470: для max=0.13 получим 61 (еще ближе)
-    # - 460: для max=0.13 получим 60 (точно)
-    scale_factor = 460.0  # Подбираем для получения диапазона -40 до 60
-    
-    y_values = [v * scale_factor for v in points_float]
-    max_scaled = max_val * scale_factor
-    
-    print(f"  After baseline correction: max={max_val:.6f} at index={imax}")
-    print(f"  After scaling (factor={scale_factor}): max={max_scaled:.6f}, range=[{min(y_values):.6f}, {max(y_values):.6f}]")
-    
-    # Для совместимости с существующим кодом
-    y_values_raw_i16 = y_values_raw_u16
-    
-    # Для отображения используем диапазон из преобразованных данных
-    if y_values:
-        y_min = float(min(y_values))
-        y_max = float(max(y_values))
-    
-    # Собираем точки для графика (x равномерно от x_min до x_max)
-    points = []
-    if len(y_values) >= 2 and x_max != x_min:
-        step = (x_max - x_min) / float(len(y_values) - 1)
-        for i, y in enumerate(y_values):
-            points.append({"x": x_min + step * i, "y": float(y)})
-    else:
-        for i, y in enumerate(y_values):
-            points.append({"x": float(i), "y": float(y)})
-    
-    print(f"\n✓ IR спектр декодирован:")
-    print(f"  Статус: {status}")
-    print(f"  X диапазон: [{x_min:.6f}, {x_max:.6f}]")
-    print(f"  Y диапазон: [{y_min:.6f}, {y_max:.6f}]")
-    print(f"  Res freq: {res_freq:.6f}")
-    print(f"  Freq: {freq:.6f}")
-    print(f"  Integral: {integral:.6f}")
-    print(f"  Точек: {len(points)}")
-    print(f"  Raw u16 диапазон: [{min(y_values_raw_u16) if y_values_raw_u16 else 'n/a'}, {max(y_values_raw_u16) if y_values_raw_u16 else 'n/a'}]")
-    print(f"  Raw i16 диапазон: [{min(y_values_raw_i16) if y_values_raw_i16 else 'n/a'}, {max(y_values_raw_i16) if y_values_raw_i16 else 'n/a'}]")
-    print(f"  Scaled y диапазон: [{y_min:.6f}, {y_max:.6f}]")
-    print(f"  Первые 10 значений данных: {y_values[:10]}")
-    print(f"  Последние 10 значений данных: {y_values[-10:]}")
-    print(f"\n  Все 58 значений Y (после baseline correction):")
-    for i, y_val in enumerate(y_values):
-        print(f"    [{i:2d}] = {y_val:.6f}")
-    print()
-        
-    return {
-        "status": status,
-        "x_min": float(x_min),
-        "x_max": float(x_max),
-        "y_min": float(y_min),
-        "y_max": float(y_max),
-        "res_freq": float(res_freq),
-        "freq": float(freq),
-        "integral": float(integral),
-        "meta_float_key": meta_float_key,
-        "data_raw_u16": y_values_raw_u16,
-        "data_raw_i16": y_values_raw_i16,
-        "data": y_values,
-        "points": points,
-    }
+    return _decode_ir_registers(meta, data_regs)
+
 
 def read_ir_data_int(sock):
     """
@@ -1833,11 +1829,15 @@ def main():
                     read_ir_data_int(sock)
                     continue
                 
-                # Специальная команда для чтения IR данных
+                # Специальная команда для чтения IR данных (ModbusClient, без сокета)
                 if cmd.lower() in ['ir', 'read_ir']:
+                    read_ir_data_direct()
+                    continue
+                # IR через сокет (legacy, для сравнения)
+                if cmd.lower() in ['ir sock', 'ir_sock', 'ir socket']:
                     read_ir_data(sock)
                     continue
-                
+
                 # Специальная команда для чтения NMR данных
                 if cmd.lower() in ['nmr', 'read_nmr']:
                     read_nmr_data(sock)
@@ -1889,7 +1889,8 @@ def main():
                     print("  Запись: 06 <адрес> <номер_реле>")
                     print("  Float: float <адрес>  - прочитать float из двух регистров")
                     print("  Int: int <адрес>  - прочитать int (16-битное знаковое) из одного регистра")
-                    print("  IR данные: ir  или  read_ir  - прочитать IR данные как float (регистры 400-414, 420-477)")
+                    print("  IR данные: ir  или  read_ir  - прочитать IR через ModbusClient (регистры 400-414, 420-477)")
+                    print("  IR через сокет: ir sock  - прочитать IR через сокет (legacy)")
                     print("  IR данные int: ir int  или  ir_int  - прочитать IR данные как int (регистры 4201-4701)")
                     print("  NMR данные: nmr  или  read_nmr")
                     print("  PXE данные: pxe  или  read_pxe  - прочитать PXE данные (регистры 500-501, 520-519+n*2)")

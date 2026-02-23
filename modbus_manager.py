@@ -73,6 +73,13 @@ class _ModbusIoWorker(QObject):
         if not self._task_timer.isActive() and not self._processing:
             self._task_timer.start(0)
 
+    @Slot(str, object)
+    def enqueueReadPriority(self, key: str, func: Callable[[], Any]):
+        """Поставить задачу чтения в начало очереди (для IR/NMR спектров)."""
+        self._read_queue.appendleft((key, func))
+        if not self._task_timer.isActive() and not self._processing:
+            self._task_timer.start(0)
+
     @Slot(str, object, object)
     def enqueueWrite(self, key: str, func: Callable[[], bool], meta: object = None):
         # Записи имеют приоритет
@@ -248,6 +255,7 @@ class ModbusManager(QObject):
     _workerConnect = Signal()
     _workerDisconnect = Signal()
     _workerEnqueueRead = Signal(str, object)
+    _workerEnqueueReadPriority = Signal(str, object)  # для IR/NMR — в начало очереди
     _workerEnqueueWrite = Signal(str, object, object)
     
     def __init__(self, parent=None):
@@ -693,6 +701,7 @@ class ModbusManager(QObject):
         self._workerConnect.connect(self._io_worker.connectClient)
         self._workerDisconnect.connect(self._io_worker.disconnectClient)
         self._workerEnqueueRead.connect(self._io_worker.enqueueRead)
+        self._workerEnqueueReadPriority.connect(self._io_worker.enqueueReadPriority)
         self._workerEnqueueWrite.connect(self._io_worker.enqueueWrite)
 
         # Результаты от worker обратно в GUI-поток
@@ -1632,7 +1641,9 @@ class ModbusManager(QObject):
         elif key == "ir":
             self._ir_request_in_flight = False
             if value is None:
-                logger.debug("IR spectrum read returned None")
+                logger.info("IR spectrum read returned None")
+            else:
+                logger.info("IR spectrum read completed, applying to graph")
             self._applyIrSpectrum(value)
         elif key == "nmr":
             self._nmr_request_in_flight = False
@@ -1717,6 +1728,13 @@ class ModbusManager(QObject):
             self._workerEnqueueRead.emit(key, func)
         except Exception:
             logger.exception("Failed to enqueue read task")
+
+    def _enqueue_read_priority(self, key: str, func: Callable[[], Any]) -> None:
+        """Поставить задачу чтения в начало очереди (IR/NMR спектры)."""
+        try:
+            self._workerEnqueueReadPriority.emit(key, func)
+        except Exception:
+            logger.exception("Failed to enqueue priority read task")
 
     def _enqueue_write(self, key: str, func: Callable[[], bool], meta: object = None) -> None:
         """Поставить задачу записи в worker-поток (приоритет)."""
@@ -2521,10 +2539,10 @@ class ModbusManager(QObject):
         Применяет результат чтения IR спектра (GUI поток) и дергает сигнал для QML графика.
         """
         if not value or not isinstance(value, dict):
-            logger.debug("IR spectrum: empty/invalid payload (not a dict or None)")
+            logger.info("IR spectrum: empty/invalid payload (not a dict or None)")
             return
         pts = value.get("points")
-        logger.debug(
+        logger.info(
             f"IR spectrum: payload received, points={len(pts) if isinstance(pts, list) else 'n/a'} "
             f"x=[{value.get('x_min')},{value.get('x_max')}] y=[{value.get('y_min')},{value.get('y_max')}] "
             f"status={value.get('status')}"
@@ -2551,26 +2569,17 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def requestIrSpectrum(self) -> bool:
         """
-        Чтение IR данных как команда `ir` из test_modbus, но безопасно:
-        отправляем запросы чанками по 10 регистров, иначе устройство может "уронить" сокет.
-
-        Регистры:
-        - 400..414 (15) метаданные
-        - 420..477 (58) данные
+        Чтение IR данных как в test_modbus (ModbusClient).
+        Регистры: 400..414 (15) метаданные, 420..477 (58) данные.
+        Читаем 58 регистров одним запросом — чанки по 10 дают нули для индексов 10-57.
         """
-        # ВРЕМЕННО ОТКЛЮЧЕНО
-        # logger.info("requestIrSpectrum (IR) временно отключен")
-        return False
-        
         if not self._is_connected or self._modbus_client is None:
-            logger.debug("IR spectrum request ignored: not connected")
+            logger.info("IR spectrum request ignored: not connected")
             return False
-        if self._ir_request_in_flight:
-            logger.debug("IR spectrum request ignored: previous request still in flight")
-            return False
-
+        # Не блокируем по _ir_request_in_flight: очередь worker переполнена (relay/valve/fan каждые 200ms),
+        # IR задача ждёт долго, и блокировка мешала периодическому обновлению графика.
         self._ir_request_in_flight = True
-        logger.debug("IR spectrum request queued")
+        logger.info("IR spectrum request queued")
 
         client = self._modbus_client
 
@@ -2581,53 +2590,16 @@ class ModbusManager(QObject):
             # Метаданные лучше читать одним блоком (15 регистров) — иначе иногда "плывут" поля.
             meta = client.read_input_registers_direct(400, 15, max_chunk=15)
             if meta is None or len(meta) < 15:
-                logger.debug(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
+                logger.info(f"IR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
-            # Основной режим: безопасно по 10 регистров.
-            data_regs = client.read_input_registers_direct(420, 58, max_chunk=10)
+            # Читаем все 58 регистров одним запросом (как в test_modbus)
+            data_regs = client.read_input_registers_direct(420, 58, max_chunk=58)
             if data_regs is None or len(data_regs) < 58:
-                logger.debug(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                logger.info(f"IR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
 
-            # Диагностика качества: если почти все значения нулевые (часто это признак, что устройство
-            # не поддерживает чтение под-диапазонов 430.. и т.п.), пробуем один раз читать весь блок 58.
-            try:
-                nz_indices = [i for i, v in enumerate(data_regs) if int(v) != 0]
-                last_nz_idx = nz_indices[-1] if nz_indices else -1
-                nz_count = len(nz_indices)
-            except Exception:
-                last_nz_idx = -1
-                nz_count = 0
-
-            if last_nz_idx >= 0 and last_nz_idx <= 9:
-                logger.debug(
-                    f"IR spectrum: suspicious tail zeros (last_nonzero_idx={last_nz_idx}, nonzero_count={nz_count}). "
-                    f"Trying single-block read (58 regs) once."
-                )
-                data_full = client.read_input_registers_direct(420, 58, max_chunk=58)
-                if data_full is not None and len(data_full) >= 58:
-                    try:
-                        nz_full = [i for i, v in enumerate(data_full) if int(v) != 0]
-                        last_nz_full = nz_full[-1] if nz_full else -1
-                        nz_count_full = len(nz_full)
-                    except Exception:
-                        last_nz_full = -1
-                        nz_count_full = 0
-
-                    if last_nz_full > last_nz_idx or nz_count_full > nz_count:
-                        logger.debug(
-                            f"IR spectrum: single-block read looks better "
-                            f"(last_nonzero_idx {last_nz_idx}->{last_nz_full}, nonzero_count {nz_count}->{nz_count_full})"
-                        )
-                        data_regs = data_full
-                    else:
-                        logger.debug(
-                            f"IR spectrum: single-block read did not improve "
-                            f"(last_nonzero_idx={last_nz_full}, nonzero_count={nz_count_full}). Keeping chunked."
-                        )
-
-            logger.debug(
+            logger.info(
                 f"IR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
                 f"data_length={len(data_regs)} data_first10={data_regs[0:10]} data_last10={data_regs[-10:] if len(data_regs) >= 10 else data_regs} "
                 f"data_nonzero_count={sum(1 for v in data_regs if int(v) != 0)}"
@@ -2959,10 +2931,10 @@ class ModbusManager(QObject):
             except Exception as e:
                 logger.error(f"IR spectrum: failed to verify data_json: {e}")
             
-            logger.debug(f"IR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
+            logger.info(f"IR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
             return result
 
-        self._enqueue_read("ir", task)
+        self._enqueue_read_priority("ir", task)
         return True
 
     @Slot(result=bool)
@@ -3200,7 +3172,7 @@ class ModbusManager(QObject):
             logger.debug(f"NMR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
             return result
 
-        self._enqueue_read("nmr", task)
+        self._enqueue_read_priority("nmr", task)
         return True
 
     def _check_connection(self):
