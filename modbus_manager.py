@@ -2940,26 +2940,15 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def requestNmrSpectrum(self) -> bool:
         """
-        Чтение NMR данных как команда `nmr` из test_modbus, но безопасно:
-        отправляем запросы чанками по 10 регистров, иначе устройство может "уронить" сокет.
-
-        Регистры:
-        - 100..116 (17) метаданные
-        - 120..375 (256) данные
+        Чтение NMR данных как в test_modbus (ModbusClient).
+        Регистры: 100..116 (17) метаданные, 120..375 (256) данные.
+        Читаем 256 регистров одним запросом (как IR — чанки дают нули).
         """
-        # ВРЕМЕННО ОТКЛЮЧЕНО
-        # logger.info("requestNmrSpectrum (NMR) временно отключен")
-        return False
-
         if not self._is_connected or self._modbus_client is None:
-            logger.debug("NMR spectrum request ignored: not connected")
+            logger.info("NMR spectrum request ignored: not connected")
             return False
-        if self._nmr_request_in_flight:
-            logger.debug("NMR spectrum request ignored: previous request still in flight")
-            return False
-
         self._nmr_request_in_flight = True
-        logger.debug("NMR spectrum request queued")
+        logger.info("NMR spectrum request queued")
 
         client = self._modbus_client
 
@@ -2970,16 +2959,16 @@ class ModbusManager(QObject):
             # Читаем метаданные 100-116 (17 регистров)
             meta = client.read_input_registers_direct(100, 17, max_chunk=17)
             if meta is None or len(meta) < 17:
-                logger.debug(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
+                logger.info(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
-            # Читаем данные 120-375 (256 регистров) частями по 10
-            data_regs = client.read_input_registers_direct(120, 256, max_chunk=10)
+            # Читаем все 256 регистров одним запросом (как IR)
+            data_regs = client.read_input_registers_direct(120, 256, max_chunk=256)
             if data_regs is None or len(data_regs) < 256:
-                logger.debug(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
+                logger.info(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
 
-            logger.debug(
+            logger.info(
                 f"NMR spectrum: raw meta[0..4]={meta[0:5]} meta_hex={[hex(int(x)) for x in meta[0:5]]} "
                 f"data_length={len(data_regs)} data_first10={data_regs[0:10]} data_last10={data_regs[-10:] if len(data_regs) >= 10 else data_regs}"
             )
