@@ -2962,8 +2962,10 @@ class ModbusManager(QObject):
                 logger.info(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
-            # Читаем все 256 регистров одним запросом (как IR)
-            data_regs = client.read_input_registers_direct(120, 256, max_chunk=256)
+            # Читаем все 256 регистров
+            # Важно: используем чанки по 30 регистров, как в test_modbus.py (read_nmr_data)
+            # Большие запросы (256 регистров) могут не поддерживаться устройством или вызывать переполнение буфера
+            data_regs = client.read_input_registers_direct(120, 256, max_chunk=30)
             if data_regs is None or len(data_regs) < 256:
                 logger.info(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None

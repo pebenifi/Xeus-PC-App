@@ -2593,10 +2593,12 @@ class ModbusClient:
 
                         resp = b""
                         # Собираем ответ до полного фрейма
-                        deadline = time.time() + 0.3  # Уменьшаем deadline с 0.5 до 0.3 секунды
+                        # Увеличиваем deadline для больших пакетов (например, спектр 256 регистров = 517 байт)
+                        deadline = time.time() + 1.0
                         while time.time() < deadline:
                             try:
-                                part = sock.recv(512)
+                                # Увеличиваем буфер чтения, чтобы вместить весь пакет (517 байт для 256 регистров)
+                                part = sock.recv(2048)
                             except socket.timeout:
                                 break
                             if not part:
