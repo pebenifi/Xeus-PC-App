@@ -334,7 +334,8 @@ Item {
         id: irRetryTimer
         interval: 2000
         repeat: true
-        running: root.cachedIsConnected
+        // Пока открыта таблица External Relays — не дёргаем спектры (иначе очередь Modbus забивается и падают записи реле).
+        running: root.cachedIsConnected && !relayTableGrid.visible
         onTriggered: {
             if (modbusManager) {
                 modbusManager.requestIrSpectrum()
@@ -355,7 +356,7 @@ Item {
         id: nmrRetryTimer
         interval: 2000
         repeat: true
-        running: root.cachedIsConnected
+        running: root.cachedIsConnected && !relayTableGrid.visible
         onTriggered: {
             if (modbusManager) modbusManager.requestNmrSpectrum()
         }

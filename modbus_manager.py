@@ -82,8 +82,13 @@ class _ModbusIoWorker(QObject):
 
     @Slot(str, object, object)
     def enqueueWrite(self, key: str, func: Callable[[], bool], meta: object = None):
-        # Записи имеют приоритет
-        self._write_queue.append((key, func, meta))
+        # Записи имеют приоритет; реле/клапаны/вентиляторы — в начало очереди записей,
+        # чтобы клик с UI не ждал длинной очереди из предыдущих записей.
+        item = (key, func, meta)
+        if key.startswith("relay:") or key.startswith("fan:") or key.startswith("valve:"):
+            self._write_queue.appendleft(item)
+        else:
+            self._write_queue.append(item)
         if not self._task_timer.isActive() and not self._processing:
             self._task_timer.start(0)
 

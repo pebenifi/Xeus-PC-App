@@ -978,18 +978,21 @@ class ModbusClient:
             logger.error(f"Номер реле должен быть от 1 до 8, получен {relay_num}")
             return False
         
-        # Читаем текущее состояние с повторными попытками, если нужно
-        # Используем обычный pymodbus для согласованности с остальными операциями
+        # Читаем текущее состояние с повторными попытками (на Clinical экране много фоновых чтений —
+        # без паузы/запасного варианта read_input_register часто возвращает None и запись реле не доходит).
         current_value = None
-        for attempt in range(3):  # До 3 попыток
+        for attempt in range(6):
             current_value = self.read_input_register(1021)
             if current_value is not None:
                 break
-            if attempt < 2:  # Не ждем после последней попытки
-                time.sleep(0.1)  # Небольшая задержка перед повторной попыткой
+            current_value = self.read_holding_register(1021)
+            if current_value is not None:
+                break
+            if attempt < 5:
+                time.sleep(0.05 * (attempt + 1))
         
         if current_value is None:
-            logger.error("Не удалось прочитать текущее состояние регистра 1021 после нескольких попыток")
+            logger.error("Не удалось прочитать текущее состояние регистра 1021 (input/holding) после нескольких попыток")
             return False
         
         current_low_byte = current_value & 0xFF
@@ -2593,12 +2596,10 @@ class ModbusClient:
 
                         resp = b""
                         # Собираем ответ до полного фрейма
-                        # Увеличиваем deadline для больших пакетов (например, спектр 256 регистров = 517 байт)
-                        deadline = time.time() + 1.0
+                        deadline = time.time() + 0.3  # Уменьшаем deadline с 0.5 до 0.3 секунды
                         while time.time() < deadline:
                             try:
-                                # Увеличиваем буфер чтения, чтобы вместить весь пакет (517 байт для 256 регистров)
-                                part = sock.recv(2048)
+                                part = sock.recv(512)
                             except socket.timeout:
                                 break
                             if not part:
