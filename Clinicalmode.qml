@@ -1731,7 +1731,7 @@ Item {
                             Text { text: "Voltage Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserVoltageValue
-                                text: "0.00 V"
+                                text: modbusManager ? modbusManager.laserPSUVoltage.toFixed(2) + " V" : "0.00 V"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1758,6 +1758,13 @@ Item {
                                     background: Rectangle {
                                         color: Constants.colorGrey
                                     }
+                                    text: modbusManager ? modbusManager.laserPSUVoltageSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setLaserPSUVoltageSetpoint(val)
+                                        }
+                                    }
                                 }
                                 Text { text: "V"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
@@ -1773,7 +1780,7 @@ Item {
                             Text { text: "Current Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: laserCurrentValue
-                                text: "0.00 A"
+                                text: modbusManager ? modbusManager.laserPSUCurrent.toFixed(2) + " A" : "0.00 A"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1799,6 +1806,13 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
+                                    }
+                                    text: modbusManager ? modbusManager.laserPSUSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setLaserPSUTemperature(val)
+                                        }
                                     }
                                 }
                                 Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
@@ -1862,7 +1876,7 @@ Item {
                             Text { text: "Voltage Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: magnetVoltageValue
-                                text: "0.00 V"
+                                text: modbusManager ? modbusManager.magnetPSUVoltage.toFixed(2) + " V" : "0.00 V"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1889,6 +1903,13 @@ Item {
                                     background: Rectangle {
                                         color: Constants.colorGrey
                                     }
+                                    text: modbusManager ? modbusManager.magnetPSUVoltageSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setMagnetPSUVoltageSetpoint(val)
+                                        }
+                                    }
                                 }
                                 Text { text: "V"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
@@ -1904,7 +1925,7 @@ Item {
                             Text { text: "Current Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: magnetCurrentValue
-                                text: "0.00 A"
+                                text: modbusManager ? modbusManager.magnetPSUCurrent.toFixed(2) + " A" : "0.00 A"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1930,6 +1951,13 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
+                                    }
+                                    text: modbusManager ? modbusManager.magnetPSUSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setMagnetPSUTemperature(val)
+                                        }
                                     }
                                 }
                                 Text { text: "A"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
@@ -2032,7 +2060,7 @@ Item {
                             Text { text: "Temperature Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: pidControllerTemperatureValue
-                                text: "0.00 °C"
+                                text: modbusManager ? modbusManager.pidControllerTemperature.toFixed(2) + " °C" : "0.00 °C"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -2058,6 +2086,13 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
+                                    }
+                                    text: modbusManager ? modbusManager.pidControllerSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setPIDControllerTemperature(val)
+                                        }
                                     }
                                 }
                                 Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
@@ -2155,7 +2190,7 @@ Item {
                             Text { text: "Alicat 1 Xenon Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: xenonPressure
-                                text: "0.00 Torr"
+                                text: modbusManager ? modbusManager.xenonPressure.toFixed(2) + " Torr" : "0.00 Torr"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -2181,6 +2216,20 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
+                                    }
+                                    text: modbusManager ? modbusManager.xenonSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setXenonSetpoint(val)
+                                        }
+                                    }
+                                    text: modbusManager ? modbusManager.xenonSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setXenonSetpoint(val)
+                                        }
                                     }
                                 }
                                 Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
@@ -2221,7 +2270,7 @@ Item {
                             Text { text: "Alicat 2 N2 Value:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: n2Pressure
-                                text: "0.00 Torr"
+                                text: modbusManager ? modbusManager.n2Pressure.toFixed(3) + " Torr" : "0.00 Torr"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -2247,6 +2296,13 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
+                                    }
+                                    text: modbusManager ? modbusManager.n2Setpoint.toFixed(3) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setN2Setpoint(val)
+                                        }
                                     }
                                 }
                                 Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
@@ -2315,7 +2371,7 @@ Item {
                             Text { text: "Vacuum Pressure:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: vacuumControllerPressure
-                                text: "0.00 mTorr"
+                                text: modbusManager ? modbusManager.vacuumPressure.toFixed(2) + " mTorr" : "0.00 mTorr"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5958,7 +6014,7 @@ Item {
                             Text { text: "Inlet Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: waterChillerInletTemp
-                                text: "0.00 °C"
+                                text: modbusManager ? modbusManager.waterChillerTemperature.toFixed(2) + " °C" : "0.00 °C"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -5975,7 +6031,7 @@ Item {
                             Text { text: "Outlet Temp:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter; width: 120 }
                             Text { 
                                 id: waterChillerOutletTemp
-                                text: "0.00 °C"
+                                text: modbusManager ? modbusManager.waterChillerTemperature.toFixed(2) + " °C" : "0.00 °C"
                                 font: Constants.fontDetailPx
                                 color: Constants.colorBlack
                                 anchors.verticalCenter: parent.verticalCenter
@@ -6001,6 +6057,20 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
+                                    }
+                                    text: modbusManager ? modbusManager.waterChillerSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setWaterChillerTemperature(val)
+                                        }
+                                    }
+                                    text: modbusManager ? modbusManager.waterChillerSetpoint.toFixed(2) : "0.00"
+                                    onEditingFinished: {
+                                        var val = parseFloat(text)
+                                        if (!isNaN(val) && modbusManager) {
+                                            modbusManager.setWaterChillerTemperature(val)
+                                        }
                                     }
                                 }
                                 Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
