@@ -413,12 +413,9 @@ Rectangle {
         }
 
         onClicked: {
-            // Переходим на Clinicalmode - ВРЕМЕННО ОТКЛЮЧЕНО
-            /*
             if (mainWindow) {
                 mainWindow.changeScreen("Clinicalmode");
             }
-            */
         }
     }
 }

@@ -573,12 +573,9 @@ Item {
             }
 
             onClicked: {
-                // Возвращаемся на Screen01 - ВРЕМЕННО ОТКЛЮЧЕНО
-                /*
                 if (mainWindow) {
                     mainWindow.changeScreen("Screen01");
                 }
-                */
             }
         }
 
