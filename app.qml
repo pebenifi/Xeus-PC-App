@@ -58,7 +58,12 @@ Window {
             visible: true
             enabled: true
             z: 1
-            Screen01 { anchors.fill: parent }
+            Screen01 { 
+                anchors.fill: parent 
+                onChangeScreenRequested: function(screenName) {
+                    mainWindow.changeScreen(screenName)
+                }
+            }
         }
 
         Loader {
@@ -73,6 +78,9 @@ Window {
             onLoaded: { 
                 if (item) {
                     item.visible = true
+                    item.changeScreenRequested.connect(function(screenName) {
+                        mainWindow.changeScreen(screenName)
+                    })
                     // Когда Clinicalmode загружен и виден, возобновляем опросы для работы вкладок
                     if (clinicalModeLoader.z === 1 && typeof modbusManager !== 'undefined' && modbusManager) {
                         modbusManager.resumePolling()

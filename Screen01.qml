@@ -23,6 +23,8 @@ Rectangle {
     palette.windowText: Constants.colorBlack
     palette.text: Constants.colorBlack
 
+    signal changeScreenRequested(string screenName)
+
  Item {
     id: screen01
     anchors.fill: parent
@@ -413,9 +415,7 @@ Rectangle {
         }
 
         onClicked: {
-            if (mainWindow) {
-                mainWindow.changeScreen("Clinicalmode");
-            }
+            changeScreenRequested("Clinicalmode");
         }
     }
 }

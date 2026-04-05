@@ -12,6 +12,8 @@ Item {
     palette.windowText: Constants.colorBlack
     palette.text: Constants.colorBlack
     
+    signal changeScreenRequested(string screenName)
+    
     // Кэшируем состояние подключения для мгновенного доступа без синхронных операций
     // Инициализируем через сигнал после загрузки компонента, чтобы не блокировать рендеринг
     property bool cachedIsConnected: false
@@ -573,9 +575,7 @@ Item {
             }
 
             onClicked: {
-                if (mainWindow) {
-                    mainWindow.changeScreen("Screen01");
-                }
+                changeScreenRequested("Screen01");
             }
         }
 
