@@ -6175,7 +6175,6 @@ Item {
             Text {
                 width: parent.width
                 font: Constants.fontSubHeaderPx
-                font.bold: true
                 color: Constants.colorBlack
                 text: "Current Values"
             }
