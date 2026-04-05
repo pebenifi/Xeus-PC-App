@@ -609,59 +609,59 @@ class ModbusManager(QObject):
         # Таймер для чтения регистров Power Supply (Laser PSU и Magnet PSU) - быстрое обновление
         self._power_supply_timer = QTimer(self)
         self._power_supply_timer.timeout.connect(self._readPowerSupply)
-        # self._power_supply_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._power_supply_timer.setInterval(1000)
 
         # Таймер для чтения регистров PID Controller (1411, 1421, 1431) - быстрое обновление
         self._pid_controller_timer = QTimer(self)
         self._pid_controller_timer.timeout.connect(self._readPIDController)
-        # self._pid_controller_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._pid_controller_timer.setInterval(1000)
 
         # Таймер для чтения регистров Alicats (1611, 1621, 1651, 1661) - быстрое обновление
         self._alicats_timer = QTimer(self)
         self._alicats_timer.timeout.connect(self._readAlicats)
-        # self._alicats_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._alicats_timer.setInterval(1000)
         self._reading_alicats = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистра Vacuum Controller (1701) - быстрое обновление
         self._vacuum_controller_timer = QTimer(self)
         self._vacuum_controller_timer.timeout.connect(self._readVacuumController)
-        # self._vacuum_controller_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._vacuum_controller_timer.setInterval(1000)
         self._reading_vacuum_controller = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров Laser (1811, 1821, 1831, 1841) - быстрое обновление
         self._laser_timer = QTimer(self)
         self._laser_timer.timeout.connect(self._readLaser)
-        # self._laser_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._laser_timer.setInterval(1000)
         self._reading_laser = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров SEOP Parameters (3011-3081) - быстрое обновление
         self._seop_parameters_timer = QTimer(self)
         self._seop_parameters_timer.timeout.connect(self._readSEOPParameters)
-        # self._seop_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._seop_parameters_timer.setInterval(1000)
         self._reading_seop_parameters = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров Calculated Parameters (4011-4101) - быстрое обновление
         self._calculated_parameters_timer = QTimer(self)
         self._calculated_parameters_timer.timeout.connect(self._readCalculatedParameters)
-        # self._calculated_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._calculated_parameters_timer.setInterval(1000)
         self._reading_calculated_parameters = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров Measured Parameters (5011-5081) - быстрое обновление
         self._measured_parameters_timer = QTimer(self)
         self._measured_parameters_timer.timeout.connect(self._readMeasuredParameters)
-        # self._measured_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._measured_parameters_timer.setInterval(1000)
         self._reading_measured_parameters = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров Additional Parameters (6011-6201) - быстрое обновление
         self._additional_parameters_timer = QTimer(self)
         self._additional_parameters_timer.timeout.connect(self._readAdditionalParameters)
-        # self._additional_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._additional_parameters_timer.setInterval(1000)
         self._reading_additional_parameters = False  # Флаг для предотвращения параллельных чтений
         
         # Таймер для чтения регистров Manual mode settings (6301-6381) - быстрое обновление
         self._manual_mode_settings_timer = QTimer(self)
         self._manual_mode_settings_timer.timeout.connect(self._readManualModeSettings)
-        # self._manual_mode_settings_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._manual_mode_settings_timer.setInterval(1000)
         self._reading_manual_mode_settings = False  # Флаг для предотвращения параллельных чтений
 
         # Список таймеров для паузы/возобновления опросов
@@ -1503,13 +1503,24 @@ class ModbusManager(QObject):
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
+        
+        QTimer.singleShot(350, lambda: self._power_supply_timer.start())
+        QTimer.singleShot(380, lambda: self._pid_controller_timer.start())
+        QTimer.singleShot(410, lambda: self._alicats_timer.start())
+        QTimer.singleShot(440, lambda: self._vacuum_controller_timer.start())
+        QTimer.singleShot(470, lambda: self._laser_timer.start())
+        QTimer.singleShot(500, lambda: self._seop_parameters_timer.start())
+        QTimer.singleShot(530, lambda: self._calculated_parameters_timer.start())
+        QTimer.singleShot(560, lambda: self._measured_parameters_timer.start())
+        QTimer.singleShot(590, lambda: self._additional_parameters_timer.start())
+        QTimer.singleShot(620, lambda: self._manual_mode_settings_timer.start())
 
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
         self._magnet_psu_setpoint_auto_update_timer.start()
         self._laser_psu_setpoint_auto_update_timer.start()
         self._seop_cell_setpoint_auto_update_timer.start()
-        # self._pid_controller_setpoint_auto_update_timer.start()
+        self._pid_controller_setpoint_auto_update_timer.start()
         self._xenon_setpoint_auto_update_timer.start()
         self._n2_setpoint_auto_update_timer.start()
 
@@ -3439,7 +3450,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1421_direct(register_value)
+            result = client.write_holding_register(1421, register_value)
             if result:
                 logger.info(f"✅ Заданная температура SEOP Cell успешно установлена: {temperature}°C")
             else:
@@ -3601,7 +3612,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1621_direct(register_value)
+            result = client.write_holding_register(1621, register_value)
             if result:
                 logger.info(f"✅ Заданное давление Xenon успешно установлено: {pressure} Torr")
             else:
@@ -3699,7 +3710,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1661_direct(register_value)
+            result = client.write_holding_register(1661, register_value)
             if result:
                 logger.info(f"✅ Заданное давление N2 успешно установлено: {pressure} Torr")
             else:
@@ -4257,25 +4268,25 @@ class ModbusManager(QObject):
             
             # Laser PSU
             if laser_voltage_regs and len(laser_voltage_regs) >= 2:
-                result['laser_voltage'] = _registers_to_float(int(laser_voltage_regs[0]), int(laser_voltage_regs[1]))
+                result['laser_voltage'] = _registers_to_float(int(laser_voltage), int(laser_voltage_regs[1]))
             if laser_current_regs and len(laser_current_regs) >= 2:
-                result['laser_current'] = _registers_to_float(int(laser_current_regs[0]), int(laser_current_regs[1]))
+                result['laser_current'] = _registers_to_float(int(laser_current), int(laser_current_regs[1]))
             if laser_voltage_setpoint_regs and len(laser_voltage_setpoint_regs) >= 2:
-                result['laser_voltage_setpoint'] = _registers_to_float(int(laser_voltage_setpoint_regs[0]), int(laser_voltage_setpoint_regs[1]))
+                result['laser_voltage_setpoint'] = _registers_to_float(int(laser_voltage_setpoint), int(laser_voltage_setpoint_regs[1]))
             if laser_current_setpoint_regs and len(laser_current_setpoint_regs) >= 2:
-                result['laser_current_setpoint'] = _registers_to_float(int(laser_current_setpoint_regs[0]), int(laser_current_setpoint_regs[1]))
+                result['laser_current_setpoint'] = _registers_to_float(int(laser_current_setpoint), int(laser_current_setpoint_regs[1]))
             if laser_state_reg and len(laser_state_reg) >= 1:
                 result['laser_state'] = bool(int(laser_state_reg[0]) & 0x01)
             
             # Magnet PSU
             if magnet_voltage_regs and len(magnet_voltage_regs) >= 2:
-                result['magnet_voltage'] = _registers_to_float(int(magnet_voltage_regs[0]), int(magnet_voltage_regs[1]))
+                result['magnet_voltage'] = _registers_to_float(int(magnet_voltage), int(magnet_voltage_regs[1]))
             if magnet_current_regs and len(magnet_current_regs) >= 2:
-                result['magnet_current'] = _registers_to_float(int(magnet_current_regs[0]), int(magnet_current_regs[1]))
+                result['magnet_current'] = _registers_to_float(int(magnet_current), int(magnet_current_regs[1]))
             if magnet_voltage_setpoint_regs and len(magnet_voltage_setpoint_regs) >= 2:
-                result['magnet_voltage_setpoint'] = _registers_to_float(int(magnet_voltage_setpoint_regs[0]), int(magnet_voltage_setpoint_regs[1]))
+                result['magnet_voltage_setpoint'] = _registers_to_float(int(magnet_voltage_setpoint), int(magnet_voltage_setpoint_regs[1]))
             if magnet_current_setpoint_regs and len(magnet_current_setpoint_regs) >= 2:
-                result['magnet_current_setpoint'] = _registers_to_float(int(magnet_current_setpoint_regs[0]), int(magnet_current_setpoint_regs[1]))
+                result['magnet_current_setpoint'] = _registers_to_float(int(magnet_current_setpoint), int(magnet_current_setpoint_regs[1]))
             if magnet_state_reg and len(magnet_state_reg) >= 1:
                 result['magnet_state'] = bool(int(magnet_state_reg[0]) & 0x01)
             
@@ -4468,71 +4479,71 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров SEOP Parameters"""
             # Регистры 3011-3081 - первые 8 параметров
-            laser_max_temp_regs = client.read_input_registers_direct(3011, 1, max_chunk=1)
-            laser_min_temp_regs = client.read_input_registers_direct(3021, 1, max_chunk=1)
-            cell_max_temp_regs = client.read_input_registers_direct(3031, 1, max_chunk=1)
-            cell_min_temp_regs = client.read_input_registers_direct(3041, 1, max_chunk=1)
-            ramp_temp_regs = client.read_input_registers_direct(3051, 1, max_chunk=1)
-            seop_temp_regs = client.read_input_registers_direct(3061, 1, max_chunk=1)
-            cell_refill_temp_regs = client.read_input_registers_direct(3071, 1, max_chunk=1)
-            loop_time_regs = client.read_input_registers_direct(3081, 1, max_chunk=1)
+            laser_max_temp = client.read_input_register(3011)
+            laser_min_temp = client.read_input_register(3021)
+            cell_max_temp = client.read_input_register(3031)
+            cell_min_temp = client.read_input_register(3041)
+            ramp_temp = client.read_input_register(3051)
+            seop_temp = client.read_input_register(3061)
+            cell_refill_temp = client.read_input_register(3071)
+            loop_time = client.read_input_register(3081)
             # Новые регистры 3091-3151
-            process_duration_regs = client.read_input_registers_direct(3091, 1, max_chunk=1)
-            laser_max_output_power_regs = client.read_input_registers_direct(3101, 1, max_chunk=1)
-            laser_psu_max_current_regs = client.read_input_registers_direct(3111, 1, max_chunk=1)
-            water_chiller_max_temp_regs = client.read_input_registers_direct(3121, 1, max_chunk=1)
-            water_chiller_min_temp_regs = client.read_input_registers_direct(3131, 1, max_chunk=1)
-            xe_concentration_regs = client.read_input_registers_direct(3141, 1, max_chunk=1)
-            water_proton_concentration_regs = client.read_input_registers_direct(3151, 1, max_chunk=1)
+            process_duration = client.read_input_register(3091)
+            laser_max_output_power = client.read_input_register(3101)
+            laser_psu_max_current = client.read_input_register(3111)
+            water_chiller_max_temp = client.read_input_register(3121)
+            water_chiller_min_temp = client.read_input_register(3131)
+            xe_concentration = client.read_input_register(3141)
+            water_proton_concentration = client.read_input_register(3151)
             # Регистры 3171-3181
-            cell_number_regs = client.read_input_registers_direct(3171, 1, max_chunk=1)
-            refill_cycle_regs = client.read_input_registers_direct(3181, 1, max_chunk=1)
+            cell_number = client.read_input_register(3171)
+            refill_cycle = client.read_input_register(3181)
             
             result = {}
-            if laser_max_temp_regs and len(laser_max_temp_regs) >= 1:
-                result['laser_max_temp'] = float(int(laser_max_temp_regs[0])) / 100.0
-            if laser_min_temp_regs and len(laser_min_temp_regs) >= 1:
-                result['laser_min_temp'] = float(int(laser_min_temp_regs[0])) / 100.0
-            if cell_max_temp_regs and len(cell_max_temp_regs) >= 1:
-                result['cell_max_temp'] = float(int(cell_max_temp_regs[0])) / 100.0
-            if cell_min_temp_regs and len(cell_min_temp_regs) >= 1:
-                result['cell_min_temp'] = float(int(cell_min_temp_regs[0])) / 100.0
-            if ramp_temp_regs and len(ramp_temp_regs) >= 1:
-                result['ramp_temp'] = float(int(ramp_temp_regs[0])) / 100.0
-            if seop_temp_regs and len(seop_temp_regs) >= 1:
-                result['seop_temp'] = float(int(seop_temp_regs[0])) / 100.0
-            if cell_refill_temp_regs and len(cell_refill_temp_regs) >= 1:
-                result['cell_refill_temp'] = float(int(cell_refill_temp_regs[0])) / 100.0
-            if loop_time_regs and len(loop_time_regs) >= 1:
+            if laser_max_temp is not None:
+                result['laser_max_temp'] = float(int(laser_max_temp)) / 100.0
+            if laser_min_temp is not None:
+                result['laser_min_temp'] = float(int(laser_min_temp)) / 100.0
+            if cell_max_temp is not None:
+                result['cell_max_temp'] = float(int(cell_max_temp)) / 100.0
+            if cell_min_temp is not None:
+                result['cell_min_temp'] = float(int(cell_min_temp)) / 100.0
+            if ramp_temp is not None:
+                result['ramp_temp'] = float(int(ramp_temp)) / 100.0
+            if seop_temp is not None:
+                result['seop_temp'] = float(int(seop_temp)) / 100.0
+            if cell_refill_temp is not None:
+                result['cell_refill_temp'] = float(int(cell_refill_temp)) / 100.0
+            if loop_time is not None:
                 # SEOP loop time в секундах - значение уже в секундах
-                result['loop_time'] = float(int(loop_time_regs[0]))
-            if process_duration_regs and len(process_duration_regs) >= 1:
+                result['loop_time'] = float(int(loop_time))
+            if process_duration is not None:
                 # SEOP process duration в секундах - значение уже в секундах (отображается как m:s)
-                result['process_duration'] = float(int(process_duration_regs[0]))
-            if laser_max_output_power_regs and len(laser_max_output_power_regs) >= 1:
+                result['process_duration'] = float(int(process_duration))
+            if laser_max_output_power is not None:
                 # Laser Max Output Power в W - преобразуем из int (W * 100) в float
-                result['laser_max_output_power'] = float(int(laser_max_output_power_regs[0])) / 100.0
-            if laser_psu_max_current_regs and len(laser_psu_max_current_regs) >= 1:
+                result['laser_max_output_power'] = float(int(laser_max_output_power)) / 100.0
+            if laser_psu_max_current is not None:
                 # Laser PSU MAX Current в A - преобразуем из int (A * 100) в float
-                result['laser_psu_max_current'] = float(int(laser_psu_max_current_regs[0])) / 100.0
-            if water_chiller_max_temp_regs and len(water_chiller_max_temp_regs) >= 1:
+                result['laser_psu_max_current'] = float(int(laser_psu_max_current)) / 100.0
+            if water_chiller_max_temp is not None:
                 # Water Chiller Max Temp в C - преобразуем из int (температура * 100) в float
-                result['water_chiller_max_temp'] = float(int(water_chiller_max_temp_regs[0])) / 100.0
-            if water_chiller_min_temp_regs and len(water_chiller_min_temp_regs) >= 1:
+                result['water_chiller_max_temp'] = float(int(water_chiller_max_temp)) / 100.0
+            if water_chiller_min_temp is not None:
                 # Water Chiller Min Temp в C - преобразуем из int (температура * 100) в float
-                result['water_chiller_min_temp'] = float(int(water_chiller_min_temp_regs[0])) / 100.0
-            if xe_concentration_regs and len(xe_concentration_regs) >= 1:
+                result['water_chiller_min_temp'] = float(int(water_chiller_min_temp)) / 100.0
+            if xe_concentration is not None:
                 # 129Xe concentration в mMol - значение уже в mMol, ничего умножать не надо
-                result['xe_concentration'] = float(int(xe_concentration_regs[0]))
-            if water_proton_concentration_regs and len(water_proton_concentration_regs) >= 1:
+                result['xe_concentration'] = float(int(xe_concentration))
+            if water_proton_concentration is not None:
                 # Water proton concentration в Mol - преобразуем из int (Mol * 100) в float
-                result['water_proton_concentration'] = float(int(water_proton_concentration_regs[0])) / 100.0
-            if cell_number_regs and len(cell_number_regs) >= 1:
+                result['water_proton_concentration'] = float(int(water_proton_concentration)) / 100.0
+            if cell_number is not None:
                 # Cell number - целое число
-                result['cell_number'] = int(cell_number_regs[0])
-            if refill_cycle_regs and len(refill_cycle_regs) >= 1:
+                result['cell_number'] = int(cell_number)
+            if refill_cycle is not None:
                 # Refill cycle - целое число
-                result['refill_cycle'] = int(refill_cycle_regs[0])
+                result['refill_cycle'] = int(refill_cycle)
             
             return result
         
@@ -4549,48 +4560,48 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Calculated Parameters"""
             # Регистры 4011-4101
-            electron_polarization_regs = client.read_input_registers_direct(4011, 1, max_chunk=1)
-            xe_polarization_regs = client.read_input_registers_direct(4021, 1, max_chunk=1)
-            buildup_rate_regs = client.read_input_registers_direct(4031, 1, max_chunk=1)
-            electron_polarization_error_regs = client.read_input_registers_direct(4041, 1, max_chunk=1)
-            xe_polarization_error_regs = client.read_input_registers_direct(4051, 1, max_chunk=1)
-            buildup_rate_error_regs = client.read_input_registers_direct(4061, 1, max_chunk=1)
-            fitted_xe_polarization_max_regs = client.read_input_registers_direct(4071, 1, max_chunk=1)
-            fitted_xe_polarization_max_error_regs = client.read_input_registers_direct(4081, 1, max_chunk=1)
-            hp_xe_t1_regs = client.read_input_registers_direct(4091, 1, max_chunk=1)
-            hp_xe_t1_error_regs = client.read_input_registers_direct(4101, 1, max_chunk=1)
+            electron_polarization = client.read_input_register(4011)
+            xe_polarization = client.read_input_register(4021)
+            buildup_rate = client.read_input_register(4031)
+            electron_polarization_error = client.read_input_register(4041)
+            xe_polarization_error = client.read_input_register(4051)
+            buildup_rate_error = client.read_input_register(4061)
+            fitted_xe_polarization_max = client.read_input_register(4071)
+            fitted_xe_polarization_max_error = client.read_input_register(4081)
+            hp_xe_t1 = client.read_input_register(4091)
+            hp_xe_t1_error = client.read_input_register(4101)
             
             result = {}
-            if electron_polarization_regs and len(electron_polarization_regs) >= 1:
+            if electron_polarization is not None:
                 # Electron Polarization (PRb %) - преобразуем из int (PRb * 100) в float
-                result['electron_polarization'] = float(int(electron_polarization_regs[0])) / 100.0
-            if xe_polarization_regs and len(xe_polarization_regs) >= 1:
+                result['electron_polarization'] = float(int(electron_polarization)) / 100.0
+            if xe_polarization is not None:
                 # 129Xe Polarization (PXe %) - преобразуем из int (PXe * 100) в float
-                result['xe_polarization'] = float(int(xe_polarization_regs[0])) / 100.0
-            if buildup_rate_regs and len(buildup_rate_regs) >= 1:
+                result['xe_polarization'] = float(int(xe_polarization)) / 100.0
+            if buildup_rate is not None:
                 # The buildup rate (g-SEOP 1/min) - преобразуем из int (g-SEOP * 100) в float
-                result['buildup_rate'] = float(int(buildup_rate_regs[0])) / 100.0
-            if electron_polarization_error_regs and len(electron_polarization_error_regs) >= 1:
+                result['buildup_rate'] = float(int(buildup_rate)) / 100.0
+            if electron_polarization_error is not None:
                 # Error bar for Electron Polarization (PRb-err %) - преобразуем из int (PRb-err * 100) в float
-                result['electron_polarization_error'] = float(int(electron_polarization_error_regs[0])) / 100.0
-            if xe_polarization_error_regs and len(xe_polarization_error_regs) >= 1:
+                result['electron_polarization_error'] = float(int(electron_polarization_error)) / 100.0
+            if xe_polarization_error is not None:
                 # Error bar for 129Xe Polarization (PXe err %) - преобразуем из int (PXe err * 100) в float
-                result['xe_polarization_error'] = float(int(xe_polarization_error_regs[0])) / 100.0
-            if buildup_rate_error_regs and len(buildup_rate_error_regs) >= 1:
+                result['xe_polarization_error'] = float(int(xe_polarization_error)) / 100.0
+            if buildup_rate_error is not None:
                 # Error bar for the buildup rate (g-SEOP err 1/min) - преобразуем из int (g-SEOP err * 100) в float
-                result['buildup_rate_error'] = float(int(buildup_rate_error_regs[0])) / 100.0
-            if fitted_xe_polarization_max_regs and len(fitted_xe_polarization_max_regs) >= 1:
+                result['buildup_rate_error'] = float(int(buildup_rate_error)) / 100.0
+            if fitted_xe_polarization_max is not None:
                 # Fitted 129Xe Polarization maximum (PXe max %) - преобразуем из int (PXe max * 100) в float
-                result['fitted_xe_polarization_max'] = float(int(fitted_xe_polarization_max_regs[0])) / 100.0
-            if fitted_xe_polarization_max_error_regs and len(fitted_xe_polarization_max_error_regs) >= 1:
+                result['fitted_xe_polarization_max'] = float(int(fitted_xe_polarization_max)) / 100.0
+            if fitted_xe_polarization_max_error is not None:
                 # Fitted 129Xe Polarization max error bar (PXe max err %) - преобразуем из int (PXe max err * 100) в float
-                result['fitted_xe_polarization_max_error'] = float(int(fitted_xe_polarization_max_error_regs[0])) / 100.0
-            if hp_xe_t1_regs and len(hp_xe_t1_regs) >= 1:
+                result['fitted_xe_polarization_max_error'] = float(int(fitted_xe_polarization_max_error)) / 100.0
+            if hp_xe_t1 is not None:
                 # HP 129Xe T1 (T1 min) - преобразуем из int (T1 * 100) в float
-                result['hp_xe_t1'] = float(int(hp_xe_t1_regs[0])) / 100.0
-            if hp_xe_t1_error_regs and len(hp_xe_t1_error_regs) >= 1:
+                result['hp_xe_t1'] = float(int(hp_xe_t1)) / 100.0
+            if hp_xe_t1_error is not None:
                 # Error bar for 129Xe T1 (T1 err min) - преобразуем из int (T1 err * 100) в float
-                result['hp_xe_t1_error'] = float(int(hp_xe_t1_error_regs[0])) / 100.0
+                result['hp_xe_t1_error'] = float(int(hp_xe_t1_error)) / 100.0
             
             return result
         
@@ -4668,40 +4679,40 @@ class ModbusManager(QObject):
             """Чтение всех регистров Measured Parameters"""
             # Регистры идут с шагом 10 (5011, 5021, 5031...), поэтому читаем их по отдельности
             # Но используем max_chunk=10 для оптимизации внутри read_input_registers_direct
-            current_ir_signal_regs = client.read_input_registers_direct(5011, 1, max_chunk=10)
-            cold_cell_ir_signal_regs = client.read_input_registers_direct(5021, 1, max_chunk=10)
-            hot_cell_ir_signal_regs = client.read_input_registers_direct(5031, 1, max_chunk=10)
-            water_1h_nmr_reference_signal_regs = client.read_input_registers_direct(5041, 1, max_chunk=10)
-            water_t2_regs = client.read_input_registers_direct(5051, 1, max_chunk=10)
-            hp_129xe_nmr_signal_regs = client.read_input_registers_direct(5061, 1, max_chunk=10)
-            hp_129xe_t2_regs = client.read_input_registers_direct(5071, 1, max_chunk=10)
-            t2_correction_factor_regs = client.read_input_registers_direct(5081, 1, max_chunk=10)
+            current_ir_signal = client.read_input_register(5011)
+            cold_cell_ir_signal = client.read_input_register(5021)
+            hot_cell_ir_signal = client.read_input_register(5031)
+            water_1h_nmr_reference_signal = client.read_input_register(5041)
+            water_t2 = client.read_input_register(5051)
+            hp_129xe_nmr_signal = client.read_input_register(5061)
+            hp_129xe_t2 = client.read_input_register(5071)
+            t2_correction_factor = client.read_input_register(5081)
             
             result = {}
-            if current_ir_signal_regs and len(current_ir_signal_regs) >= 1:
+            if current_ir_signal is not None:
                 # Current IR Signal - значение уже в нужных единицах
-                result['current_ir_signal'] = float(int(current_ir_signal_regs[0]))
-            if cold_cell_ir_signal_regs and len(cold_cell_ir_signal_regs) >= 1:
+                result['current_ir_signal'] = float(int(current_ir_signal))
+            if cold_cell_ir_signal is not None:
                 # Cold Cell IR Signal - значение уже в нужных единицах
-                result['cold_cell_ir_signal'] = float(int(cold_cell_ir_signal_regs[0]))
-            if hot_cell_ir_signal_regs and len(hot_cell_ir_signal_regs) >= 1:
+                result['cold_cell_ir_signal'] = float(int(cold_cell_ir_signal))
+            if hot_cell_ir_signal is not None:
                 # Hot Cell IR Signal - значение уже в нужных единицах
-                result['hot_cell_ir_signal'] = float(int(hot_cell_ir_signal_regs[0]))
-            if water_1h_nmr_reference_signal_regs and len(water_1h_nmr_reference_signal_regs) >= 1:
+                result['hot_cell_ir_signal'] = float(int(hot_cell_ir_signal))
+            if water_1h_nmr_reference_signal is not None:
                 # Water 1H NMR Reference Signal - значение уже в нужных единицах
-                result['water_1h_nmr_reference_signal'] = float(int(water_1h_nmr_reference_signal_regs[0]))
-            if water_t2_regs and len(water_t2_regs) >= 1:
+                result['water_1h_nmr_reference_signal'] = float(int(water_1h_nmr_reference_signal))
+            if water_t2 is not None:
                 # Water T2 в ms - преобразуем из int (ms * 100) в float
-                result['water_t2'] = float(int(water_t2_regs[0])) / 100.0
-            if hp_129xe_nmr_signal_regs and len(hp_129xe_nmr_signal_regs) >= 1:
+                result['water_t2'] = float(int(water_t2)) / 100.0
+            if hp_129xe_nmr_signal is not None:
                 # HP 129Xe NMR Signal - значение уже в нужных единицах
-                result['hp_129xe_nmr_signal'] = float(int(hp_129xe_nmr_signal_regs[0]))
-            if hp_129xe_t2_regs and len(hp_129xe_t2_regs) >= 1:
+                result['hp_129xe_nmr_signal'] = float(int(hp_129xe_nmr_signal))
+            if hp_129xe_t2 is not None:
                 # HP 129Xe T2 в ms - преобразуем из int (ms * 100) в float
-                result['hp_129xe_t2'] = float(int(hp_129xe_t2_regs[0])) / 100.0
-            if t2_correction_factor_regs and len(t2_correction_factor_regs) >= 1:
+                result['hp_129xe_t2'] = float(int(hp_129xe_t2)) / 100.0
+            if t2_correction_factor is not None:
                 # T2* correction factor - значение уже в нужных единицах
-                result['t2_correction_factor'] = float(int(t2_correction_factor_regs[0]))
+                result['t2_correction_factor'] = float(int(t2_correction_factor))
             
             return result
         
@@ -4774,88 +4785,88 @@ class ModbusManager(QObject):
             """Чтение всех регистров Additional Parameters"""
             # Регистры идут с шагом 10 (6011, 6021, 6031...), поэтому читаем их по отдельности
             # Но используем max_chunk=10 для оптимизации внутри read_input_registers_direct
-            magnet_psu_current_proton_nmr_regs = client.read_input_registers_direct(6011, 1, max_chunk=10)
-            magnet_psu_current_129xe_nmr_regs = client.read_input_registers_direct(6021, 1, max_chunk=10)
-            operational_laser_psu_current_regs = client.read_input_registers_direct(6031, 1, max_chunk=10)
-            rf_pulse_duration_regs = client.read_input_registers_direct(6041, 1, max_chunk=10)
-            resonance_frequency_regs = client.read_input_registers_direct(6051, 1, max_chunk=10)
-            proton_rf_pulse_power_regs = client.read_input_registers_direct(6061, 1, max_chunk=10)
-            hp_129xe_rf_pulse_power_regs = client.read_input_registers_direct(6071, 1, max_chunk=10)
-            step_size_b0_sweep_hp_129xe_regs = client.read_input_registers_direct(6081, 1, max_chunk=10)
-            step_size_b0_sweep_protons_regs = client.read_input_registers_direct(6091, 1, max_chunk=10)
-            xe_alicats_pressure_regs = client.read_input_registers_direct(6101, 1, max_chunk=10)
-            nitrogen_alicats_pressure_regs = client.read_input_registers_direct(6111, 1, max_chunk=10)
-            chiller_temp_setpoint_regs = client.read_input_registers_direct(6121, 1, max_chunk=10)
-            seop_resonance_frequency_regs = client.read_input_registers_direct(6131, 1, max_chunk=10)
-            seop_resonance_frequency_tolerance_regs = client.read_input_registers_direct(6141, 1, max_chunk=10)
-            ir_spectrometer_number_of_scans_regs = client.read_input_registers_direct(6151, 1, max_chunk=10)
-            ir_spectrometer_exposure_duration_regs = client.read_input_registers_direct(6161, 1, max_chunk=10)
-            h1_reference_n_scans_regs = client.read_input_registers_direct(6171, 1, max_chunk=10)
-            h1_current_sweep_n_scans_regs = client.read_input_registers_direct(6181, 1, max_chunk=10)
-            baseline_correction_min_frequency_regs = client.read_input_registers_direct(6191, 1, max_chunk=10)
-            baseline_correction_max_frequency_regs = client.read_input_registers_direct(6201, 1, max_chunk=10)
+            magnet_psu_current_proton_nmr = client.read_input_register(6011)
+            magnet_psu_current_129xe_nmr = client.read_input_register(6021)
+            operational_laser_psu_current = client.read_input_register(6031)
+            rf_pulse_duration = client.read_input_register(6041)
+            resonance_frequency = client.read_input_register(6051)
+            proton_rf_pulse_power = client.read_input_register(6061)
+            hp_129xe_rf_pulse_power = client.read_input_register(6071)
+            step_size_b0_sweep_hp_129xe = client.read_input_register(6081)
+            step_size_b0_sweep_protons = client.read_input_register(6091)
+            xe_alicats_pressure = client.read_input_register(6101)
+            nitrogen_alicats_pressure = client.read_input_register(6111)
+            chiller_temp_setpoint = client.read_input_register(6121)
+            seop_resonance_frequency = client.read_input_register(6131)
+            seop_resonance_frequency_tolerance = client.read_input_register(6141)
+            ir_spectrometer_number_of_scans = client.read_input_register(6151)
+            ir_spectrometer_exposure_duration = client.read_input_register(6161)
+            h1_reference_n_scans = client.read_input_register(6171)
+            h1_current_sweep_n_scans = client.read_input_register(6181)
+            baseline_correction_min_frequency = client.read_input_register(6191)
+            baseline_correction_max_frequency = client.read_input_register(6201)
             
             result = {}
-            if magnet_psu_current_proton_nmr_regs and len(magnet_psu_current_proton_nmr_regs) >= 1:
+            if magnet_psu_current_proton_nmr is not None:
                 # Magnet PSU current for proton NMR в A - преобразуем из int (A * 100) в float
-                result['magnet_psu_current_proton_nmr'] = float(int(magnet_psu_current_proton_nmr_regs[0])) / 100.0
-            if magnet_psu_current_129xe_nmr_regs and len(magnet_psu_current_129xe_nmr_regs) >= 1:
+                result['magnet_psu_current_proton_nmr'] = float(int(magnet_psu_current_proton_nmr)) / 100.0
+            if magnet_psu_current_129xe_nmr is not None:
                 # Magnet PSU current for 129Xe NMR в A - преобразуем из int (A * 100) в float
-                result['magnet_psu_current_129xe_nmr'] = float(int(magnet_psu_current_129xe_nmr_regs[0])) / 100.0
-            if operational_laser_psu_current_regs and len(operational_laser_psu_current_regs) >= 1:
+                result['magnet_psu_current_129xe_nmr'] = float(int(magnet_psu_current_129xe_nmr)) / 100.0
+            if operational_laser_psu_current is not None:
                 # Operational Laser PSU current в A - преобразуем из int (A * 100) в float
-                result['operational_laser_psu_current'] = float(int(operational_laser_psu_current_regs[0])) / 100.0
-            if rf_pulse_duration_regs and len(rf_pulse_duration_regs) >= 1:
+                result['operational_laser_psu_current'] = float(int(operational_laser_psu_current)) / 100.0
+            if rf_pulse_duration is not None:
                 # RF pulse duration - значение уже в нужных единицах
-                result['rf_pulse_duration'] = float(int(rf_pulse_duration_regs[0]))
-            if resonance_frequency_regs and len(resonance_frequency_regs) >= 1:
+                result['rf_pulse_duration'] = float(int(rf_pulse_duration))
+            if resonance_frequency is not None:
                 # Resonance frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['resonance_frequency'] = float(int(resonance_frequency_regs[0])) / 100.0
-            if proton_rf_pulse_power_regs and len(proton_rf_pulse_power_regs) >= 1:
+                result['resonance_frequency'] = float(int(resonance_frequency)) / 100.0
+            if proton_rf_pulse_power is not None:
                 # Proton RF pulse power в % - преобразуем из int (% * 100) в float
-                result['proton_rf_pulse_power'] = float(int(proton_rf_pulse_power_regs[0])) / 100.0
-            if hp_129xe_rf_pulse_power_regs and len(hp_129xe_rf_pulse_power_regs) >= 1:
+                result['proton_rf_pulse_power'] = float(int(proton_rf_pulse_power)) / 100.0
+            if hp_129xe_rf_pulse_power is not None:
                 # HP 129Xe RF pulse power в % - преобразуем из int (% * 100) в float
-                result['hp_129xe_rf_pulse_power'] = float(int(hp_129xe_rf_pulse_power_regs[0])) / 100.0
-            if step_size_b0_sweep_hp_129xe_regs and len(step_size_b0_sweep_hp_129xe_regs) >= 1:
+                result['hp_129xe_rf_pulse_power'] = float(int(hp_129xe_rf_pulse_power)) / 100.0
+            if step_size_b0_sweep_hp_129xe is not None:
                 # Step size during B0 field sweep for HP 129Xe в A - преобразуем из int (A * 100) в float
-                result['step_size_b0_sweep_hp_129xe'] = float(int(step_size_b0_sweep_hp_129xe_regs[0])) / 100.0
-            if step_size_b0_sweep_protons_regs and len(step_size_b0_sweep_protons_regs) >= 1:
+                result['step_size_b0_sweep_hp_129xe'] = float(int(step_size_b0_sweep_hp_129xe)) / 100.0
+            if step_size_b0_sweep_protons is not None:
                 # Step size during B0 field sweep for protons в A - преобразуем из int (A * 100) в float
-                result['step_size_b0_sweep_protons'] = float(int(step_size_b0_sweep_protons_regs[0])) / 100.0
-            if xe_alicats_pressure_regs and len(xe_alicats_pressure_regs) >= 1:
+                result['step_size_b0_sweep_protons'] = float(int(step_size_b0_sweep_protons)) / 100.0
+            if xe_alicats_pressure is not None:
                 # Xe ALICATS pressure в Torr - преобразуем из int (Torr * 100) в float
-                result['xe_alicats_pressure'] = float(int(xe_alicats_pressure_regs[0])) / 100.0
-            if nitrogen_alicats_pressure_regs and len(nitrogen_alicats_pressure_regs) >= 1:
+                result['xe_alicats_pressure'] = float(int(xe_alicats_pressure)) / 100.0
+            if nitrogen_alicats_pressure is not None:
                 # Nitrogen ALICATS pressure в Torr - преобразуем из int (Torr * 100) в float
-                result['nitrogen_alicats_pressure'] = float(int(nitrogen_alicats_pressure_regs[0])) / 100.0
-            if chiller_temp_setpoint_regs and len(chiller_temp_setpoint_regs) >= 1:
+                result['nitrogen_alicats_pressure'] = float(int(nitrogen_alicats_pressure)) / 100.0
+            if chiller_temp_setpoint is not None:
                 # Chiller Temp setpoint - значение уже в нужных единицах (предполагаем что это int)
-                result['chiller_temp_setpoint'] = float(int(chiller_temp_setpoint_regs[0]))
-            if seop_resonance_frequency_regs and len(seop_resonance_frequency_regs) >= 1:
+                result['chiller_temp_setpoint'] = float(int(chiller_temp_setpoint))
+            if seop_resonance_frequency is not None:
                 # SEOP Resonance Frequency в nm - преобразуем из int (nm * 100) в float
-                result['seop_resonance_frequency'] = float(int(seop_resonance_frequency_regs[0])) / 100.0
-            if seop_resonance_frequency_tolerance_regs and len(seop_resonance_frequency_tolerance_regs) >= 1:
+                result['seop_resonance_frequency'] = float(int(seop_resonance_frequency)) / 100.0
+            if seop_resonance_frequency_tolerance is not None:
                 # SEOP Resonance Frequency Tolerance - значение уже в нужных единицах (предполагаем что это int)
-                result['seop_resonance_frequency_tolerance'] = float(int(seop_resonance_frequency_tolerance_regs[0]))
-            if ir_spectrometer_number_of_scans_regs and len(ir_spectrometer_number_of_scans_regs) >= 1:
+                result['seop_resonance_frequency_tolerance'] = float(int(seop_resonance_frequency_tolerance))
+            if ir_spectrometer_number_of_scans is not None:
                 # IR spectrometer number of scans - значение уже в нужных единицах (предполагаем что это int)
-                result['ir_spectrometer_number_of_scans'] = float(int(ir_spectrometer_number_of_scans_regs[0]))
-            if ir_spectrometer_exposure_duration_regs and len(ir_spectrometer_exposure_duration_regs) >= 1:
+                result['ir_spectrometer_number_of_scans'] = float(int(ir_spectrometer_number_of_scans))
+            if ir_spectrometer_exposure_duration is not None:
                 # IR spectrometer exposure duration в ms - преобразуем из int (ms * 100) в float
-                result['ir_spectrometer_exposure_duration'] = float(int(ir_spectrometer_exposure_duration_regs[0])) / 100.0
-            if h1_reference_n_scans_regs and len(h1_reference_n_scans_regs) >= 1:
+                result['ir_spectrometer_exposure_duration'] = float(int(ir_spectrometer_exposure_duration)) / 100.0
+            if h1_reference_n_scans is not None:
                 # 1H Reference N Scans - значение уже в нужных единицах (предполагаем что это int)
-                result['h1_reference_n_scans'] = float(int(h1_reference_n_scans_regs[0]))
-            if h1_current_sweep_n_scans_regs and len(h1_current_sweep_n_scans_regs) >= 1:
+                result['h1_reference_n_scans'] = float(int(h1_reference_n_scans))
+            if h1_current_sweep_n_scans is not None:
                 # 1H Current Sweep N Scans - значение уже в нужных единицах (предполагаем что это int)
-                result['h1_current_sweep_n_scans'] = float(int(h1_current_sweep_n_scans_regs[0]))
-            if baseline_correction_min_frequency_regs and len(baseline_correction_min_frequency_regs) >= 1:
+                result['h1_current_sweep_n_scans'] = float(int(h1_current_sweep_n_scans))
+            if baseline_correction_min_frequency is not None:
                 # Baseline correction min frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['baseline_correction_min_frequency'] = float(int(baseline_correction_min_frequency_regs[0])) / 100.0
-            if baseline_correction_max_frequency_regs and len(baseline_correction_max_frequency_regs) >= 1:
+                result['baseline_correction_min_frequency'] = float(int(baseline_correction_min_frequency)) / 100.0
+            if baseline_correction_max_frequency is not None:
                 # Baseline correction max frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['baseline_correction_max_frequency'] = float(int(baseline_correction_max_frequency_regs[0])) / 100.0
+                result['baseline_correction_max_frequency'] = float(int(baseline_correction_max_frequency)) / 100.0
             
             return result
         
@@ -5002,44 +5013,44 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Manual mode settings"""
             # Регистры 6301-6381
-            rf_pulse_frequency_regs = client.read_input_registers_direct(6301, 1, max_chunk=1)
-            rf_pulse_power_regs = client.read_input_registers_direct(6311, 1, max_chunk=1)
-            rf_pulse_duration_regs = client.read_input_registers_direct(6321, 1, max_chunk=1)
-            pre_acquisition_regs = client.read_input_registers_direct(6331, 1, max_chunk=1)
-            nmr_gain_regs = client.read_input_registers_direct(6341, 1, max_chunk=1)
-            nmr_number_of_scans_regs = client.read_input_registers_direct(6351, 1, max_chunk=1)
-            nmr_recovery_regs = client.read_input_registers_direct(6361, 1, max_chunk=1)
-            center_frequency_regs = client.read_input_registers_direct(6371, 1, max_chunk=1)
-            frequency_span_regs = client.read_input_registers_direct(6381, 1, max_chunk=1)
+            rf_pulse_frequency = client.read_input_register(6301)
+            rf_pulse_power = client.read_input_register(6311)
+            rf_pulse_duration = client.read_input_register(6321)
+            pre_acquisition = client.read_input_register(6331)
+            nmr_gain = client.read_input_register(6341)
+            nmr_number_of_scans = client.read_input_register(6351)
+            nmr_recovery = client.read_input_register(6361)
+            center_frequency = client.read_input_register(6371)
+            frequency_span = client.read_input_register(6381)
             
             result = {}
-            if rf_pulse_frequency_regs and len(rf_pulse_frequency_regs) >= 1:
+            if rf_pulse_frequency is not None:
                 # RF pulse frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['rf_pulse_frequency'] = float(int(rf_pulse_frequency_regs[0])) / 100.0
-            if rf_pulse_power_regs and len(rf_pulse_power_regs) >= 1:
+                result['rf_pulse_frequency'] = float(int(rf_pulse_frequency)) / 100.0
+            if rf_pulse_power is not None:
                 # RF pulse power в % - преобразуем из int (% * 100) в float
-                result['rf_pulse_power'] = float(int(rf_pulse_power_regs[0])) / 100.0
-            if rf_pulse_duration_regs and len(rf_pulse_duration_regs) >= 1:
+                result['rf_pulse_power'] = float(int(rf_pulse_power)) / 100.0
+            if rf_pulse_duration is not None:
                 # RF pulse duration в T/2 - преобразуем из int (T/2 * 100) в float
-                result['rf_pulse_duration'] = float(int(rf_pulse_duration_regs[0])) / 100.0
-            if pre_acquisition_regs and len(pre_acquisition_regs) >= 1:
+                result['rf_pulse_duration'] = float(int(rf_pulse_duration)) / 100.0
+            if pre_acquisition is not None:
                 # Pre acquisition в ms - преобразуем из int (ms * 100) в float
-                result['pre_acquisition'] = float(int(pre_acquisition_regs[0])) / 100.0
-            if nmr_gain_regs and len(nmr_gain_regs) >= 1:
+                result['pre_acquisition'] = float(int(pre_acquisition)) / 100.0
+            if nmr_gain is not None:
                 # NMR gain в dB - преобразуем из int (dB * 100) в float
-                result['nmr_gain'] = float(int(nmr_gain_regs[0])) / 100.0
-            if nmr_number_of_scans_regs and len(nmr_number_of_scans_regs) >= 1:
+                result['nmr_gain'] = float(int(nmr_gain)) / 100.0
+            if nmr_number_of_scans is not None:
                 # NMR number of scans - значение уже в нужных единицах (предполагаем что это int)
-                result['nmr_number_of_scans'] = float(int(nmr_number_of_scans_regs[0]))
-            if nmr_recovery_regs and len(nmr_recovery_regs) >= 1:
+                result['nmr_number_of_scans'] = float(int(nmr_number_of_scans))
+            if nmr_recovery is not None:
                 # NMR recovery в ms - преобразуем из int (ms * 100) в float
-                result['nmr_recovery'] = float(int(nmr_recovery_regs[0])) / 100.0
-            if center_frequency_regs and len(center_frequency_regs) >= 1:
+                result['nmr_recovery'] = float(int(nmr_recovery)) / 100.0
+            if center_frequency is not None:
                 # Center frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['center_frequency'] = float(int(center_frequency_regs[0])) / 100.0
-            if frequency_span_regs and len(frequency_span_regs) >= 1:
+                result['center_frequency'] = float(int(center_frequency)) / 100.0
+            if frequency_span is not None:
                 # Frequency span в kHz - преобразуем из int (kHz * 100) в float
-                result['frequency_span'] = float(int(frequency_span_regs[0])) / 100.0
+                result['frequency_span'] = float(int(frequency_span)) / 100.0
             
             return result
         
@@ -6562,7 +6573,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1531_direct(register_value)
+            result = client.write_holding_register(1531, register_value)
             if result:
                 logger.info(f"✅ Заданная температура Water Chiller успешно установлена: {temperature}°C")
             else:
@@ -6653,7 +6664,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1331_direct(register_value)
+            result = client.write_holding_register(1331, register_value)
             if result:
                 logger.info(f"✅ Заданная температура Magnet PSU успешно установлена: {temperature}°C")
             else:
@@ -6744,7 +6755,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1241_direct(register_value)
+            result = client.write_holding_register(1241, register_value)
             if result:
                 logger.info(f"✅ Заданная температура Laser PSU успешно установлена: {temperature}°C")
             else:
@@ -7037,7 +7048,6 @@ class ModbusManager(QObject):
         register_value = int(voltage * 100)
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1221_direct в modbus_client.py
             result = client.write_holding_register(1221, register_value)
             return bool(result)
         self._enqueue_write("1221", task, {"voltage": voltage})
@@ -7055,7 +7065,7 @@ class ModbusManager(QObject):
         register_value = int(current * 100)
         client = self._modbus_client
         def task() -> bool:
-            result = client.write_register_1241_direct(register_value)
+            result = client.write_holding_register(1241, register_value)
             return bool(result)
         self._enqueue_write("1241", task, {"current": current})
         return True
@@ -7071,7 +7081,6 @@ class ModbusManager(QObject):
         register_value = 1 if state else 0
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1251_direct в modbus_client.py
             result = client.write_holding_register(1251, register_value)
             return bool(result)
         self._enqueue_write("1251", task, {"state": state})
@@ -7091,7 +7100,6 @@ class ModbusManager(QObject):
         register_value = int(voltage * 100)
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1311_direct в modbus_client.py
             result = client.write_holding_register(1311, register_value)
             return bool(result)
         self._enqueue_write("1311", task, {"voltage": voltage})
@@ -7109,7 +7117,7 @@ class ModbusManager(QObject):
         register_value = int(current * 100)
         client = self._modbus_client
         def task() -> bool:
-            result = client.write_register_1331_direct(register_value)
+            result = client.write_holding_register(1331, register_value)
             return bool(result)
         self._enqueue_write("1331", task, {"current": current})
         return True
@@ -7125,7 +7133,6 @@ class ModbusManager(QObject):
         register_value = 1 if state else 0
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1341_direct в modbus_client.py
             result = client.write_holding_register(1341, register_value)
             return bool(result)
         self._enqueue_write("1341", task, {"state": state})
@@ -7172,7 +7179,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1421_direct(register_value)
+            result = client.write_holding_register(1421, register_value)
             if result:
                 logger.info(f"✅ Заданная температура PID Controller успешно установлена: {temperature}°C")
             else:
@@ -7223,7 +7230,6 @@ class ModbusManager(QObject):
         register_value = 1 if state else 0
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1431_direct в modbus_client.py
             result = client.write_holding_register(1431, register_value)
             return bool(result)
         self._enqueue_write("1431", task, {"state": state})
@@ -7271,7 +7277,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1531_direct(register_value)
+            result = client.write_holding_register(1531, register_value)
             if result:
                 logger.info(f"✅ Заданная температура Water Chiller успешно установлена: {temperature}°C")
             else:
@@ -7938,7 +7944,6 @@ class ModbusManager(QObject):
         register_value = 1 if state else 0
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1541_direct в modbus_client.py
             result = client.write_holding_register(1541, register_value)
             return bool(result)
         self._enqueue_write("1541", task, {"state": state})
