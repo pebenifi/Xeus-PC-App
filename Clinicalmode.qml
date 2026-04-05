@@ -2224,13 +2224,6 @@ Item {
                                             modbusManager.setXenonSetpoint(val)
                                         }
                                     }
-                                    text: modbusManager ? modbusManager.xenonSetpoint.toFixed(2) : "0.00"
-                                    onEditingFinished: {
-                                        var val = parseFloat(text)
-                                        if (!isNaN(val) && modbusManager) {
-                                            modbusManager.setXenonSetpoint(val)
-                                        }
-                                    }
                                 }
                                 Text { text: "Torr"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {
@@ -6057,13 +6050,6 @@ Item {
                                     placeholderText: "0.00"
                                     background: Rectangle {
                                         color: Constants.colorGrey
-                                    }
-                                    text: modbusManager ? modbusManager.waterChillerSetpoint.toFixed(2) : "0.00"
-                                    onEditingFinished: {
-                                        var val = parseFloat(text)
-                                        if (!isNaN(val) && modbusManager) {
-                                            modbusManager.setWaterChillerTemperature(val)
-                                        }
                                     }
                                     text: modbusManager ? modbusManager.waterChillerSetpoint.toFixed(2) : "0.00"
                                     onEditingFinished: {
