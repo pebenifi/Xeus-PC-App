@@ -6471,7 +6471,6 @@ Item {
                                     color: Constants.colorWhite
                                     text: modelData
                                     font: Constants.fontBodyPx
-                                    font.bold: menuItemContainer.expanded
                                 }
                             }
 
@@ -6706,7 +6705,6 @@ Item {
                                             color: Constants.colorWhite
                                             text: modelData
                                             font: Constants.fontDetailPx
-                                            font.bold: paramItem.isActive
                                         }
                                     }
 
