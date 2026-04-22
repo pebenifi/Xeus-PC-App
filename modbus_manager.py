@@ -2934,7 +2934,8 @@ class ModbusManager(QObject):
             logger.info(f"IR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
             return result
 
-        self._enqueue_read_priority("ir", task)
+        # Обычная очередь: приоритетные IR/NMR забивали worker и чтение 1021 «висело» (watchdog).
+        self._enqueue_read("ir", task)
         return True
 
     @Slot(result=bool)
@@ -2942,7 +2943,7 @@ class ModbusManager(QObject):
         """
         Чтение NMR данных как в test_modbus (ModbusClient).
         Регистры: 100..116 (17) метаданные, 120..375 (256) данные.
-        Читаем 256 регистров одним запросом (как IR — чанки дают нули).
+        Читаем чанками (max_chunk=30): один запрос на 256 регистров превышает лимит PDU Modbus TCP и даёт пустой/короткий ответ.
         """
         if not self._is_connected or self._modbus_client is None:
             logger.info("NMR spectrum request ignored: not connected")
@@ -2962,8 +2963,7 @@ class ModbusManager(QObject):
                 logger.info(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
-            # Читаем все 256 регистров одним запросом (как IR)
-            data_regs = client.read_input_registers_direct(120, 256, max_chunk=256)
+            data_regs = client.read_input_registers_direct(120, 256, max_chunk=30)
             if data_regs is None or len(data_regs) < 256:
                 logger.info(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
@@ -3161,7 +3161,7 @@ class ModbusManager(QObject):
             logger.debug(f"NMR spectrum: returning payload with {len(result['data'])} data points, {len(result['points'])} graph points")
             return result
 
-        self._enqueue_read_priority("nmr", task)
+        self._enqueue_read("nmr", task)
         return True
 
     def _check_connection(self):
