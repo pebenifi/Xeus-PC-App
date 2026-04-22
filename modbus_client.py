@@ -2592,12 +2592,11 @@ class ModbusClient:
                         # time.sleep(0.01)  # Убрано для ускорения
 
                         resp = b""
-                        # Собираем ответ до полного фрейма (58/120+ регистров — ответ сотни байт; 0.3с и recv 512 мало)
-                        recv_bytes = 2048 if chunk > 24 else 512
-                        deadline = time.time() + (1.5 if chunk > 24 else 0.75)
+                        # Собираем ответ до полного фрейма
+                        deadline = time.time() + 0.3  # Уменьшаем deadline с 0.5 до 0.3 секунды
                         while time.time() < deadline:
                             try:
-                                part = sock.recv(recv_bytes)
+                                part = sock.recv(512)
                             except socket.timeout:
                                 break
                             if not part:
