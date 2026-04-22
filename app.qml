@@ -17,7 +17,10 @@ Window {
         console.log("⚡ changeScreen вызван:", screenName, "время:", Date.now())
         
         if (screenName === "Screen01") {
-            // Возвращаемся на первый экран - возобновляем все опросы первой страницы
+            // Сначала глушим опросы/таймеры Clinical «сзади», иначе дублируем нагрузку на Modbus с Screen01
+            if (clinicalModeLoader.status === Loader.Ready && clinicalModeLoader.item) {
+                clinicalModeLoader.item.deactivateForeground()
+            }
             if (typeof modbusManager !== 'undefined' && modbusManager) {
                 modbusManager.resumePolling()
             }
@@ -37,6 +40,7 @@ Window {
                 if (typeof modbusManager !== 'undefined' && modbusManager) {
                     modbusManager.resumePolling()
                 }
+                clinicalModeLoader.item.activateForeground()
                 console.log("✅ Clinicalmode показан, опросы возобновлены, время:", Date.now())
             } else {
                 console.log("⏳ Clinicalmode еще не готов, статус:", clinicalModeLoader.status,
@@ -85,6 +89,7 @@ Window {
                     // Когда Clinicalmode загружен и виден, возобновляем опросы для работы вкладок
                     if (clinicalModeLoader.z === 1 && typeof modbusManager !== 'undefined' && modbusManager) {
                         modbusManager.resumePolling()
+                        item.activateForeground()
                         console.log("✅ Clinicalmode загружен, опросы возобновлены")
                     }
                 }

@@ -17,6 +17,35 @@ Item {
     // Кэшируем состояние подключения для мгновенного доступа без синхронных операций
     // Инициализируем через сигнал после загрузки компонента, чтобы не блокировать рендеринг
     property bool cachedIsConnected: false
+    // Пока Clinical «сзади» (z ниже Screen01), не опрашиваем Modbus — иначе дублируем IR/NMR/SEOP с первым экраном и забиваем очередь.
+    property bool foreground: false
+
+    function activateForeground() {
+        if (root.foreground)
+            return
+        root.foreground = true
+        if (modbusManager) {
+            root.cachedIsConnected = modbusManager.isConnected
+            modbusManager.enableSEOPParametersPolling()
+            modbusManager.enableCalculatedParametersPolling()
+            if (modbusManager.isConnected) {
+                Qt.callLater(function() {
+                    if (modbusManager && root.foreground) {
+                        modbusManager.requestIrSpectrum()
+                        modbusManager.requestNmrSpectrum()
+                    }
+                })
+            }
+        }
+    }
+
+    function deactivateForeground() {
+        root.foreground = false
+        if (modbusManager) {
+            modbusManager.disableSEOPParametersPolling()
+            modbusManager.disableCalculatedParametersPolling()
+        }
+    }
     
     // IR spectrum: обновляем по событию подключения + по приходу данных.
     // (Не держим таймер — оба экрана всегда загружены, иначе будем дергать IR даже когда экран "сзади")
@@ -334,7 +363,7 @@ Item {
         id: irRetryTimer
         interval: 2000
         repeat: true
-        running: root.cachedIsConnected
+        running: root.cachedIsConnected && root.foreground
         onTriggered: {
             if (modbusManager) {
                 modbusManager.requestIrSpectrum()
@@ -355,7 +384,7 @@ Item {
         id: nmrRetryTimer
         interval: 2000
         repeat: true
-        running: root.cachedIsConnected
+        running: root.cachedIsConnected && root.foreground
         onTriggered: {
             if (modbusManager) modbusManager.requestNmrSpectrum()
         }
@@ -373,10 +402,12 @@ Item {
         target: modbusManager
         function onConnectionStatusChanged(connected) {
             root.cachedIsConnected = connected
-            if (connected && modbusManager) {
+            if (connected && modbusManager && root.foreground) {
                 Qt.callLater(function() { 
-                    modbusManager.requestIrSpectrum()
-                    modbusManager.requestNmrSpectrum()
+                    if (modbusManager && root.foreground) {
+                        modbusManager.requestIrSpectrum()
+                        modbusManager.requestNmrSpectrum()
+                    }
                 })
             }
         }
@@ -384,14 +415,9 @@ Item {
     
     // Инициализируем кэш после загрузки компонента асинхронно
     Component.onCompleted: {
-        // Устанавливаем начальное значение асинхронно, чтобы не блокировать рендеринг
         Qt.callLater(function() {
-            if (modbusManager) {
+            if (modbusManager)
                 root.cachedIsConnected = modbusManager.isConnected
-                // Включаем опрос SEOP Parameters и Calculated Parameters для Current Values
-                modbusManager.enableSEOPParametersPolling()
-                modbusManager.enableCalculatedParametersPolling()
-            }
         })
     }
 
