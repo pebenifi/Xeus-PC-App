@@ -25,21 +25,22 @@ Window {
             clinicalModeLoader.z = 0
             console.log("✅ Screen01 показан, время:", Date.now())
         } else if (screenName === "Clinicalmode") {
-            // Переходим на второй экран - останавливаем опросы первой страницы
-            if (typeof modbusManager !== 'undefined' && modbusManager) {
-                modbusManager.pausePolling()
-            }
+            // ВАЖНО: pausePolling только когда Clinicalmode уже загружен. Иначе при
+            // asynchronous Loader вызов pause без последующего resume «убивает» опрос навсегда.
             if (clinicalModeLoader.status === Loader.Ready && clinicalModeLoader.item) {
+                if (typeof modbusManager !== 'undefined' && modbusManager) {
+                    modbusManager.pausePolling()
+                }
                 screen01Item.z = 0
                 clinicalModeLoader.z = 1
                 clinicalModeLoader.item.visible = true
-                // ВАЖНО: Возобновляем опросы для второго экрана, чтобы вкладки могли работать
                 if (typeof modbusManager !== 'undefined' && modbusManager) {
                     modbusManager.resumePolling()
                 }
                 console.log("✅ Clinicalmode показан, опросы возобновлены, время:", Date.now())
             } else {
-                console.log("⏳ Clinicalmode еще не готов, статус:", clinicalModeLoader.status)
+                console.log("⏳ Clinicalmode еще не готов, статус:", clinicalModeLoader.status,
+                            "(опрос Modbus не трогаем; нажмите Mode ещё раз через мгновение)")
             }
         }
     }
