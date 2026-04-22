@@ -6,6 +6,8 @@ import QtQuick.VirtualKeyboard
 Item {
     id: root
     anchors.fill: parent
+
+    signal changeScreenRequested(string screenName)
     
     // Explicitly set palette
     palette.buttonText: Constants.buttonText
@@ -573,12 +575,7 @@ Item {
             }
 
             onClicked: {
-                // Возвращаемся на Screen01 - ВРЕМЕННО ОТКЛЮЧЕНО
-                /*
-                if (mainWindow) {
-                    mainWindow.changeScreen("Screen01");
-                }
-                */
+                root.changeScreenRequested("Screen01")
             }
         }
 
@@ -6178,7 +6175,6 @@ Item {
             Text {
                 width: parent.width
                 font: Constants.fontSubHeaderPx
-                font.bold: true
                 color: Constants.colorBlack
                 text: "Current Values"
             }
@@ -6475,7 +6471,6 @@ Item {
                                     color: Constants.colorWhite
                                     text: modelData
                                     font: Constants.fontBodyPx
-                                    font.bold: menuItemContainer.expanded
                                 }
                             }
 
@@ -6710,7 +6705,6 @@ Item {
                                             color: Constants.colorWhite
                                             text: modelData
                                             font: Constants.fontDetailPx
-                                            font.bold: paramItem.isActive
                                         }
                                     }
 
