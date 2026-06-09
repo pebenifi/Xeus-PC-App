@@ -1413,82 +1413,77 @@ class ModbusClient:
             logger.error(f"Ошибка при записи в регистр 1331 через прямой сокет: {e}")
             return False
     
-    def _build_write_frame_1241(self, value: int) -> bytes:
-        """Формирование Modbus RTU фрейма для записи в регистр 1241 (функция 06)"""
-        address = 1241
+    def _build_write_frame_register(self, address: int, value: int) -> bytes:
+        """Формирование Modbus RTU фрейма для записи в регистр (функция 06)"""
         addr_high = (address >> 8) & 0xFF
         addr_low = address & 0xFF
         value_high = (value >> 8) & 0xFF
         value_low = value & 0xFF
-        
+
         frame = bytes([self.unit_id, 6, addr_high, addr_low, value_high, value_low])
         crc = self._crc16_modbus(frame)
         crc_low = crc & 0xFF
         crc_high = (crc >> 8) & 0xFF
         return frame + bytes([crc_low, crc_high])
-    
-    def write_register_1241_direct(self, value: int) -> bool:
-        """Запись в регистр 1241 (установка температуры Laser PSU) через прямой сокет (функция 06)
-        
-        Args:
-            value: Значение для записи (температура * 100, например 2300 для 23.00°C)
-        """
+
+    def write_register_direct(self, address: int, value: int) -> bool:
+        """Запись в регистр через прямой сокет (функция 06). Значение — uint16 (например, A×100)."""
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return False
+
         if self.client is None or not self.client.is_socket_open():
             return False
-        
+
         try:
-            # Получаем сокет из pymodbus клиента
             sock = self._get_socket()
             if sock is None:
-                logger.warning("Не удалось получить сокет для прямой записи в регистр 1241")
+                logger.warning(f"Не удалось получить сокет для прямой записи в регистр {address}")
                 return False
-            
-            # Отправляем запрос дважды
-            write_frame = self._build_write_frame_1241(value)
-            logger.debug(f"Запись в регистр 1241: отправляем фрейм {write_frame.hex().upper()}")
+
+            write_frame = self._build_write_frame_register(address, value)
+            logger.debug(f"Запись в регистр {address}: отправляем фрейм {write_frame.hex().upper()}")
             success = False
-            
+
             for i in range(2):
                 try:
                     sock.sendall(write_frame)
-                    time.sleep(0.01)  # Минимальная задержка для быстрой записи для избежания блокировки UI
+                    time.sleep(0.01)
                     resp = sock.recv(256)
-                    if resp:
-                        logger.debug(f"Ответ на запись в регистр 1241 (попытка {i+1}): {resp.hex().upper()}")
-                        if len(resp) >= 8:
-                            # Проверяем, что ответ соответствует запросу
-                            if resp[0] == self.unit_id and resp[1] == 6:
-                                # Проверяем, что адрес и значение совпадают
-                                resp_addr = (resp[2] << 8) | resp[3]
-                                resp_value = (resp[4] << 8) | resp[5]
-                                if resp_addr == 1241 and resp_value == value:
-                                    logger.debug(f"✅ Запись в регистр 1241 подтверждена: адрес={resp_addr}, значение={resp_value}")
-                                    success = True
-                                    break
-                                else:
-                                    logger.warning(f"Ответ не соответствует запросу: адрес={resp_addr} (ожидался 1241), значение={resp_value} (ожидалось {value})")
-                            else:
-                                logger.warning(f"Неожиданный ответ: unit_id={resp[0]}, функция={resp[1]}")
-                        else:
-                            logger.warning(f"Ответ слишком короткий: {len(resp)} байт")
-                    else:
-                        logger.warning(f"Пустой ответ на запись в регистр 1241 (попытка {i+1})")
+                    if resp and len(resp) >= 8:
+                        if resp[0] == self.unit_id and resp[1] == 6:
+                            resp_addr = (resp[2] << 8) | resp[3]
+                            resp_value = (resp[4] << 8) | resp[5]
+                            if resp_addr == address and resp_value == value:
+                                logger.debug(f"✅ Запись в регистр {address} подтверждена: {resp_value}")
+                                success = True
+                                break
                 except (ConnectionError, OSError) as e:
                     if i == 0:
-                        logger.debug(f"Первая попытка записи в регистр 1241 не удалась (это нормально): {e}")
+                        logger.debug(f"Первая попытка записи в регистр {address} не удалась (это нормально): {e}")
                     else:
-                        logger.error(f"Ошибка при записи в регистр 1241: {e}")
                         raise
                 if i < 1:
-                    time.sleep(0.05)  # Минимальная задержка между попытками для быстрой записи
-            
+                    time.sleep(0.05)
+
             if not success:
-                logger.error(f"❌ Не удалось записать в регистр 1241 после 2 попыток")
-            
+                logger.error(f"❌ Не удалось записать в регистр {address} после 2 попыток")
             return success
         except Exception as e:
-            logger.error(f"Ошибка при записи в регистр 1241 через прямой сокет: {e}")
+            logger.error(f"Ошибка при записи в регистр {address} через прямой сокет: {e}")
             return False
+
+    def write_register_1221_direct(self, value: int) -> bool:
+        """Запись setpoint напряжения Laser PSU (регистр 1221, V×100)."""
+        return self.write_register_direct(1221, value)
+
+    def write_register_1241_direct(self, value: int) -> bool:
+        """Запись setpoint тока Laser PSU (регистр 1241, A×100)."""
+        return self.write_register_direct(1241, value)
+
+    def write_register_1251_direct(self, value: int) -> bool:
+        """Запись on/off Laser PSU (регистр 1251: 1=вкл, 0=выкл)."""
+        return self.write_register_direct(1251, value)
     
     def _build_write_frame_1421(self, value: int) -> bytes:
         """Формирование Modbus RTU фрейма для записи в регистр 1421 (функция 06)"""
