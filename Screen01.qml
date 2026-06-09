@@ -1984,26 +1984,31 @@ Rectangle {
         color: "#c23b8a"
         radius: 12
 
-        Text {
-            x: 30
-            y: 8
-            color: Constants.colorWhite
-            text: qsTr("Laser Temp")
-            font: Constants.fontTinyPx
-        }
+        Column {
+            anchors.centerIn: parent
+            spacing: 4
 
-        Label {
-            id: labelLaserTemp
-            x: 42
-            y: 29
-            color: Constants.colorWhite
-            text: modbusManager ? (modbusManager.laserTemp.toFixed(2) + "°C") : qsTr("--")
-            font: Constants.fontTinyPx
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: Constants.colorWhite
+                text: qsTr("Laser Temp")
+                font: Constants.fontTinyPx
+                horizontalAlignment: Text.AlignHCenter
+            }
 
-            Connections {
-                target: modbusManager
-                function onLaserTempChanged(temp) {
-                    labelLaserTemp.text = temp.toFixed(2) + "°C"
+            Label {
+                id: labelLaserTemp
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: Constants.colorWhite
+                text: modbusManager ? (modbusManager.laserTemp.toFixed(2) + "°C") : qsTr("--")
+                font: Constants.fontTinyPx
+                horizontalAlignment: Text.AlignHCenter
+
+                Connections {
+                    target: modbusManager
+                    function onLaserTempChanged(temp) {
+                        labelLaserTemp.text = temp.toFixed(2) + "°C"
+                    }
                 }
             }
         }
