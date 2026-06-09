@@ -1976,9 +1976,43 @@ Rectangle {
     }
 
     Rectangle {
-        id: rectangle5
+        id: rectangleLaserTemp
         x: 404
         y: 468
+        width: 150
+        height: 75
+        color: "#c23b8a"
+        radius: 12
+
+        Text {
+            x: 30
+            y: 8
+            color: Constants.colorWhite
+            text: qsTr("Laser Temp")
+            font: Constants.fontTinyPx
+        }
+
+        Label {
+            id: labelLaserTemp
+            x: 42
+            y: 29
+            color: Constants.colorWhite
+            text: modbusManager ? (modbusManager.laserTemp.toFixed(2) + "°C") : qsTr("--")
+            font: Constants.fontTinyPx
+
+            Connections {
+                target: modbusManager
+                function onLaserTempChanged(temp) {
+                    labelLaserTemp.text = temp.toFixed(2) + "°C"
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: rectangle5
+        x: 404
+        y: 624
         width: 150
         height: 75
         color: "#467a28"

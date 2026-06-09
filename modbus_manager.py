@@ -307,7 +307,7 @@ class ModbusManager(QObject):
         self._laser_psu_driver_on = False  # On/off драйвера Laser PSU (регистр 1251)
         self._laser_psu_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._laser_psu_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._laser_psu_setpoint_auto_update_timer.timeout.connect(self._readLaserPSURegisters)
+        self._laser_psu_setpoint_auto_update_timer.timeout.connect(self._autoUpdateLaserPSUSetpoint)
         self._laser_psu_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
         self._xenon_pressure = 0.0  # Давление Xenon в Torr (регистр 1611)
         self._xenon_setpoint = 0.0  # Заданное давление Xenon в Torr (регистр 1621)
@@ -499,6 +499,7 @@ class ModbusManager(QObject):
         self._reading_1341 = False
         self._reading_power_supply = False
         self._reading_laser_psu = False
+        self._reading_laser_temp = False
         self._reading_1611 = False
         self._reading_1651 = False
         self._reading_1701 = False
@@ -569,8 +570,12 @@ class ModbusManager(QObject):
         self._laser_psu_current_timer.timeout.connect(self._readLaserPSURegisters)
         self._laser_psu_current_timer.setInterval(300)
 
+        self._laser_temp_timer = QTimer(self)
+        self._laser_temp_timer.timeout.connect(self._readLaserTemp)
+        self._laser_temp_timer.setInterval(300)
+
         self._laser_psu_setpoint_auto_update_timer = QTimer(self)
-        self._laser_psu_setpoint_auto_update_timer.timeout.connect(self._readLaserPSURegisters)
+        self._laser_psu_setpoint_auto_update_timer.timeout.connect(self._autoUpdateLaserPSUSetpoint)
         self._laser_psu_setpoint_auto_update_timer.setInterval(1000)
         
         # Таймер для чтения регистра 1611 (давление Xenon) - быстрое обновление
@@ -672,6 +677,7 @@ class ModbusManager(QObject):
             self._seop_cell_temp_timer,
             self._magnet_psu_current_timer,
             self._laser_psu_current_timer,
+            self._laser_temp_timer,
             self._xenon_pressure_timer,
             self._n2_pressure_timer,
             self._vacuum_pressure_timer,
@@ -765,6 +771,7 @@ class ModbusManager(QObject):
         self.laserPSUCurrentChanged.emit(self._laser_psu_current)
         self.laserPSUSetpointChanged.emit(self._laser_psu_setpoint)
         self.laserPSUStateChanged.emit(self._laser_psu_driver_on)
+        self.laserTempChanged.emit(self._laser_temp)
         self.xenonPressureChanged.emit(self._xenon_pressure)
         self.xenonSetpointChanged.emit(self._xenon_setpoint)
         self.n2PressureChanged.emit(self._n2_pressure)
@@ -1146,6 +1153,11 @@ class ModbusManager(QObject):
         """Ток Laser PSU в амперах (регистр 1231)"""
         return self._laser_psu_current
 
+    @Property(float, notify=laserTempChanged)
+    def laserTemp(self):
+        """Температура лазера (регистр 1841)"""
+        return self._laser_temp
+
     @Property(float, notify=xenonPressureChanged)
     def xenonPressure(self):
         """Давление Xenon в Torr (регистр 1611)"""
@@ -1335,6 +1347,7 @@ class ModbusManager(QObject):
             self._seop_cell_setpoint_auto_update_timer.stop()  # Останавливаем автообновление setpoint SEOP Cell
             self._magnet_psu_current_timer.stop()  # Останавливаем чтение тока Magnet PSU
             self._laser_psu_current_timer.stop()  # Останавливаем чтение тока Laser PSU
+            self._laser_temp_timer.stop()  # Останавливаем чтение температуры лазера
             self._xenon_pressure_timer.stop()  # Останавливаем чтение давления Xenon
             self._xenon_setpoint_auto_update_timer.stop()  # Останавливаем автообновление setpoint Xenon
             self._n2_setpoint_auto_update_timer.stop()  # Останавливаем автообновление setpoint N2
@@ -1403,6 +1416,7 @@ class ModbusManager(QObject):
             self._laser_psu_current = 0.0
             self._laser_psu_setpoint = 0.0
             self._laser_psu_driver_on = False
+            self._laser_temp = 0.0
             self._xenon_pressure = 0.0
             self._xenon_setpoint = 0.0
             self._n2_pressure = 0.0
@@ -1417,6 +1431,7 @@ class ModbusManager(QObject):
             self.laserPSUCurrentChanged.emit(0.0)
             self.laserPSUSetpointChanged.emit(0.0)
             self.laserPSUStateChanged.emit(False)
+            self.laserTempChanged.emit(0.0)
             self.xenonPressureChanged.emit(0.0)
             self.xenonSetpointChanged.emit(0.0)
             self.n2PressureChanged.emit(0.0)
@@ -1506,6 +1521,7 @@ class ModbusManager(QObject):
         QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
         QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
         QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
+        QTimer.singleShot(215, lambda: self._laser_temp_timer.start())
         QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
@@ -1562,6 +1578,8 @@ class ModbusManager(QObject):
                 self._reading_1331 = False # (если используем флаг)
             elif key == "laser_psu":
                 self._reading_laser_psu = False
+            elif key == "1841":
+                self._reading_laser_temp = False
             elif key == "1611":
                 self._reading_1611 = False
             elif key == "1621":
@@ -1605,6 +1623,8 @@ class ModbusManager(QObject):
             self._applyMagnetPSUSetpointValue(value)
         elif key == "laser_psu":
             self._applyLaserPSURegisters(value)
+        elif key == "1841":
+            self._applyLaserTempValue(value)
         elif key == "1611":
             self._applyXenonPressureValue(value)
         elif key == "1621":
@@ -1786,6 +1806,7 @@ class ModbusManager(QObject):
         for flag in (
             "_reading_1021", "_reading_1111", "_reading_1511", "_reading_1531",
             "_reading_1411", "_reading_1421", "_reading_1341", "_reading_laser_psu",
+            "_reading_laser_temp",
             "_reading_1331", "_reading_1611", "_reading_1621",
             "_reading_1651", "_reading_1661", "_reading_1701", "_reading_1131",
         ):
@@ -3395,6 +3416,38 @@ class ModbusManager(QObject):
         # Регистр 1331 - Holding Register (записываемый)
         self._enqueue_read("1331", lambda: client.read_holding_register(1331))
     
+    def _autoUpdateLaserPSUSetpoint(self):
+        """Сбрасывает блокировку ввода и снова читает setpoint с устройства."""
+        if self._laser_psu_setpoint_user_interaction:
+            self._laser_psu_setpoint_user_interaction = False
+            logger.debug("Laser PSU setpoint: сброс флага ввода, читаем значение с устройства")
+        self._readLaserPSURegisters()
+
+    def _applyLaserTempValue(self, value: object):
+        """Температура лазера (регистр 1841)."""
+        self._reading_laser_temp = False
+        if value is None:
+            return
+        try:
+            temp = float(int(value))
+        except Exception:
+            return
+        if self._laser_temp != temp:
+            self._laser_temp = temp
+            self.laserTempChanged.emit(temp)
+            logger.debug(f"✅ [1841] Laser Temp: {temp}")
+
+    def _readLaserTemp(self):
+        """Чтение регистра 1841 (температура лазера)."""
+        if not self._is_connected or self._modbus_client is None or self._reading_laser_temp:
+            return
+        if "1841" in self._problematic_registers and not self._checking_problematic_register:
+            return
+
+        self._reading_laser_temp = True
+        client = self._modbus_client
+        self._enqueue_read("1841", lambda: client.read_input_register(1841))
+
     def _readLaserPSURegisters(self):
         """Чтение Laser PSU: 1231 A, 1241 A setpoint, 1251 on/off."""
         if not self._is_connected or self._modbus_client is None or self._reading_laser_psu:
@@ -4194,6 +4247,7 @@ class ModbusManager(QObject):
                 "1341": self._readMagnetPSUCurrent,
                 "1331": self._readMagnetPSUSetpoint,
                 "laser_psu": self._readLaserPSURegisters,
+                "1841": self._readLaserTemp,
                 "1611": self._readXenonPressure,
                 "1621": self._readXenonSetpoint,
                 "1651": self._readN2Pressure,
@@ -7021,6 +7075,7 @@ class ModbusManager(QObject):
             return False
         self._laser_psu_setpoint = current
         self.laserPSUSetpointChanged.emit(current)
+        self._laser_psu_setpoint_user_interaction = False
         register_value = int(current * 100)
         logger.info(f"Установка тока Laser PSU: {current} A (регистр 1241 = {register_value})")
         client = self._modbus_client
@@ -7034,6 +7089,8 @@ class ModbusManager(QObject):
             return bool(result)
 
         self._enqueue_write("1241", task, {"current": current})
+        self._laser_psu_setpoint_auto_update_timer.stop()
+        self._laser_psu_setpoint_auto_update_timer.start()
         return True
     
     @Slot(bool, result=bool)
