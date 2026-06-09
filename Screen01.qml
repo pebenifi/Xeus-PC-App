@@ -2617,7 +2617,6 @@ Rectangle {
                     width: parent.width - 48  // Освобождаем место для стрелок (16px) и кнопки "set" (30px) + отступы
                     height: parent.height
                     color: Constants.colorWhite
-                    text: modbusManager ? modbusManager.waterChillerSetpoint.toFixed(1) : qsTr("--")
                     font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
@@ -2632,14 +2631,20 @@ Rectangle {
                     Connections {
                         target: modbusManager
                         function onWaterChillerSetpointChanged(setpoint) {
-                            // Обновляем только если поле не в фокусе (чтобы не прерывать ввод)
-                            // и только если значение действительно изменилось
                             if (!textInput7.activeFocus) {
                                 var currentText = parseFloat(textInput7.text)
                                 if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.01) {
                                     textInput7.text = setpoint.toFixed(1)
                                 }
                             }
+                        }
+                    }
+
+                    Component.onCompleted: {
+                        if (modbusManager) {
+                            textInput7.text = modbusManager.waterChillerSetpoint.toFixed(1)
+                        } else {
+                            textInput7.text = "--"
                         }
                     }
                     
