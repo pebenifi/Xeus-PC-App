@@ -1473,10 +1473,6 @@ class ModbusClient:
             logger.error(f"Ошибка при записи в регистр {address} через прямой сокет: {e}")
             return False
 
-    def write_register_1221_direct(self, value: int) -> bool:
-        """Запись setpoint напряжения Laser PSU (регистр 1221, V×100)."""
-        return self.write_register_direct(1221, value)
-
     def write_register_1241_direct(self, value: int) -> bool:
         """Запись setpoint тока Laser PSU (регистр 1241, A×100)."""
         return self.write_register_direct(1241, value)

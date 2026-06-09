@@ -134,7 +134,6 @@ class ModbusManager(QObject):
     # Сигналы для синхронизации состояний устройств
     fanStateChanged = Signal(int, bool)  # fanIndex, state
     valveStateChanged = Signal(int, bool)  # valveIndex, state
-    laserPSUStateChanged = Signal(bool)
     magnetPSUStateChanged = Signal(bool)
     pidControllerStateChanged = Signal(bool)  # Состояние PID Controller (вкл/выкл, регистр 1431)
     pidControllerTemperatureChanged = Signal(float)  # Температура PID Controller в градусах Цельсия (регистр 1411)
@@ -154,8 +153,6 @@ class ModbusManager(QObject):
     magnetPSUStateChanged = Signal(bool)  # Состояние Magnet PSU (вкл/выкл, регистр 1341)
     laserPSUCurrentChanged = Signal(float)  # Ток Laser PSU в амперах (регистр 1231)
     laserPSUSetpointChanged = Signal(float)  # Заданный ток Laser PSU в амперах (регистр 1241)
-    laserPSUVoltageChanged = Signal(float)  # Напряжение Laser PSU в вольтах (регистр 1211)
-    laserPSUVoltageSetpointChanged = Signal(float)  # Заданное напряжение Laser PSU в вольтах (регистр 1221)
     laserPSUStateChanged = Signal(bool)  # Состояние Laser PSU (вкл/выкл, регистр 1251)
     xenonPressureChanged = Signal(float)  # Давление Xenon в Torr (регистр 1611)
     n2SetpointChanged = Signal(float)  # Заданное давление N2 в Torr (регистр 1661)
@@ -305,8 +302,6 @@ class ModbusManager(QObject):
         self._magnet_psu_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
         self._magnet_psu_setpoint_auto_update_timer.timeout.connect(self._readMagnetPSUSetpoint)
         self._magnet_psu_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
-        self._laser_psu_voltage = 0.0  # Напряжение Laser PSU в вольтах (регистр 1211)
-        self._laser_psu_voltage_setpoint = 0.0  # Setpoint напряжения Laser PSU (регистр 1221)
         self._laser_psu_current = 0.0  # Ток Laser PSU в амперах (регистр 1231)
         self._laser_psu_setpoint = 0.0  # Setpoint тока Laser PSU в амперах (регистр 1241)
         self._laser_psu_driver_on = False  # On/off драйвера Laser PSU (регистр 1251)
@@ -569,7 +564,7 @@ class ModbusManager(QObject):
         self._magnet_psu_setpoint_auto_update_timer.timeout.connect(self._readMagnetPSUSetpoint)
         self._magnet_psu_setpoint_auto_update_timer.setInterval(1000)
         
-        # Таймер для чтения Laser PSU (1211/1221/1231/1241/1251)
+        # Таймер для чтения Laser PSU (1231/1241/1251)
         self._laser_psu_current_timer = QTimer(self)
         self._laser_psu_current_timer.timeout.connect(self._readLaserPSURegisters)
         self._laser_psu_current_timer.setInterval(300)
@@ -767,8 +762,6 @@ class ModbusManager(QObject):
         self.seopCellSetpointChanged.emit(self._seop_cell_setpoint)
         self.magnetPSUCurrentChanged.emit(self._magnet_psu_current)
         self.magnetPSUSetpointChanged.emit(self._magnet_psu_setpoint)
-        self.laserPSUVoltageChanged.emit(self._laser_psu_voltage)
-        self.laserPSUVoltageSetpointChanged.emit(self._laser_psu_voltage_setpoint)
         self.laserPSUCurrentChanged.emit(self._laser_psu_current)
         self.laserPSUSetpointChanged.emit(self._laser_psu_setpoint)
         self.laserPSUStateChanged.emit(self._laser_psu_driver_on)
@@ -1153,16 +1146,6 @@ class ModbusManager(QObject):
         """Ток Laser PSU в амперах (регистр 1231)"""
         return self._laser_psu_current
 
-    @Property(float, notify=laserPSUVoltageChanged)
-    def laserPSUVoltage(self):
-        """Напряжение Laser PSU в вольтах (регистр 1211)"""
-        return self._laser_psu_voltage
-
-    @Property(float, notify=laserPSUVoltageSetpointChanged)
-    def laserPSUVoltageSetpoint(self):
-        """Setpoint напряжения Laser PSU в вольтах (регистр 1221)"""
-        return self._laser_psu_voltage_setpoint
-    
     @Property(float, notify=xenonPressureChanged)
     def xenonPressure(self):
         """Давление Xenon в Torr (регистр 1611)"""
@@ -1417,8 +1400,6 @@ class ModbusManager(QObject):
             self._seop_cell_temperature = 0.0
             self._magnet_psu_current = 0.0
             self._magnet_psu_setpoint = 0.0
-            self._laser_psu_voltage = 0.0
-            self._laser_psu_voltage_setpoint = 0.0
             self._laser_psu_current = 0.0
             self._laser_psu_setpoint = 0.0
             self._laser_psu_driver_on = False
@@ -1433,8 +1414,6 @@ class ModbusManager(QObject):
             self.seopCellSetpointChanged.emit(0.0)
             self.magnetPSUCurrentChanged.emit(0.0)
             self.magnetPSUSetpointChanged.emit(0.0)
-            self.laserPSUVoltageChanged.emit(0.0)
-            self.laserPSUVoltageSetpointChanged.emit(0.0)
             self.laserPSUCurrentChanged.emit(0.0)
             self.laserPSUSetpointChanged.emit(0.0)
             self.laserPSUStateChanged.emit(False)
@@ -2045,7 +2024,7 @@ class ModbusManager(QObject):
             logger.info(f"✅ [1331] Magnet PSU Setpoint обновлен из устройства: {setpoint} A (применено напрямую)")
 
     def _applyLaserPSURegisters(self, value: object):
-        """Laser PSU: 1211 V, 1221 V setpoint, 1231 A, 1241 A setpoint, 1251 on/off."""
+        """Laser PSU: 1231 A value, 1241 A setpoint, 1251 on/off."""
         self._reading_laser_psu = False
         if value is None or not isinstance(value, dict):
             return
@@ -2055,18 +2034,6 @@ class ModbusManager(QObject):
                 return float(int(raw)) / 100.0
             except Exception:
                 return None
-
-        voltage = _to_scaled(value.get("1211"))
-        if voltage is not None and self._laser_psu_voltage != voltage:
-            self._laser_psu_voltage = voltage
-            self.laserPSUVoltageChanged.emit(voltage)
-            logger.debug(f"✅ [1211] Laser PSU Voltage: {voltage} V")
-
-        voltage_sp = _to_scaled(value.get("1221"))
-        if voltage_sp is not None and self._laser_psu_voltage_setpoint != voltage_sp:
-            self._laser_psu_voltage_setpoint = voltage_sp
-            self.laserPSUVoltageSetpointChanged.emit(voltage_sp)
-            logger.debug(f"✅ [1221] Laser PSU Voltage Setpoint: {voltage_sp} V")
 
         current = _to_scaled(value.get("1231"))
         if current is not None and self._laser_psu_current != current:
@@ -2304,13 +2271,9 @@ class ModbusManager(QObject):
         if value is None or not isinstance(value, dict):
             return
         
-        # Laser PSU
-        if 'laser_voltage' in value:
-            self.laserPSUVoltageChanged.emit(float(value['laser_voltage']))
+        # Laser PSU (только ток + on/off)
         if 'laser_current' in value:
             self.laserPSUCurrentChanged.emit(float(value['laser_current']))
-        if 'laser_voltage_setpoint' in value:
-            self.laserPSUVoltageSetpointChanged.emit(float(value['laser_voltage_setpoint']))
         if 'laser_current_setpoint' in value:
             self.laserPSUSetpointChanged.emit(float(value['laser_current_setpoint']))
         if 'laser_state' in value:
@@ -3433,7 +3396,7 @@ class ModbusManager(QObject):
         self._enqueue_read("1331", lambda: client.read_holding_register(1331))
     
     def _readLaserPSURegisters(self):
-        """Чтение Laser PSU: 1211 V, 1221 V sp, 1231 A, 1241 A sp, 1251 on/off."""
+        """Чтение Laser PSU: 1231 A, 1241 A setpoint, 1251 on/off."""
         if not self._is_connected or self._modbus_client is None or self._reading_laser_psu:
             return
 
@@ -3442,8 +3405,6 @@ class ModbusManager(QObject):
 
         def read_laser_psu():
             regs = {
-                "1211": client.read_input_register(1211),
-                "1221": client.read_input_register(1221),
                 "1231": client.read_input_register(1231),
                 "1241": client.read_input_register(1241),
                 "1251": client.read_input_register(1251),
@@ -4279,7 +4240,7 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Power Supply"""
             import struct
-            # Laser PSU: Voltage Value (1211), Voltage Setpoint (1221), Current Value (1231), Current Setpoint (1241), On/Off (1251)
+            # Laser PSU: Current Value (1231), Current Setpoint (1241), On/Off (1251)
             # Magnet PSU: Voltage Value (1301), Voltage Setpoint (1311), Current Value (1321), Current Setpoint (1331), On/Off (1341)
             # Читаем по 2 регистра для float значений (Voltage и Current)
             # Используем обычный pymodbus для согласованности
@@ -4293,8 +4254,6 @@ class ModbusManager(QObject):
                 except Exception:
                     return None
             
-            laser_voltage_reg = read_multiple_registers(1211, 1)
-            laser_voltage_setpoint_reg = read_multiple_registers(1221, 1)
             laser_current_reg = read_multiple_registers(1231, 1)
             laser_current_setpoint_reg = read_multiple_registers(1241, 1)
             laser_state_reg = read_multiple_registers(1251, 1)
@@ -4339,16 +4298,10 @@ class ModbusManager(QObject):
             
             result = {}
             
-            # Laser PSU (1211 V, 1221 V sp, 1231 A, 1241 A sp, 1251 on/off — ÷100)
-            laser_voltage = _register_to_scaled(laser_voltage_reg)
-            if laser_voltage is not None:
-                result['laser_voltage'] = laser_voltage
+            # Laser PSU (1231 A, 1241 A sp, 1251 on/off — ÷100)
             laser_current = _register_to_scaled(laser_current_reg)
             if laser_current is not None:
                 result['laser_current'] = laser_current
-            laser_voltage_sp = _register_to_scaled(laser_voltage_setpoint_reg)
-            if laser_voltage_sp is not None:
-                result['laser_voltage_setpoint'] = laser_voltage_sp
             laser_current_sp = _register_to_scaled(laser_current_setpoint_reg)
             if laser_current_sp is not None:
                 result['laser_current_setpoint'] = laser_current_sp
@@ -7057,24 +7010,6 @@ class ModbusManager(QObject):
         return True  # Возвращаем True сразу, так как UI уже обновлен
     
     # ===== Power Supply методы записи =====
-    @Slot(float, result=bool)
-    def setLaserPSUVoltageSetpoint(self, voltage: float) -> bool:
-        """Установка заданного напряжения Laser PSU (регистр 1221, V×100)."""
-        self._addLog(f"Laser PSU Voltage Setpoint: {voltage} V")
-        logger.info(f"🔵 setLaserPSUVoltageSetpoint вызван с напряжением: {voltage} V")
-        if not self._is_connected or self._modbus_client is None:
-            return False
-        register_value = int(voltage * 100)
-        self._laser_psu_voltage_setpoint = voltage
-        self.laserPSUVoltageSetpointChanged.emit(voltage)
-        client = self._modbus_client
-
-        def task() -> bool:
-            return bool(client.write_register_1221_direct(register_value))
-
-        self._enqueue_write("1221", task, {"voltage": voltage})
-        return True
-    
     @Slot(float, result=bool)
     def setLaserPSUCurrentSetpoint(self, current: float) -> bool:
         """Установка заданного тока Laser PSU (регистр 1241)"""
