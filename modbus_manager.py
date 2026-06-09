@@ -1888,9 +1888,8 @@ class ModbusManager(QObject):
             return
             
         try:
-            # Прямое применение, без проверок времени записи
-            # Исправлено масштабирование: делим на 10.0, как и в SEOP Cell
-            temperature = float(int(value)) / 10.0
+            # Регистр хранит °C × 100 (как при записи в 1531: temp * 100)
+            temperature = float(int(value)) / 100.0
         except Exception:
             return
             
@@ -1909,9 +1908,8 @@ class ModbusManager(QObject):
             return
 
         try:
-            # Прямое применение, без проверок времени записи
-            # Исправлено масштабирование: делим на 10.0
-            setpoint = float(int(value)) / 10.0
+            # Регистр хранит °C × 100 (согласовано с setWaterChillerTemperature)
+            setpoint = float(int(value)) / 100.0
         except Exception:
             return
 
