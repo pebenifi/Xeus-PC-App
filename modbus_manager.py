@@ -1344,6 +1344,10 @@ class ModbusManager(QObject):
             self._vacuum_pressure_timer.stop()  # Останавливаем чтение давления Vacuum
             self._fan_1131_timer.stop()  # Останавливаем чтение регистра 1131 (fans)
             self._ui_update_timer.stop()  # Останавливаем таймер обновления UI
+            self._problematic_registers_timer.stop()
+            self._problematic_registers.clear()
+            self._checking_problematic_register = False
+            self._reset_periodic_read_flags()
             # Очищаем кэш при отключении
             self._pending_relay_updates.clear()
             self._pending_fan_updates.clear()
@@ -1473,6 +1477,9 @@ class ModbusManager(QObject):
         # Сбрасываем флаги, которые могут блокировать применение значений при первом подключении
         self._write_in_progress = False
         self._last_write_error_time = 0.0
+        self._problematic_registers.clear()
+        self._checking_problematic_register = False
+        self._reset_periodic_read_flags()
         logger.debug(f"🔌 Время подключения установлено: {self._connection_time}, сброшены блокировки")
 
         self.connectionStatusChanged.emit(self._is_connected)
@@ -1503,6 +1510,8 @@ class ModbusManager(QObject):
         QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
         QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
         QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
+        if not self._problematic_registers_timer.isActive():
+            self._problematic_registers_timer.start()
 
         # Таймеры автообновления setpoint (UI-логика)
         self._water_chiller_setpoint_auto_update_timer.start()
@@ -1761,6 +1770,31 @@ class ModbusManager(QObject):
             if key.startswith("relay:") or key.startswith("fan:") or key.startswith("valve:"):
                 self._write_in_progress = False
 
+    def _try_begin_register_read(self, flag_attr: str, start_time_attr: str, timeout: float = 1.5) -> bool:
+        """True — можно начать чтение; False — предыдущее ещё в полёте (или сброшено watchdog)."""
+        if self._polling_paused:
+            return False
+        if getattr(self, flag_attr, False):
+            started = getattr(self, start_time_attr, 0.0)
+            if started and (time.time() - started) > timeout:
+                logger.warning(f"⚠️ Watchdog: сброс зависшего флага {flag_attr}")
+                setattr(self, flag_attr, False)
+            else:
+                return False
+        setattr(self, flag_attr, True)
+        setattr(self, start_time_attr, time.time())
+        return True
+
+    def _reset_periodic_read_flags(self):
+        """Сброс флагов in-flight чтений (после disconnect / перед новым connect)."""
+        for flag in (
+            "_reading_1021", "_reading_1111", "_reading_1511", "_reading_1531",
+            "_reading_1411", "_reading_1421", "_reading_1341", "_reading_1251",
+            "_reading_1241", "_reading_1331", "_reading_1611", "_reading_1621",
+            "_reading_1651", "_reading_1661", "_reading_1701", "_reading_1131",
+        ):
+            setattr(self, flag, False)
+
     # ===== apply-методы: применяют результат чтения в GUI-потоке =====
     def _applyRelay1021Value(self, value: object):
         apply_time = time.time()
@@ -1893,10 +1927,9 @@ class ModbusManager(QObject):
         except Exception:
             return
             
-        if self._water_chiller_temperature != temperature:
-            self._water_chiller_temperature = temperature
-            self.waterChillerTemperatureChanged.emit(temperature)
-            logger.debug(f"✅ [1511] Water Chiller Temperature обновлена: {temperature}°C")
+        self._water_chiller_temperature = temperature
+        self.waterChillerTemperatureChanged.emit(temperature)
+        logger.debug(f"✅ [1511] Water Chiller Temperature обновлена: {temperature}°C")
 
     def _applyWaterChillerSetpointValue(self, value: object):
         # self._reading_1531 = False (если такой флаг есть)
@@ -1931,10 +1964,9 @@ class ModbusManager(QObject):
         except Exception:
             return
             
-        if self._seop_cell_temperature != temperature:
-            self._seop_cell_temperature = temperature
-            self.seopCellTemperatureChanged.emit(temperature)
-            logger.debug(f"✅ [1411] SEOP Cell Temperature обновлена: {temperature}°C")
+        self._seop_cell_temperature = temperature
+        self.seopCellTemperatureChanged.emit(temperature)
+        logger.debug(f"✅ [1411] SEOP Cell Temperature обновлена: {temperature}°C")
 
     def _applySeopCellSetpointValue(self, value: object):
         self._reading_1421 = False
@@ -3314,15 +3346,17 @@ class ModbusManager(QObject):
     
     def _readWaterChillerTemperature(self):
         """Чтение регистра 1511 (температура Water Chiller) и обновление label C"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1511:
+        if not self._is_connected or self._modbus_client is None:
+            return
+        if not self._try_begin_register_read("_reading_1511", "_read_1511_start_time"):
             return
         
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
         if "1511" in self._problematic_registers and not self._checking_problematic_register:
+            self._reading_1511 = False
             logger.debug("⚠️ Пропускаем проблемный регистр 1511")
             return
 
-        self._reading_1511 = True
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1511", lambda: client.read_input_register(1511))
@@ -3478,14 +3512,18 @@ class ModbusManager(QObject):
         """
         Чтение регистра 1421 (setpoint SEOP Cell) из устройства
         """
-        if not self._is_connected or self._modbus_client is None or self._reading_1421:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
         if self._seop_cell_setpoint_user_interaction:
             return
+        if not self._try_begin_register_read("_reading_1421", "_read_1421_start_time"):
+            return
+        if "1421" in self._problematic_registers and not self._checking_problematic_register:
+            self._reading_1421 = False
+            return
 
-        self._reading_1421 = True
         client = self._modbus_client
         # Используем обычный pymodbus
         self._enqueue_read("1421", lambda: client.read_holding_register(1421))
@@ -3736,15 +3774,17 @@ class ModbusManager(QObject):
     
     def _readSeopCellTemperature(self):
         """Чтение регистра 1411 (температура SEOP Cell) и обновление label C"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1411:
+        if not self._is_connected or self._modbus_client is None:
+            return
+        if not self._try_begin_register_read("_reading_1411", "_read_1411_start_time"):
             return
         
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
         if "1411" in self._problematic_registers and not self._checking_problematic_register:
+            self._reading_1411 = False
             logger.debug("⚠️ Пропускаем проблемный регистр 1411")
             return
 
-        self._reading_1411 = True
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1411", lambda: client.read_input_register(1411))
@@ -4148,11 +4188,17 @@ class ModbusManager(QObject):
                 "1021": self._readRelay1021,
                 "1111": self._readValve1111,
                 "1511": self._readWaterChillerTemperature,
+                "1531": self._readWaterChillerSetpoint,
                 "1411": self._readSeopCellTemperature,
+                "1421": self._readSeopCellSetpoint,
                 "1341": self._readMagnetPSUCurrent,
+                "1331": self._readMagnetPSUSetpoint,
                 "1251": self._readLaserPSUCurrent,
+                "1241": self._readLaserPSUSetpoint,
                 "1611": self._readXenonPressure,
+                "1621": self._readXenonSetpoint,
                 "1651": self._readN2Pressure,
+                "1661": self._readN2Setpoint,
                 "1701": self._readVacuumPressure,
                 "1131": self._readFan1131,
             }
