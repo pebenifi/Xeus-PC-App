@@ -2187,9 +2187,9 @@ class ModbusManager(QObject):
                              self.fanStateChanged.emit(written_fan_index, new_state)
                         return
                     
-                    # Check laser fan
+                    # Check laser fan (fans 17+18 → bits 16+17)
                     if written_fan_index == 10:
-                        new_state = bool(value_int & (1 << 15))
+                        new_state = bool(value_int & (1 << 16)) and bool(value_int & (1 << 17))
                         current_state = self._fan_states[10]
                         if new_state != current_state:
                              self._fan_states[10] = new_state
@@ -2242,8 +2242,8 @@ class ModbusManager(QObject):
                 #     self._pending_fan_updates[fan_index] = (new_state, current_time)
                 #     logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
 
-        # laser fan: bit 15
-        new_laser_fan_state = bool(value_int & (1 << 15))
+        # laser fans 17+18 → bits 16+17
+        new_laser_fan_state = bool(value_int & (1 << 16)) and bool(value_int & (1 << 17))
         current_laser_fan_state = self._fan_states[10]
         if new_laser_fan_state != current_laser_fan_state:
              # Временно применяем ВСЕГДА напрямую
@@ -6423,8 +6423,8 @@ class ModbusManager(QObject):
         }
         
         if fanIndex == 10:
-            # Laser fan использует бит 15 (считая с 0), что соответствует биту 16 (считая с 1)
-            logger.info(f"Установка Laser Fan (бит 15): {state}")
+            # Laser Fan: fans 17 и 18 (биты 16 и 17 в регистре 1131)
+            logger.info(f"Установка Laser Fan (биты 16+17, fans 17+18): {state}")
             # Обновляем статус
             self._updateActionStatus(f"set {fan_name_mapping[10]}")
             # Логируем действие
@@ -6484,8 +6484,7 @@ class ModbusManager(QObject):
 
         def task() -> bool:
             try:
-                # laser fan: bit 15
-                result = client.set_fan_1131(15, state)
+                result = client.set_laser_fans_1131(state)
                 if result:
                     logger.info(f"✅ Laser Fan успешно {'включен' if state else 'выключен'}")
                 else:
