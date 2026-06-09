@@ -124,6 +124,37 @@ class _ModbusIoWorker(QObject):
 
 class ModbusManager(QObject):
     """Менеджер для управления Modbus подключением, доступный из QML"""
+
+    _REGISTER_READ_WATCHDOG_S = 1.5
+    _READ_KEY_TO_FLAG = {
+        "1021": "_reading_1021",
+        "1111": "_reading_1111",
+        "1511": "_reading_1511",
+        "1531": "_reading_1531",
+        "1411": "_reading_1411",
+        "1421": "_reading_1421",
+        "1341": "_reading_1341",
+        "1331": "_reading_1331",
+        "laser_psu": "_reading_laser_psu",
+        "1841": "_reading_laser_temp",
+        "1611": "_reading_1611",
+        "1621": "_reading_1621",
+        "1651": "_reading_1651",
+        "1661": "_reading_1661",
+        "1701": "_reading_1701",
+        "1131": "_reading_1131",
+        "power_supply": "_reading_power_supply",
+        "pid_controller": "_reading_pid_controller",
+        "water_chiller": "_reading_water_chiller",
+        "alicats": "_reading_alicats",
+        "vacuum_controller": "_reading_vacuum_controller",
+        "laser": "_reading_laser",
+        "seop_parameters": "_reading_seop_parameters",
+        "calculated_parameters": "_reading_calculated_parameters",
+        "measured_parameters": "_reading_measured_parameters",
+        "additional_parameters": "_reading_additional_parameters",
+        "manual_mode_settings": "_reading_manual_mode_settings",
+    }
     
     # Сигналы для QML
     connectionStatusChanged = Signal(bool)
@@ -153,7 +184,8 @@ class ModbusManager(QObject):
     magnetPSUStateChanged = Signal(bool)  # Состояние Magnet PSU (вкл/выкл, регистр 1341)
     laserPSUCurrentChanged = Signal(float)  # Ток Laser PSU в амперах (регистр 1231)
     laserPSUSetpointChanged = Signal(float)  # Заданный ток Laser PSU в амперах (регистр 1241)
-    laserPSUStateChanged = Signal(bool)  # Состояние Laser PSU (вкл/выкл, регистр 1251)
+    laserPSUStateChanged = Signal(bool)  # Состояние реле Laser PSU (регистр 1021, бит 2)
+    laserPSUDriverStateChanged = Signal(bool)  # On/off драйвера Laser PSU (регистр 1251)
     xenonPressureChanged = Signal(float)  # Давление Xenon в Torr (регистр 1611)
     n2SetpointChanged = Signal(float)  # Заданное давление N2 в Torr (регистр 1661)
     xenonSetpointChanged = Signal(float)  # Заданное давление Xenon в Torr (регистр 1621)
@@ -504,6 +536,10 @@ class ModbusManager(QObject):
         self._reading_1651 = False
         self._reading_1701 = False
         self._reading_1131 = False
+        self._reading_1531 = False
+        self._reading_1331 = False
+        self._reading_1621 = False
+        self._reading_1661 = False
         self._reading_pid_controller = False
         # Флаги оптимистичных обновлений
         self._fan_optimistic_updates = {}  # Флаги оптимистичных обновлений вентиляторов: fanIndex -> timestamp
@@ -770,7 +806,7 @@ class ModbusManager(QObject):
         self.magnetPSUSetpointChanged.emit(self._magnet_psu_setpoint)
         self.laserPSUCurrentChanged.emit(self._laser_psu_current)
         self.laserPSUSetpointChanged.emit(self._laser_psu_setpoint)
-        self.laserPSUStateChanged.emit(self._laser_psu_driver_on)
+        self.laserPSUDriverStateChanged.emit(self._laser_psu_driver_on)
         self.laserTempChanged.emit(self._laser_temp)
         self.xenonPressureChanged.emit(self._xenon_pressure)
         self.xenonSetpointChanged.emit(self._xenon_setpoint)
@@ -1430,7 +1466,7 @@ class ModbusManager(QObject):
             self.magnetPSUSetpointChanged.emit(0.0)
             self.laserPSUCurrentChanged.emit(0.0)
             self.laserPSUSetpointChanged.emit(0.0)
-            self.laserPSUStateChanged.emit(False)
+            self.laserPSUDriverStateChanged.emit(False)
             self.laserTempChanged.emit(0.0)
             self.xenonPressureChanged.emit(0.0)
             self.xenonSetpointChanged.emit(0.0)
@@ -1560,38 +1596,7 @@ class ModbusManager(QObject):
             
             # Не обрабатываем значение, если оно None
             # Но сбрасываем флаги чтения, чтобы не блокировать следующие попытки
-            if key == "1021":
-                self._reading_1021 = False
-            elif key == "1111":
-                self._reading_1111 = False
-            elif key == "1511":
-                self._reading_1511 = False
-            elif key == "1531":
-                self._reading_1531 = False # (если используем флаг)
-            elif key == "1411":
-                self._reading_1411 = False
-            elif key == "1421":
-                self._reading_1421 = False
-            elif key == "1341":
-                self._reading_1341 = False
-            elif key == "1331":
-                self._reading_1331 = False # (если используем флаг)
-            elif key == "laser_psu":
-                self._reading_laser_psu = False
-            elif key == "1841":
-                self._reading_laser_temp = False
-            elif key == "1611":
-                self._reading_1611 = False
-            elif key == "1621":
-                self._reading_1621 = False # (если используем флаг)
-            elif key == "1651":
-                self._reading_1651 = False
-            elif key == "1661":
-                self._reading_1661 = False # (если используем флаг)
-            elif key == "1701":
-                self._reading_1701 = False
-            elif key == "1131":
-                self._reading_1131 = False
+            self._clear_reading_flag_for_key(key)
             return
         
         # Если регистр успешно прочитан и он был в списке проблемных - удаляем его
@@ -1786,14 +1791,29 @@ class ModbusManager(QObject):
             if key.startswith("relay:") or key.startswith("fan:") or key.startswith("valve:"):
                 self._write_in_progress = False
 
-    def _try_begin_register_read(self, flag_attr: str, start_time_attr: str, timeout: float = 1.5) -> bool:
+    def _clear_reading_flag_for_key(self, key: str) -> None:
+        flag = self._READ_KEY_TO_FLAG.get(key)
+        if flag:
+            setattr(self, flag, False)
+
+    def _try_begin_register_read(
+        self,
+        flag_attr: str,
+        start_time_attr: str,
+        timeout: Optional[float] = None,
+    ) -> bool:
         """True — можно начать чтение; False — предыдущее ещё в полёте (или сброшено watchdog)."""
         if self._polling_paused:
             return False
+        if timeout is None:
+            timeout = self._REGISTER_READ_WATCHDOG_S
         if getattr(self, flag_attr, False):
             started = getattr(self, start_time_attr, 0.0)
             if started and (time.time() - started) > timeout:
-                logger.warning(f"⚠️ Watchdog: сброс зависшего флага {flag_attr}")
+                logger.warning(
+                    f"⚠️ Watchdog: сброс зависшего флага {flag_attr} "
+                    f"(время={time.time() - started:.2f}s)"
+                )
                 setattr(self, flag_attr, False)
             else:
                 return False
@@ -1803,13 +1823,7 @@ class ModbusManager(QObject):
 
     def _reset_periodic_read_flags(self):
         """Сброс флагов in-flight чтений (после disconnect / перед новым connect)."""
-        for flag in (
-            "_reading_1021", "_reading_1111", "_reading_1511", "_reading_1531",
-            "_reading_1411", "_reading_1421", "_reading_1341", "_reading_laser_psu",
-            "_reading_laser_temp",
-            "_reading_1331", "_reading_1611", "_reading_1621",
-            "_reading_1651", "_reading_1661", "_reading_1701", "_reading_1131",
-        ):
+        for flag in self._READ_KEY_TO_FLAG.values():
             setattr(self, flag, False)
 
     # ===== apply-методы: применяют результат чтения в GUI-потоке =====
@@ -1949,7 +1963,7 @@ class ModbusManager(QObject):
         logger.debug(f"✅ [1511] Water Chiller Temperature обновлена: {temperature}°C")
 
     def _applyWaterChillerSetpointValue(self, value: object):
-        # self._reading_1531 = False (если такой флаг есть)
+        self._reading_1531 = False
         if value is None:
             return
 
@@ -2025,6 +2039,7 @@ class ModbusManager(QObject):
             logger.debug(f"✅ [1341] Magnet PSU Current обновлен: {current} A")
 
     def _applyMagnetPSUSetpointValue(self, value: object):
+        self._reading_1331 = False
         if value is None:
             return
 
@@ -2076,8 +2091,8 @@ class ModbusManager(QObject):
                 driver_on = None
             if driver_on is not None and self._laser_psu_driver_on != driver_on:
                 self._laser_psu_driver_on = driver_on
-                self.laserPSUStateChanged.emit(driver_on)
-                logger.debug(f"✅ [1251] Laser PSU on/off: {driver_on}")
+                self.laserPSUDriverStateChanged.emit(driver_on)
+                logger.debug(f"✅ [1251] Laser PSU driver on/off: {driver_on}")
 
     def _applyXenonPressureValue(self, value: object):
         self._reading_1611 = False
@@ -2096,6 +2111,7 @@ class ModbusManager(QObject):
             logger.debug(f"✅ [1611] Xenon Pressure обновлено: {pressure} Torr")
 
     def _applyXenonSetpointValue(self, value: object):
+        self._reading_1621 = False
         if value is None:
             return
 
@@ -2132,6 +2148,7 @@ class ModbusManager(QObject):
             logger.debug(f"✅ [1651] N2 Pressure обновлено: {pressure} Torr")
 
     def _applyN2SetpointValue(self, value: object):
+        self._reading_1661 = False
         if value is None:
             return
 
@@ -2298,7 +2315,9 @@ class ModbusManager(QObject):
         if 'laser_current_setpoint' in value:
             self.laserPSUSetpointChanged.emit(float(value['laser_current_setpoint']))
         if 'laser_state' in value:
-            self.laserPSUStateChanged.emit(bool(value['laser_state']))
+            driver_on = bool(value['laser_state'])
+            self._laser_psu_driver_on = driver_on
+            self.laserPSUDriverStateChanged.emit(driver_on)
         
         # Magnet PSU
         if 'magnet_voltage' in value:
@@ -3300,15 +3319,6 @@ class ModbusManager(QObject):
         if self._polling_paused:
             return
 
-        # Если уже читаем, проверяем watchdog
-        if self._reading_1021:
-             if hasattr(self, '_read_1021_start_time') and time.time() - self._read_1021_start_time > 1.0:
-                 logger.warning(f"⚠️ Watchdog: сброс зависшего флага _reading_1021 (время={time.time() - self._read_1021_start_time:.2f}s)")
-                 self._reading_1021 = False
-             else:
-                 # logger.debug("Skipping read 1021: previous read still in progress")
-                 return
-        
         # КРИТИЧНО: блокируем периодическое чтение сразу после записи, чтобы избежать перезаписи UI старыми значениями
         time_since_write = time.time() - self._last_write_time
         # Уменьшаем время блокировки до 0.5 секунды для более быстрой реакции на внешние изменения
@@ -3327,8 +3337,9 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1021")
             return
 
-        self._reading_1021 = True
-        self._read_1021_start_time = time.time() # Запоминаем время начала
+        if not self._try_begin_register_read("_reading_1021", "_read_1021_start_time"):
+            return
+
         client = self._modbus_client
         # Сбрасываем сокет перед чтением реле, чтобы не читать старые данные
         # client._flush_socket()
@@ -3341,7 +3352,7 @@ class ModbusManager(QObject):
     
     def _readValve1111(self):
         """Чтение регистра 1111 (клапаны X6-X12) и обновление состояний"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1111:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # КРИТИЧНО: блокируем периодическое чтение сразу после записи, чтобы избежать перезаписи UI старыми значениями
@@ -3361,7 +3372,9 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1111")
             return
 
-        self._reading_1111 = True
+        if not self._try_begin_register_read("_reading_1111", "_read_1111_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1111", lambda: client.read_input_register(1111))
@@ -3394,7 +3407,9 @@ class ModbusManager(QObject):
         if self._water_chiller_setpoint_user_interaction:
             return
 
-        # self._reading_1531 = True # (можно добавить флаг если нужен)
+        if not self._try_begin_register_read("_reading_1531", "_read_1531_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus
         # Регистр 1531 - Holding Register (записываемый)
@@ -3409,6 +3424,9 @@ class ModbusManager(QObject):
         
         # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
         if self._magnet_psu_setpoint_user_interaction:
+            return
+
+        if not self._try_begin_register_read("_reading_1331", "_read_1331_start_time"):
             return
 
         client = self._modbus_client
@@ -3439,21 +3457,25 @@ class ModbusManager(QObject):
 
     def _readLaserTemp(self):
         """Чтение регистра 1841 (температура лазера)."""
-        if not self._is_connected or self._modbus_client is None or self._reading_laser_temp:
+        if not self._is_connected or self._modbus_client is None:
             return
         if "1841" in self._problematic_registers and not self._checking_problematic_register:
             return
 
-        self._reading_laser_temp = True
+        if not self._try_begin_register_read("_reading_laser_temp", "_read_laser_temp_start_time"):
+            return
+
         client = self._modbus_client
         self._enqueue_read("1841", lambda: client.read_input_register(1841))
 
     def _readLaserPSURegisters(self):
         """Чтение Laser PSU: 1231 A, 1241 A setpoint, 1251 on/off."""
-        if not self._is_connected or self._modbus_client is None or self._reading_laser_psu:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_laser_psu = True
+        if not self._try_begin_register_read("_reading_laser_psu", "_read_laser_psu_start_time"):
+            return
+
         client = self._modbus_client
 
         def read_laser_psu():
@@ -3616,6 +3638,9 @@ class ModbusManager(QObject):
         if self._xenon_setpoint_user_interaction:
             return
 
+        if not self._try_begin_register_read("_reading_1621", "_read_1621_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus
         # Регистр 1621 - Holding Register (записываемый)
@@ -3730,6 +3755,9 @@ class ModbusManager(QObject):
         
         # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
         if self._n2_setpoint_user_interaction:
+            return
+
+        if not self._try_begin_register_read("_reading_1661", "_read_1661_start_time"):
             return
 
         client = self._modbus_client
@@ -3849,7 +3877,7 @@ class ModbusManager(QObject):
     
     def _readMagnetPSUCurrent(self):
         """Чтение регистра 1341 (ток Magnet PSU) и обновление label A"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1341:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
@@ -3857,14 +3885,16 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1341")
             return
 
-        self._reading_1341 = True
+        if not self._try_begin_register_read("_reading_1341", "_read_1341_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1341", lambda: client.read_input_register(1341))
     
     def _readXenonPressure(self):
         """Чтение регистра 1611 (давление Xenon) и обновление label Torr"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1611:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
@@ -3872,14 +3902,16 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1611")
             return
 
-        self._reading_1611 = True
+        if not self._try_begin_register_read("_reading_1611", "_read_1611_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1611", lambda: client.read_input_register(1611))
     
     def _readN2Pressure(self):
         """Чтение регистра 1651 (давление N2) и обновление label Torr"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1651:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
@@ -3887,14 +3919,16 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1651")
             return
 
-        self._reading_1651 = True
+        if not self._try_begin_register_read("_reading_1651", "_read_1651_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1651", lambda: client.read_input_register(1651))
     
     def _readVacuumPressure(self):
         """Чтение регистра 1701 (давление Vacuum) и обновление label Torr"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1701:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # Проверяем, не является ли регистр проблемным (но не пропускаем при проверке проблемных регистров)
@@ -3902,14 +3936,16 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1701")
             return
 
-        self._reading_1701 = True
+        if not self._try_begin_register_read("_reading_1701", "_read_1701_start_time"):
+            return
+
         client = self._modbus_client
         # Используем обычный pymodbus вместо прямого сокета (более стабильно)
         self._enqueue_read("1701", lambda: client.read_input_register(1701))
     
     def _readFan1131(self):
         """Чтение регистра 1131 (fans) и обновление состояний всех вентиляторов"""
-        if not self._is_connected or self._modbus_client is None or self._reading_1131:
+        if not self._is_connected or self._modbus_client is None:
             return
         
         # КРИТИЧНО: блокируем периодическое чтение сразу после записи, чтобы избежать перезаписи UI старыми значениями
@@ -3929,7 +3965,9 @@ class ModbusManager(QObject):
             logger.debug("⚠️ Пропускаем проблемный регистр 1131")
             return
 
-        self._reading_1131 = True
+        if not self._try_begin_register_read("_reading_1131", "_read_1131_start_time"):
+            return
+
         client = self._modbus_client
 
         def read_fan_registers():
@@ -4285,10 +4323,12 @@ class ModbusManager(QObject):
     
     def _readPowerSupply(self):
         """Чтение регистров Power Supply (Laser PSU и Magnet PSU)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_power_supply:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_power_supply = True
+        if not self._try_begin_register_read("_reading_power_supply", "_read_power_supply_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4380,10 +4420,12 @@ class ModbusManager(QObject):
     
     def _readPIDController(self):
         """Чтение регистров PID Controller (1411 - температура, 1421 - setpoint, 1431 - on/off)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_pid_controller:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_pid_controller = True
+        if not self._try_begin_register_read("_reading_pid_controller", "_read_pid_controller_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4412,10 +4454,12 @@ class ModbusManager(QObject):
     
     def _readWaterChiller(self):
         """Чтение регистров Water Chiller (1511 - inlet temp, 1521 - outlet temp, 1531 - setpoint, 1541 - on/off)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_water_chiller:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_water_chiller = True
+        if not self._try_begin_register_read("_reading_water_chiller", "_read_water_chiller_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4449,10 +4493,12 @@ class ModbusManager(QObject):
     
     def _readAlicats(self):
         """Чтение регистров Alicats (1611 - Xenon value, 1621 - Xenon setpoint, 1651 - N2 value, 1661 - N2 setpoint)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_alicats:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_alicats = True
+        if not self._try_begin_register_read("_reading_alicats", "_read_alicats_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4488,7 +4534,7 @@ class ModbusManager(QObject):
         """Чтение регистра Vacuum Controller (1701 - давление в mTorr)"""
         # Проверяем только флаг чтения и наличие клиента, но не подключение
         # Поле должно отображаться всегда, даже если устройство не подключено
-        if self._modbus_client is None or self._reading_vacuum_controller:
+        if self._modbus_client is None:
             return
         
         # Если устройство не подключено, не пытаемся читать, но таймер продолжает работать
@@ -4496,7 +4542,9 @@ class ModbusManager(QObject):
             logger.debug("Vacuum Controller: устройство не подключено, пропускаем чтение")
             return
 
-        self._reading_vacuum_controller = True
+        if not self._try_begin_register_read("_reading_vacuum_controller", "_read_vacuum_controller_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4517,10 +4565,12 @@ class ModbusManager(QObject):
     
     def _readLaser(self):
         """Чтение регистров Laser (1811 - Beam on/off, 1821 - MPD uA, 1831 - Output Power, 1841 - Temp)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_laser:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_laser = True
+        if not self._try_begin_register_read("_reading_laser", "_read_laser_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4554,10 +4604,12 @@ class ModbusManager(QObject):
     
     def _readSEOPParameters(self):
         """Чтение регистров SEOP Parameters (3011-3181)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_seop_parameters:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_seop_parameters = True
+        if not self._try_begin_register_read("_reading_seop_parameters", "_read_seop_parameters_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4635,10 +4687,12 @@ class ModbusManager(QObject):
     
     def _readCalculatedParameters(self):
         """Чтение регистров Calculated Parameters (4011-4101)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_calculated_parameters:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_calculated_parameters = True
+        if not self._try_begin_register_read("_reading_calculated_parameters", "_read_calculated_parameters_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4753,10 +4807,12 @@ class ModbusManager(QObject):
     
     def _readMeasuredParameters(self):
         """Чтение регистров Measured Parameters (5011-5081)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_measured_parameters:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_measured_parameters = True
+        if not self._try_begin_register_read("_reading_measured_parameters", "_read_measured_parameters_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -4859,10 +4915,12 @@ class ModbusManager(QObject):
     
     def _readAdditionalParameters(self):
         """Чтение регистров Additional Parameters (6011-6201)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_additional_parameters:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_additional_parameters = True
+        if not self._try_begin_register_read("_reading_additional_parameters", "_read_additional_parameters_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -5088,10 +5146,12 @@ class ModbusManager(QObject):
     
     def _readManualModeSettings(self):
         """Чтение регистров Manual mode settings (6301-6381)"""
-        if not self._is_connected or self._modbus_client is None or self._reading_manual_mode_settings:
+        if not self._is_connected or self._modbus_client is None:
             return
 
-        self._reading_manual_mode_settings = True
+        if not self._try_begin_register_read("_reading_manual_mode_settings", "_read_manual_mode_settings_start_time"):
+            return
+
         client = self._modbus_client
         
         def task():
@@ -6892,14 +6952,13 @@ class ModbusManager(QObject):
     # Методы для управления реле через регистр 1021
     @Slot(bool, result=bool)
     def setLaserPSU(self, state: bool) -> bool:
-        """Управление Laser PSU: реле 1021 (бит 2) + on/off драйвера (регистр 1251)."""
+        """Управление Laser PSU через реле 1021 (бит 2). Кнопка на главном экране — только реле."""
         logger.info(f"🔴 [SET] setLaserPSU вызван: state={state}, текущее состояние в памяти={self._relay_states.get('laser_psu')}")
         self._updateActionStatus(f"set 3")
         self._addLog(f"Laser PSU: {'ON' if state else 'OFF'}")
         if self._is_connected and self._modbus_client is not None:
-            logger.info(f"🔴 [SET] setLaserPSU: реле 3 + регистр 1251")
+            logger.info(f"🔴 [SET] setLaserPSU: реле 3")
             self._setRelayAsync(3, state, "Laser PSU")
-            self.setLaserPSUPower(state)
             return True
         return False
     
@@ -7102,7 +7161,7 @@ class ModbusManager(QObject):
             return False
         register_value = 1 if state else 0
         self._laser_psu_driver_on = state
-        self.laserPSUStateChanged.emit(state)
+        self.laserPSUDriverStateChanged.emit(state)
         client = self._modbus_client
 
         def task() -> bool:

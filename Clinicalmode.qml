@@ -1860,7 +1860,7 @@ Item {
                                     }
                                     Connections {
                                         target: modbusManager
-                                        function onLaserPSUStateChanged(state) {
+                                        function onLaserPSUDriverStateChanged(state) {
                                             if (laserPSUPower.checked !== state) laserPSUPower.checked = state
                                         }
                                     }
