@@ -1978,7 +1978,7 @@ Rectangle {
     Rectangle {
         id: rectangleLaserTemp
         x: 404
-        y: 468
+        y: 390
         width: 150
         height: 75
         color: "#c23b8a"
@@ -2012,7 +2012,7 @@ Rectangle {
     Rectangle {
         id: rectangle5
         x: 404
-        y: 624
+        y: 468
         width: 150
         height: 75
         color: "#467a28"
