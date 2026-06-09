@@ -1507,7 +1507,7 @@ Rectangle {
                     color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.n2Setpoint !== undefined) {
-                            return (modbusManager.n2Setpoint / 1000.0).toFixed(3)
+                            return modbusManager.n2Setpoint.toFixed(3)
                         } else {
                             return "0.000"
                         }
@@ -1516,11 +1516,10 @@ Rectangle {
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
-                    inputMethodHints: Qt.ImhDigitsOnly
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                     
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 1000
+                    validator: RegularExpressionValidator {
+                        regularExpression: /^\d*\.?\d*$/
                     }
                     
                     Connections {
@@ -1528,8 +1527,8 @@ Rectangle {
                         function onN2SetpointChanged(setpoint) {
                             if (!textInput3.activeFocus) {
                                 var currentText = parseFloat(textInput3.text)
-                                if (isNaN(currentText) || Math.abs(currentText - setpoint / 1000.0) > 0.001) {
-                                    textInput3.text = (setpoint / 1000.0).toFixed(3)
+                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.001) {
+                                    textInput3.text = setpoint.toFixed(3)
                                 }
                             }
                         }
@@ -1545,7 +1544,7 @@ Rectangle {
                                     modbusManager.setN2Pressure(value)
                                 }
                             } else {
-                                text = modbusManager ? modbusManager.n2Setpoint.toFixed(2) : "0.00"
+                                text = modbusManager ? modbusManager.n2Setpoint.toFixed(3) : "0.000"
                             }
                         }
                     }
@@ -1561,11 +1560,9 @@ Rectangle {
                         if (modbusManager && text.trim() !== "") {
                             var value = parseFloat(text)
                             if (!isNaN(value) && value >= 0) {
-                                // Умножаем на 1000 для сравнения с внутренним значением
-                                var deviceValue = value * 1000.0
                                 var currentSetpoint = modbusManager.n2Setpoint
-                                if (Math.abs(deviceValue - currentSetpoint) > 1.0) {
-                                    modbusManager.setN2SetpointValue(deviceValue)
+                                if (Math.abs(value - currentSetpoint) > 0.001) {
+                                    modbusManager.setN2SetpointValue(value)
                                 }
                             }
                         }
@@ -1613,14 +1610,12 @@ Rectangle {
                             var currentValue = parseFloat(textValue)
                             
                             if (isNaN(currentValue) || currentValue < 0 || textValue === "") {
-                                currentValue = modbusManager.n2Setpoint / 1000.0
+                                currentValue = modbusManager.n2Setpoint
                             }
                             
-                            // Вычисляем новое значение (увеличиваем на 0.001)
                             var newValue = currentValue + 0.001
                             textInput3.text = newValue.toFixed(3)
-                            // Умножаем на 1000 для отправки на устройство
-                            modbusManager.setN2SetpointValue(newValue * 1000.0)
+                            modbusManager.setN2SetpointValue(newValue)
                         }
                     }
                     
@@ -1652,15 +1647,13 @@ Rectangle {
                             var currentValue = parseFloat(textValue)
                             
                             if (isNaN(currentValue) || currentValue < 0 || textValue === "") {
-                                currentValue = modbusManager.n2Setpoint / 1000.0
+                                currentValue = modbusManager.n2Setpoint
                             }
                             
-                            // Вычисляем новое значение (уменьшаем на 0.001)
                             var newValue = currentValue - 0.001
-                            if (newValue < 0) newValue = 0  // Не позволяем отрицательные значения
+                            if (newValue < 0) newValue = 0
                             textInput3.text = newValue.toFixed(3)
-                            // Умножаем на 1000 для отправки на устройство
-                            modbusManager.setN2SetpointValue(newValue * 1000.0)
+                            modbusManager.setN2SetpointValue(newValue)
                         }
                     }
                 }
@@ -1694,10 +1687,8 @@ Rectangle {
                     if (modbusManager && modbusManager.isConnected) {
                         var value = parseFloat(textInput3.text)
                         if (!isNaN(value) && value >= 0) {
-                            // Умножаем на 1000 для отправки на устройство
-                            var deviceValue = value * 1000.0
-                            modbusManager.setN2SetpointValue(deviceValue)
-                            modbusManager.setN2Pressure(deviceValue)
+                            modbusManager.setN2SetpointValue(value)
+                            modbusManager.setN2Pressure(value)
                         }
                     }
                 }
@@ -1711,13 +1702,13 @@ Rectangle {
             width: 77
             height: 18
             color: Constants.colorWhite
-            text: modbusManager ? ((modbusManager.n2Pressure / 1000.0).toFixed(3) + " Torr") : qsTr("--")
+            text: modbusManager ? (modbusManager.n2Pressure.toFixed(3) + " Torr") : qsTr("--")
             font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
                 function onN2PressureChanged(pressure) {
-                    label2.text = (pressure / 1000.0).toFixed(3) + " Torr"
+                    label2.text = pressure.toFixed(3) + " Torr"
                 }
             }
         }
@@ -1802,11 +1793,10 @@ Rectangle {
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
-                    inputMethodHints: Qt.ImhDigitsOnly
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                     
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 100
+                    validator: RegularExpressionValidator {
+                        regularExpression: /^\d*\.?\d*$/
                     }
                     
                     Connections {
@@ -2064,11 +2054,10 @@ Rectangle {
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
-                    inputMethodHints: Qt.ImhDigitsOnly
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                     
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 100
+                    validator: RegularExpressionValidator {
+                        regularExpression: /^\d*\.?\d*$/
                     }
                     
                     Connections {
@@ -2317,33 +2306,31 @@ Rectangle {
                     color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.xenonSetpoint !== undefined) {
-                            return (modbusManager.xenonSetpoint / 1000.0).toFixed(3)
+                            // На Alicat setpoint отображается как значение регистра (Torr × 10000)
+                            return (modbusManager.xenonSetpoint * 10000.0).toFixed(0)
                         } else {
-                            return "0.000"
+                            return "0"
                         }
                     }
                     font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
-                    inputMethodHints: Qt.ImhDigitsOnly  // Только цифры
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                     
-                    // Валидация ввода - только цифры
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 1000  // Максимальное давление (можно изменить)
+                    validator: RegularExpressionValidator {
+                        regularExpression: /^\d*\.?\d*$/
                     }
                     
                     // Обновление значения при изменении на устройстве
                     Connections {
                         target: modbusManager
                         function onXenonSetpointChanged(setpoint) {
-                            // Обновляем только если поле не в фокусе (чтобы не прерывать ввод)
-                            // и только если значение действительно изменилось
                             if (!textInput4.activeFocus) {
+                                var registerValue = setpoint * 10000.0
                                 var currentText = parseFloat(textInput4.text)
-                                if (isNaN(currentText) || Math.abs(currentText - setpoint / 1000.0) > 0.001) {
-                                    textInput4.text = (setpoint / 1000.0).toFixed(3)
+                                if (isNaN(currentText) || Math.abs(currentText - registerValue) > 0.5) {
+                                    textInput4.text = registerValue.toFixed(0)
                                 }
                             }
                         }
@@ -2353,19 +2340,15 @@ Rectangle {
                     onEditingFinished: {
                         if (modbusManager) {
                             var textValue = text.trim()
-                            var value = parseFloat(textValue)
-                            if (!isNaN(value) && value >= 0) {
-                                // Умножаем на 1000 для отправки на устройство
-                                var deviceValue = value * 1000.0
-                                // Обновляем внутреннее значение (чтобы стрелки работали с актуальным значением)
-                                modbusManager.setXenonSetpointValue(deviceValue)
-                                // Отправляем на устройство только если подключены
+                            var registerValue = parseFloat(textValue)
+                            if (!isNaN(registerValue) && registerValue >= 0) {
+                                var torrValue = registerValue / 10000.0
+                                modbusManager.setXenonSetpointValue(torrValue)
                                 if (modbusManager.isConnected) {
-                                    modbusManager.setXenonPressure(deviceValue)
+                                    modbusManager.setXenonPressure(torrValue)
                                 }
                             } else {
-                                // Если ввод некорректный, восстанавливаем предыдущее значение
-                                text = modbusManager ? (modbusManager.xenonSetpoint / 1000.0).toFixed(3) : "0.000"
+                                text = modbusManager ? (modbusManager.xenonSetpoint * 10000.0).toFixed(0) : "0"
                             }
                         }
                     }
@@ -2384,14 +2367,12 @@ Rectangle {
                         // Это нужно для того, чтобы стрелки работали с актуальным значением
                         // НЕ обновляем если текст пустой или только пробелы, чтобы избежать binding loop
                         if (modbusManager && text.trim() !== "") {
-                            var value = parseFloat(text)
-                            if (!isNaN(value) && value >= 0) {
-                                // Умножаем на 1000 для сравнения с внутренним значением
-                                var deviceValue = value * 1000.0
-                                // Обновляем только если значение действительно изменилось
+                            var registerValue = parseFloat(text)
+                            if (!isNaN(registerValue) && registerValue >= 0) {
+                                var torrValue = registerValue / 10000.0
                                 var currentSetpoint = modbusManager.xenonSetpoint
-                                if (Math.abs(deviceValue - currentSetpoint) > 1.0) {
-                                    modbusManager.setXenonSetpointValue(deviceValue)
+                                if (Math.abs(torrValue - currentSetpoint) > 0.00001) {
+                                    modbusManager.setXenonSetpointValue(torrValue)
                                 }
                             }
                         }
@@ -2443,18 +2424,12 @@ Rectangle {
                             
                             // Если не удалось распарсить или значение некорректное, пробуем взять из внутреннего состояния
                             if (isNaN(currentValue) || currentValue < 0 || textValue === "") {
-                                currentValue = modbusManager.xenonSetpoint / 1000.0
+                                currentValue = modbusManager.xenonSetpoint * 10000.0
                             }
                             
-                            // Вычисляем новое значение (увеличиваем на 0.001 Torr)
-                            var newValue = currentValue + 0.001
-                            
-                            // Сразу обновляем текст в поле ввода для мгновенной обратной связи
-                            textInput4.text = newValue.toFixed(3)
-                            
-                            // Обновляем только внутреннее значение (без отправки на устройство)
-                            // Запись на устройство произойдет только при нажатии на кнопку "set"
-                            modbusManager.setXenonSetpointValue(newValue * 1000.0)
+                            var newRegisterValue = currentValue + 1
+                            textInput4.text = newRegisterValue.toFixed(0)
+                            modbusManager.setXenonSetpointValue(newRegisterValue / 10000.0)
                         }
                     }
                     
@@ -2489,19 +2464,13 @@ Rectangle {
                             
                             // Если не удалось распарсить или значение некорректное, пробуем взять из внутреннего состояния
                             if (isNaN(currentValue) || currentValue < 0 || textValue === "") {
-                                currentValue = modbusManager.xenonSetpoint / 1000.0
+                                currentValue = modbusManager.xenonSetpoint * 10000.0
                             }
                             
-                            // Вычисляем новое значение (уменьшаем на 0.001 Torr)
-                            var newValue = currentValue - 0.001
-                            if (newValue < 0) newValue = 0  // Не позволяем отрицательные значения
-                            
-                            // Сразу обновляем текст в поле ввода для мгновенной обратной связи
-                            textInput4.text = newValue.toFixed(3)
-                            
-                            // Обновляем только внутреннее значение (без отправки на устройство)
-                            // Запись на устройство произойдет только при нажатии на кнопку "set"
-                            modbusManager.setXenonSetpointValue(newValue * 1000.0)
+                            var newRegisterValue = currentValue - 1
+                            if (newRegisterValue < 0) newRegisterValue = 0
+                            textInput4.text = newRegisterValue.toFixed(0)
+                            modbusManager.setXenonSetpointValue(newRegisterValue / 10000.0)
                         }
                     }
                 }
@@ -2533,14 +2502,11 @@ Rectangle {
                 
                 onClicked: {
                     if (modbusManager && modbusManager.isConnected) {
-                        var value = parseFloat(textInput4.text)
-                        if (!isNaN(value) && value >= 0) {
-                            // Умножаем на 1000 для отправки на устройство
-                            var deviceValue = value * 1000.0
-                            // Сначала обновляем внутреннее значение
-                            modbusManager.setXenonSetpointValue(deviceValue)
-                            // Затем отправляем на устройство
-                            modbusManager.setXenonPressure(deviceValue)
+                        var registerValue = parseFloat(textInput4.text)
+                        if (!isNaN(registerValue) && registerValue >= 0) {
+                            var torrValue = registerValue / 10000.0
+                            modbusManager.setXenonSetpointValue(torrValue)
+                            modbusManager.setXenonPressure(torrValue)
                         }
                     }
                 }
@@ -2656,12 +2622,10 @@ Rectangle {
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
-                    inputMethodHints: Qt.ImhDigitsOnly  // Только цифры
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                     
-                    // Валидация ввода - только цифры
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 100  // Максимальная температура (можно изменить)
+                    validator: RegularExpressionValidator {
+                        regularExpression: /^\d*\.?\d*$/
                     }
                     
                     // Обновление значения при изменении на устройстве
@@ -2946,12 +2910,10 @@ Rectangle {
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 5
-                    inputMethodHints: Qt.ImhDigitsOnly  // Только цифры
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                     
-                    // Валидация ввода - только цифры
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 100  // Максимальная температура (можно изменить)
+                    validator: RegularExpressionValidator {
+                        regularExpression: /^\d*\.?\d*$/
                     }
                     
                     // Инициализация и обновление значения при изменении на устройстве
