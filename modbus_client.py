@@ -2342,7 +2342,7 @@ class ModbusClient:
         """Установка состояния вентилятора в регистре 1131
         
         Args:
-            fan_bit: Бит вентилятора (0-9 для обычных fans; laser fans — биты 16 и 17, см. set_laser_fans_1131)
+            fan_bit: Бит вентилятора (0-9 для обычных fans; laser fans — регистр 1132, см. set_laser_fans_1131)
             state: True - включить, False - выключить
         
         Returns:
@@ -2380,33 +2380,148 @@ class ModbusClient:
         # Записываем новое значение
         return self.write_register_1131_direct(new_value)
 
+    def read_register_1132_direct(self) -> Optional[int]:
+        """Чтение регистра 1132 через прямой сокет (функция 04) — fans 17+18."""
+        return self._read_register_direct_generic(1132, self._build_read_frame_1132, self._parse_read_response_1132)
+
+    def write_register_1132_direct(self, value: int) -> bool:
+        """Запись в регистр 1132 через прямой сокет (функция 06) — fans 17+18."""
+        address = 1132
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return False
+
+        self._last_read_register = address
+
+        if self.client is None or not self.client.is_socket_open():
+            return False
+
+        try:
+            sock = self._get_socket()
+            if sock is None:
+                logger.warning("Не удалось получить сокет для прямой записи в регистр 1132")
+                return False
+
+            write_frame = self._build_write_frame_1132(value)
+            success = False
+
+            for i in range(2):
+                try:
+                    sock.sendall(write_frame)
+                    time.sleep(0.01)
+                    resp = sock.recv(256)
+                    if resp and len(resp) >= 8:
+                        if resp[0] == self.unit_id and resp[1] == 6:
+                            success = True
+                            break
+                except (ConnectionError, OSError) as e:
+                    if i == 0:
+                        logger.debug(f"Первая попытка записи в регистр 1132 не удалась (это нормально): {e}")
+                    else:
+                        raise
+                if i < 1:
+                    time.sleep(0.05)
+
+            return success
+        except (ConnectionError, OSError) as e:
+            error_code = getattr(e, 'errno', None)
+            logger.warning(f"Ошибка соединения при записи в регистр 1132: {e} (errno={error_code})")
+            if error_code in (54, 32, 104, 107):
+                logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
+                if self._reconnect():
+                    try:
+                        return self.write_register_1132_direct(value)
+                    except Exception as e2:
+                        logger.warning(f"Ошибка при повторной записи после переподключения: {e2}")
+            self._connected = False
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка при записи в регистр 1132 через прямой сокет: {e}")
+            return False
+
+    def _build_read_frame_1132(self) -> bytes:
+        """Формирование Modbus RTU фрейма для чтения регистра 1132 (функция 04)"""
+        address = 1132
+        addr_high = (address >> 8) & 0xFF
+        addr_low = address & 0xFF
+
+        frame = bytes([self.unit_id, 4, addr_high, addr_low, 0x00, 0x01])
+        crc = self._crc16_modbus(frame)
+        crc_low = crc & 0xFF
+        crc_high = (crc >> 8) & 0xFF
+        return frame + bytes([crc_low, crc_high])
+
+    def _build_write_frame_1132(self, value: int) -> bytes:
+        """Формирование Modbus RTU фрейма для записи в регистр 1132 (функция 06)"""
+        address = 1132
+        addr_high = (address >> 8) & 0xFF
+        addr_low = address & 0xFF
+        value_high = (value >> 8) & 0xFF
+        value_low = value & 0xFF
+
+        frame = bytes([self.unit_id, 6, addr_high, addr_low, value_high, value_low])
+        crc = self._crc16_modbus(frame)
+        crc_low = crc & 0xFF
+        crc_high = (crc >> 8) & 0xFF
+        return frame + bytes([crc_low, crc_high])
+
+    def _parse_read_response_1132(self, resp: bytes) -> Optional[int]:
+        """Расшифровка ответа на запрос чтения регистра 1132"""
+        if len(resp) < 5:
+            return None
+
+        if resp[0] != self.unit_id:
+            return None
+
+        exception_info = self._check_modbus_exception(resp, "1132")
+        if exception_info:
+            exc_code = exception_info['error_code']
+            if exc_code in (2, 3):
+                logger.debug(f"Регистр 1132 вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует")
+            else:
+                logger.warning(f"Регистр 1132 вернул Modbus exception code={exc_code} ({exception_info['error_message']})")
+            return None
+
+        if resp[1] != 4 or len(resp) < 7:
+            return None
+
+        value = (resp[3] << 8) | resp[4]
+
+        received_crc = (resp[-1] << 8) | resp[-2]
+        calculated_crc = self._crc16_modbus(resp[:-2])
+
+        if received_crc == calculated_crc:
+            return value
+        logger.debug(f"Регистр 1132: CRC не совпадает - получен {received_crc:04X}, ожидался {calculated_crc:04X}")
+        return None
+
     def set_laser_fans_1131(self, state: bool) -> bool:
-        """Laser Fan: одновременно fans 17 и 18 (биты 16 и 17 в регистре 1131)."""
+        """Laser Fan: fans 17 и 18 в регистре 1132 (биты 0 и 1)."""
         current_value = None
         try:
             if self.client is not None and self.client.is_socket_open():
-                result = self.client.read_input_registers(1131, count=1, device_id=self.unit_id)
+                result = self.client.read_input_registers(1132, count=1, device_id=self.unit_id)
                 if not result.isError() and result.registers:
                     current_value = result.registers[0]
         except Exception as e:
-            logger.debug(f"Не удалось прочитать регистр 1131 через pymodbus: {e}")
+            logger.debug(f"Не удалось прочитать регистр 1132 через pymodbus: {e}")
 
         if current_value is None:
-            current_value = self.read_register_1131_direct()
+            current_value = self.read_register_1132_direct()
 
         if current_value is None:
-            logger.error("Не удалось прочитать текущее состояние регистра 1131")
+            logger.error("Не удалось прочитать текущее состояние регистра 1132 (laser fans)")
             return False
 
-        # Fans 17+18; bit 15 — устаревший laser fan в старых сборках GUI
-        laser_mask = (1 << 16) | (1 << 17) | (1 << 15)
+        # Fan 17 → bit 0, fan 18 → bit 1 (32-bit mask: 65536 + 131072)
+        laser_mask = 0b11
         if state:
-            new_value = current_value | ((1 << 16) | (1 << 17))
+            new_value = current_value | laser_mask
         else:
             new_value = current_value & ~laser_mask
 
         self._flush_socket()
-        return self.write_register_1131_direct(new_value)
+        return self.write_register_1132_direct(new_value)
 
     def _flush_socket(self):
         """Вычитывание и сброс всех данных из входного буфера сокета"""

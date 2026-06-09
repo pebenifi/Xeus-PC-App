@@ -2156,10 +2156,20 @@ class ModbusManager(QObject):
         self._reading_1131 = False
         if value is None:
             return
-        try:
-            value_int = int(value)
-        except Exception:
-            return
+        if isinstance(value, dict):
+            try:
+                value_int = int(value.get("1131", 0))
+                value_1132 = int(value.get("1132", 0))
+            except Exception:
+                return
+        else:
+            try:
+                value_int = int(value)
+                value_1132 = 0
+            except Exception:
+                return
+
+        laser_fan_mask = 0b11  # fan 17 → bit 0, fan 18 → bit 1 in register 1132
 
         # КРИТИЧНО: если это происходит сразу после начала записи (в течение 2 секунд),
         # то обновляем только тот вентилятор, который мы записывали
@@ -2187,9 +2197,9 @@ class ModbusManager(QObject):
                              self.fanStateChanged.emit(written_fan_index, new_state)
                         return
                     
-                    # Check laser fan (fans 17+18 → bits 16+17)
+                    # Check laser fan (fans 17+18 → register 1132 bits 0+1)
                     if written_fan_index == 10:
-                        new_state = bool(value_int & (1 << 16)) and bool(value_int & (1 << 17))
+                        new_state = (value_1132 & laser_fan_mask) == laser_fan_mask
                         current_state = self._fan_states[10]
                         if new_state != current_state:
                              self._fan_states[10] = new_state
@@ -2242,8 +2252,8 @@ class ModbusManager(QObject):
                 #     self._pending_fan_updates[fan_index] = (new_state, current_time)
                 #     logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
 
-        # laser fans 17+18 → bits 16+17
-        new_laser_fan_state = bool(value_int & (1 << 16)) and bool(value_int & (1 << 17))
+        # laser fans 17+18 → register 1132 bits 0+1
+        new_laser_fan_state = (value_1132 & laser_fan_mask) == laser_fan_mask
         current_laser_fan_state = self._fan_states[10]
         if new_laser_fan_state != current_laser_fan_state:
              # Временно применяем ВСЕГДА напрямую
@@ -3888,8 +3898,18 @@ class ModbusManager(QObject):
 
         self._reading_1131 = True
         client = self._modbus_client
-        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
-        self._enqueue_read("1131", lambda: client.read_input_register(1131))
+
+        def read_fan_registers():
+            reg_1131 = client.read_input_register(1131)
+            reg_1132 = client.read_input_register(1132)
+            if reg_1131 is None and reg_1132 is None:
+                return None
+            return {
+                "1131": reg_1131 if reg_1131 is not None else 0,
+                "1132": reg_1132 if reg_1132 is not None else 0,
+            }
+
+        self._enqueue_read("1131", read_fan_registers)
     
     def _readStateAfterWrite(self, key: str):
         """
@@ -6423,8 +6443,8 @@ class ModbusManager(QObject):
         }
         
         if fanIndex == 10:
-            # Laser Fan: fans 17 и 18 (биты 16 и 17 в регистре 1131)
-            logger.info(f"Установка Laser Fan (биты 16+17, fans 17+18): {state}")
+            # Laser Fan: fans 17 и 18 (биты 0 и 1 в регистре 1132)
+            logger.info(f"Установка Laser Fan (регистр 1132, fans 17+18): {state}")
             # Обновляем статус
             self._updateActionStatus(f"set {fan_name_mapping[10]}")
             # Логируем действие
