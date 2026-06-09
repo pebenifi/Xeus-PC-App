@@ -2079,7 +2079,7 @@ Rectangle {
                             if (!isNaN(value) && value >= 0) {
                                 modbusManager.setLaserPSUSetpointValue(value)
                                 if (modbusManager.isConnected) {
-                                    modbusManager.setLaserPSUTemperature(value)
+                                    modbusManager.setLaserPSUCurrentSetpoint(value)
                                 }
                             } else {
                                 text = modbusManager ? modbusManager.laserPSUSetpoint.toFixed(2) : "0.00"
@@ -2228,7 +2228,7 @@ Rectangle {
                         var value = parseFloat(textInput6.text)
                         if (!isNaN(value) && value >= 0) {
                             modbusManager.setLaserPSUSetpointValue(value)
-                            modbusManager.setLaserPSUTemperature(value)
+                            modbusManager.setLaserPSUCurrentSetpoint(value)
                         }
                     }
                 }
