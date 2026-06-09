@@ -17,6 +17,8 @@ Rectangle {
     border.color: Constants.colorDarkBlue
     border.width: 0
     enabled: true
+
+    signal changeScreenRequested(string screenName)
     
     // Explicitly set palette for all controls to ensure consistent look
     palette.buttonText: Constants.buttonText
@@ -413,12 +415,7 @@ Rectangle {
         }
 
         onClicked: {
-            // Переходим на Clinicalmode - ВРЕМЕННО ОТКЛЮЧЕНО
-            /*
-            if (mainWindow) {
-                mainWindow.changeScreen("Clinicalmode");
-            }
-            */
+            rectangle67.changeScreenRequested("Clinicalmode")
         }
     }
 }

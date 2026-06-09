@@ -2962,11 +2962,8 @@ class ModbusManager(QObject):
                 logger.info(f"NMR spectrum: meta read failed or short: {None if meta is None else len(meta)}")
                 return None
 
-            # Читаем все 256 регистров.
-            # ВАЖНО: используем max_chunk=30 как в test_modbus.py, так как большие чанки (256) 
-            # приводят к ошибкам чтения или пустым данным на некоторых устройствах.
-            # Стандартный лимит Modbus TCP PDU ~253 байт (125 регистров), 256 явно превышает.
-            data_regs = client.read_input_registers_direct(120, 256, max_chunk=30)
+            # Читаем все 256 регистров одним запросом (как IR)
+            data_regs = client.read_input_registers_direct(120, 256, max_chunk=256)
             if data_regs is None or len(data_regs) < 256:
                 logger.info(f"NMR spectrum: data read failed or short: {None if data_regs is None else len(data_regs)}")
                 return None
