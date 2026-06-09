@@ -1662,13 +1662,13 @@ Rectangle {
             // Кнопка "set"
             Button {
                 id: n2SetButton
-                width: 30
-                height: parent.height - 4
+                width: 40
+                height: parent.height - 2
                 anchors.right: parent.right
-                anchors.rightMargin: 25
+                anchors.rightMargin: 20
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font: Constants.fontNanoPx
+                font: Constants.fontTinyPx
                 
                 background: Rectangle {
                     color: n2SetButton.pressed ? "#555555" : "transparent"
@@ -1941,13 +1941,13 @@ Rectangle {
             // Кнопка "set"
             Button {
                 id: magnetPSUSetButton
-                width: 30
-                height: parent.height - 4
+                width: 40
+                height: parent.height - 2
                 anchors.right: parent.right
-                anchors.rightMargin: 25
+                anchors.rightMargin: 20
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font: Constants.fontNanoPx
+                font: Constants.fontTinyPx
                 
                 background: Rectangle {
                     color: magnetPSUSetButton.pressed ? "#555555" : "transparent"
@@ -2202,13 +2202,13 @@ Rectangle {
             // Кнопка "set"
             Button {
                 id: laserPSUSetButton
-                width: 30
-                height: parent.height - 4
+                width: 40
+                height: parent.height - 2
                 anchors.right: parent.right
-                anchors.rightMargin: 25
+                anchors.rightMargin: 20
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font: Constants.fontNanoPx
+                font: Constants.fontTinyPx
                 
                 background: Rectangle {
                     color: laserPSUSetButton.pressed ? "#555555" : "transparent"
@@ -2479,13 +2479,13 @@ Rectangle {
             // Кнопка "set" на всю высоту справа (позиционируется абсолютно относительно Rectangle)
             Button {
                 id: xenonSetButton
-                width: 30
-                height: parent.height - 4  // Учитываем margins родителя
+                width: 40
+                height: parent.height - 2
                 anchors.right: parent.right
-                anchors.rightMargin: 25  // Сдвигаем кнопку влево на 25 пикселей (было 20, теперь 25)
+                anchors.rightMargin: 20
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font: Constants.fontNanoPx
+                font: Constants.fontTinyPx
                 
                 background: Rectangle {
                     color: xenonSetButton.pressed ? "#555555" : "transparent"
@@ -2805,13 +2805,13 @@ Rectangle {
             // Кнопка "set" на всю высоту справа (позиционируется абсолютно относительно Rectangle)
             Button {
                 id: setButton
-                width: 30
-                height: parent.height - 4  // Учитываем margins родителя
+                width: 40
+                height: parent.height - 2
                 anchors.right: parent.right
-                anchors.rightMargin: 25  // Сдвигаем кнопку влево на 25 пикселей (было 20, теперь 25)
+                anchors.rightMargin: 20
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font: Constants.fontNanoPx
+                font: Constants.fontTinyPx
                 
                 background: Rectangle {
                     color: setButton.pressed ? "#555555" : "transparent"
@@ -3101,13 +3101,13 @@ Rectangle {
             // Кнопка "set" на всю высоту справа (позиционируется абсолютно относительно Rectangle)
             Button {
                 id: seopSetButton
-                width: 30
-                height: parent.height - 4  // Учитываем margins родителя
+                width: 40
+                height: parent.height - 2
                 anchors.right: parent.right
-                anchors.rightMargin: 25  // Сдвигаем кнопку влево на 25 пикселей (было 20, теперь 25)
+                anchors.rightMargin: 20
                 anchors.verticalCenter: parent.verticalCenter
                 text: "set"
-                font: Constants.fontNanoPx
+                font: Constants.fontTinyPx
                 
                 background: Rectangle {
                     color: seopSetButton.pressed ? "#555555" : "transparent"
