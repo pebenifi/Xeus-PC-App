@@ -2342,7 +2342,7 @@ class ModbusClient:
         """Установка состояния вентилятора в регистре 1131
         
         Args:
-            fan_bit: Бит вентилятора (0-9 для обычных fans, 16-17 для laser fan)
+            fan_bit: Бит вентилятора (0-9 для обычных fans; laser fans — биты 16 и 17, см. set_laser_fans_1131)
             state: True - включить, False - выключить
         
         Returns:
@@ -2378,6 +2378,34 @@ class ModbusClient:
         self._flush_socket()
         
         # Записываем новое значение
+        return self.write_register_1131_direct(new_value)
+
+    def set_laser_fans_1131(self, state: bool) -> bool:
+        """Laser Fan: одновременно fans 17 и 18 (биты 16 и 17 в регистре 1131)."""
+        current_value = None
+        try:
+            if self.client is not None and self.client.is_socket_open():
+                result = self.client.read_input_registers(1131, count=1, device_id=self.unit_id)
+                if not result.isError() and result.registers:
+                    current_value = result.registers[0]
+        except Exception as e:
+            logger.debug(f"Не удалось прочитать регистр 1131 через pymodbus: {e}")
+
+        if current_value is None:
+            current_value = self.read_register_1131_direct()
+
+        if current_value is None:
+            logger.error("Не удалось прочитать текущее состояние регистра 1131")
+            return False
+
+        # Fans 17+18; bit 15 — устаревший laser fan в старых сборках GUI
+        laser_mask = (1 << 16) | (1 << 17) | (1 << 15)
+        if state:
+            new_value = current_value | ((1 << 16) | (1 << 17))
+        else:
+            new_value = current_value & ~laser_mask
+
+        self._flush_socket()
         return self.write_register_1131_direct(new_value)
 
     def _flush_socket(self):
