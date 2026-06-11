@@ -1737,13 +1737,13 @@ Rectangle {
             x: 51
             y: 30
             color: Constants.colorWhite
-            text: modbusManager ? (modbusManager.magnetPSUCurrent.toFixed(2) + "A") : qsTr("--")
+            text: modbusManager ? (modbusManager.magnetPSUSetpoint.toFixed(3) + "A") : qsTr("--")
             font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
-                function onMagnetPSUCurrentChanged(current) {
-                    label5.text = current.toFixed(2) + "A"
+                function onMagnetPSUSetpointChanged(setpoint) {
+                    label5.text = setpoint.toFixed(3) + "A"
                 }
             }
         }
