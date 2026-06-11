@@ -11,6 +11,31 @@ import time
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Laser PSU ток (1231) и setpoint (1241): устройство хранит A × 10 (152 → 15.2 A)
+_LASER_PSU_AMPS_SCALE = 10.0
+
+
+def _laser_psu_register_to_amps(raw: object) -> Optional[float]:
+    try:
+        return float(int(raw)) / _LASER_PSU_AMPS_SCALE
+    except Exception:
+        return None
+
+
+def _laser_psu_amps_to_register(amps: float) -> int:
+    return int(round(amps * _LASER_PSU_AMPS_SCALE))
+
+
+# Laser temp (1841): устройство хранит °C × 10 (218 → 21.8°C)
+_LASER_TEMP_SCALE = 10.0
+
+
+def _laser_temp_register_to_celsius(raw: object) -> Optional[float]:
+    try:
+        return float(int(raw)) / _LASER_TEMP_SCALE
+    except Exception:
+        return None
+
 
 class _ModbusIoWorker(QObject):
     """
@@ -126,6 +151,15 @@ class ModbusManager(QObject):
     """Менеджер для управления Modbus подключением, доступный из QML"""
 
     _REGISTER_READ_WATCHDOG_S = 1.5
+    _REGISTER_KEY_TO_ADDRESS = {
+        "1021": 1021,
+        "1111": 1111,
+        "1511": 1511,
+        "1531": 1531,
+        "1411": 1411,
+        "1421": 1421,
+        "1841": 1841,
+    }
     _READ_KEY_TO_FLAG = {
         "1021": "_reading_1021",
         "1111": "_reading_1111",
@@ -292,6 +326,7 @@ class ModbusManager(QObject):
         self._modbus_client: ModbusClient = None
         self._is_connected = False
         self._connection_in_progress = False
+        self._reconnect_polling_stopped = False
         self._last_modbus_ok_time = 0.0
         self._last_reconnect_attempt_time = 0.0
         self._status_text = "Disconnected"
@@ -302,6 +337,9 @@ class ModbusManager(QObject):
         self._problematic_registers_timer = QTimer(self)
         self._problematic_registers_timer.timeout.connect(self._checkProblematicRegisters)
         self._problematic_registers_timer.setInterval(2000)  # Проверка каждые 2 секунды
+        self._problematic_registers_clear_timer = QTimer(self)
+        self._problematic_registers_clear_timer.timeout.connect(self._periodicClearProblematicRegisters)
+        self._problematic_registers_clear_timer.setInterval(10000)  # Полный сброс списка каждые 10 секунд
         self._checking_problematic_register = False  # Флаг для предотвращения параллельных проверок
         self._water_chiller_inlet_temperature = 0.0  # Температура на входе Water Chiller (регистр 1511)
         self._water_chiller_outlet_temperature = 0.0  # Температура на выходе Water Chiller (регистр 1521)
@@ -311,8 +349,8 @@ class ModbusManager(QObject):
         self._water_chiller_temperature = 0.0  # Текущая температура Water Chiller (регистр 1511) - использует inlet temp
         self._water_chiller_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._water_chiller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._readWaterChillerSetpoint)
-        self._water_chiller_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
+        self._water_chiller_setpoint_auto_update_timer.timeout.connect(self._autoUpdateWaterChillerSetpoint)
+        self._water_chiller_setpoint_auto_update_timer.setInterval(1000)
         self._seop_cell_temperature = 0.0  # Температура SEOP Cell (регистр 1411)
         self._seop_cell_setpoint = 0.0  # Заданная температура SEOP Cell (регистр 1421)
         self._pid_controller_temperature = 0.0  # Температура PID Controller (регистр 1411)
@@ -320,12 +358,12 @@ class ModbusManager(QObject):
         self._pid_controller_state = False  # Состояние PID Controller (вкл/выкл, регистр 1431)
         self._pid_controller_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._pid_controller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._pid_controller_setpoint_auto_update_timer.timeout.connect(self._autoUpdatePIDControllerSetpoint)
-        self._pid_controller_setpoint_auto_update_timer.setInterval(20000)  # 20 секунд
+        self._pid_controller_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
+        self._pid_controller_setpoint_auto_update_timer.setInterval(1000)
         self._reading_water_chiller = False  # Флаг для предотвращения параллельного чтения Water Chiller
         self._seop_cell_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._seop_cell_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
-        self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._readSeopCellSetpoint)
+        self._seop_cell_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
         self._seop_cell_setpoint_auto_update_timer.setInterval(1000)  # 1 секунда
         self._reading_1421 = False  # Флаг для предотвращения параллельного чтения setpoint SEOP Cell
         self._magnet_psu_current = 0.0  # Ток Magnet PSU в амперах (регистр 1341)
@@ -652,7 +690,7 @@ class ModbusManager(QObject):
         # Таймер для чтения регистров PID Controller (1411, 1421, 1431) - быстрое обновление
         self._pid_controller_timer = QTimer(self)
         self._pid_controller_timer.timeout.connect(self._readPIDController)
-        # self._pid_controller_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._pid_controller_timer.setInterval(1000)
 
         # Таймер для чтения регистров Alicats (1611, 1621, 1651, 1661) - быстрое обновление
         self._alicats_timer = QTimer(self)
@@ -814,6 +852,121 @@ class ModbusManager(QObject):
         self.n2SetpointChanged.emit(self._n2_setpoint)
         self.vacuumPressureChanged.emit(self._vacuum_pressure)
 
+    def _clear_client_problematic_registers(self) -> None:
+        """Сброс проблемных регистров в ModbusClient (иначе 1511/1531 не читаются до перезапуска)."""
+        client = self._modbus_client
+        if client is not None:
+            client.clear_problematic_registers()
+
+    def _periodicClearProblematicRegisters(self) -> None:
+        """Полная очистка списков проблемных регистров (manager + client) каждые 10 с."""
+        if not self._is_connected:
+            return
+        manager_list = sorted(self._problematic_registers)
+        client_list: list[int] = []
+        if self._modbus_client is not None:
+            client_list = sorted(self._modbus_client._problematic_registers)
+        if manager_list or client_list:
+            logger.info(
+                f"🔄 Периодическая очистка проблемных регистров: "
+                f"manager={manager_list}, client={client_list}"
+            )
+        self._problematic_registers.clear()
+        self._checking_problematic_register = False
+        self._clear_client_problematic_registers()
+
+    def _discard_client_problematic_for_key(self, key: str) -> None:
+        address = self._REGISTER_KEY_TO_ADDRESS.get(key)
+        client = self._modbus_client
+        if address is not None and client is not None:
+            client.discard_problematic_register(address)
+
+    def _clear_setpoint_user_interaction_flags(self) -> None:
+        """Сброс блокировок ввода setpoint — иначе значения с устройства не применяются до перезапуска."""
+        self._water_chiller_setpoint_user_interaction = False
+        self._seop_cell_setpoint_user_interaction = False
+        self._pid_controller_setpoint_user_interaction = False
+        self._magnet_psu_setpoint_user_interaction = False
+        self._laser_psu_setpoint_user_interaction = False
+        self._xenon_setpoint_user_interaction = False
+        self._n2_setpoint_user_interaction = False
+
+    def _begin_priority_register_read(
+        self,
+        key: str,
+        flag_attr: str,
+        start_time_attr: str,
+        read_func: Callable[[], Any],
+    ) -> None:
+        """Приоритетное чтение регистра (connect/resume), в т.ч. когда опрос на паузе."""
+        if not self._is_connected or self._modbus_client is None:
+            return
+        if key in self._problematic_registers and not self._checking_problematic_register:
+            return
+        self._discard_client_problematic_for_key(key)
+        timeout = self._REGISTER_READ_WATCHDOG_S
+        if getattr(self, flag_attr, False):
+            started = getattr(self, start_time_attr, 0.0)
+            if started and (time.time() - started) > timeout:
+                setattr(self, flag_attr, False)
+            else:
+                return
+        setattr(self, flag_attr, True)
+        setattr(self, start_time_attr, time.time())
+        self._enqueue_read_priority(key, read_func)
+
+    def _scheduleImmediateSensorReads(self) -> None:
+        """Немедленное чтение температур/setpoint после connect или resume (не ждать тика таймера)."""
+        if not self._is_connected or self._modbus_client is None:
+            return
+        client = self._modbus_client
+        specs = (
+            (50, "1511", "_reading_1511", "_read_1511_start_time", lambda: client.read_register_1511_direct()),
+            (80, "1411", "_reading_1411", "_read_1411_start_time", lambda: client.read_input_register(1411)),
+            (110, "1841", "_reading_laser_temp", "_read_laser_temp_start_time", lambda: client.read_input_register(1841)),
+            (140, "1531", "_reading_1531", "_read_1531_start_time", lambda: client.read_holding_register(1531)),
+            (170, "1421", "_reading_1421", "_read_1421_start_time", lambda: client.read_holding_register(1421)),
+        )
+        for delay_ms, key, flag, start_attr, func in specs:
+            QTimer.singleShot(
+                delay_ms,
+                lambda k=key, f=flag, s=start_attr, fn=func: (
+                    self._begin_priority_register_read(k, f, s, fn)
+                    if self._is_connected
+                    else None
+                ),
+            )
+
+    def _startPollingTimersAfterConnect(self) -> None:
+        """Запуск всех таймеров опроса после успешного connect/reconnect."""
+        self._connection_check_timer.start()
+        QTimer.singleShot(50, lambda: self._relay_1021_timer.start())
+        self._ui_update_timer.start()
+        QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
+        QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
+        QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
+        QTimer.singleShot(155, lambda: self._pid_controller_timer.start())
+        QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
+        QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
+        QTimer.singleShot(215, lambda: self._laser_temp_timer.start())
+        QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
+        QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
+        QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
+        QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
+        if not self._problematic_registers_timer.isActive():
+            self._problematic_registers_timer.start()
+        if not self._problematic_registers_clear_timer.isActive():
+            self._problematic_registers_clear_timer.start()
+
+        self._water_chiller_setpoint_auto_update_timer.start()
+        self._magnet_psu_setpoint_auto_update_timer.start()
+        self._laser_psu_setpoint_auto_update_timer.start()
+        self._seop_cell_setpoint_auto_update_timer.start()
+        self._xenon_setpoint_auto_update_timer.start()
+        self._n2_setpoint_auto_update_timer.start()
+
+        self._scheduleImmediateSensorReads()
+
     @Slot()
     def pausePolling(self):
         """Приостановить все таймеры опроса (используется при переключении экранов)"""
@@ -846,9 +999,10 @@ class ModbusManager(QObject):
         def startPollingAfterDelay():
             for t in self._polling_timers:
                 t.start()
+            self._scheduleImmediateSensorReads()
             self.pollingPausedChanged.emit(False)
             logger.info("▶️ Опрос Modbus возобновлен после переключения экрана")
-        
+
         # Задержка 200ms перед возобновлением опроса
         QTimer.singleShot(200, startPollingAfterDelay)
     
@@ -1371,7 +1525,9 @@ class ModbusManager(QObject):
         try:
             logger.info("Отключение от Modbus устройства")
             self._connection_in_progress = False
+            self._reconnect_polling_stopped = False
             self._connection_check_timer.stop()
+            self._clear_setpoint_user_interaction_flags()
             self._sync_timer.stop()  # Останавливаем синхронизацию
             self._relay_1021_timer.stop()  # Останавливаем чтение регистра 1021
             self._valve_1111_timer.stop()  # Останавливаем чтение регистра 1111
@@ -1392,6 +1548,7 @@ class ModbusManager(QObject):
             self._fan_1131_timer.stop()  # Останавливаем чтение регистра 1131 (fans)
             self._ui_update_timer.stop()  # Останавливаем таймер обновления UI
             self._problematic_registers_timer.stop()
+            self._problematic_registers_clear_timer.stop()
             self._problematic_registers.clear()
             self._checking_problematic_register = False
             self._reset_periodic_read_flags()
@@ -1510,6 +1667,9 @@ class ModbusManager(QObject):
             )
             self.errorOccurred.emit(error_msg)
             logger.error(error_msg)
+            if self._reconnect_polling_stopped:
+                self._reconnect_polling_stopped = False
+                self._startPollingTimersAfterConnect()
             return
 
         # Успешное подключение
@@ -1530,7 +1690,10 @@ class ModbusManager(QObject):
         self._last_write_error_time = 0.0
         self._problematic_registers.clear()
         self._checking_problematic_register = False
+        self._clear_client_problematic_registers()
         self._reset_periodic_read_flags()
+        self._reconnect_polling_stopped = False
+        self._clear_setpoint_user_interaction_flags()
         logger.debug(f"🔌 Время подключения установлено: {self._connection_time}, сброшены блокировки")
 
         self.connectionStatusChanged.emit(self._is_connected)
@@ -1540,39 +1703,10 @@ class ModbusManager(QObject):
         # Немедленно отправляем текущие состояния из буфера в UI для мгновенного отображения
         self._emitCachedStates()
 
-        # КРИТИЧНО: сразу читаем регистры вентиляторов и клапанов для синхронизации UI с устройством
-        # Это предотвращает задержку в 20-30 секунд перед отображением начальных состояний
         QTimer.singleShot(100, lambda: self._readRelay1021() if self._is_connected else None)
-        # QTimer.singleShot(150, lambda: self._readValve1111() if self._is_connected else None)
-        # QTimer.singleShot(200, lambda: self._readFan1131() if self._is_connected else None)
+        QTimer.singleShot(150, lambda: self._readPIDController() if self._is_connected else None)
 
-        # Запускаем таймеры (они теперь будут только ставить задачи в worker, не блокируя UI)
-        self._connection_check_timer.start()
-        # QTimer.singleShot(100, lambda: self._sync_timer.start())
-        QTimer.singleShot(50, lambda: self._relay_1021_timer.start())
-        # Запускаем таймер последовательного обновления UI
-        self._ui_update_timer.start()
-        QTimer.singleShot(80, lambda: self._valve_1111_timer.start())
-        QTimer.singleShot(110, lambda: self._water_chiller_temp_timer.start())
-        QTimer.singleShot(140, lambda: self._seop_cell_temp_timer.start())
-        QTimer.singleShot(170, lambda: self._magnet_psu_current_timer.start())
-        QTimer.singleShot(200, lambda: self._laser_psu_current_timer.start())
-        QTimer.singleShot(215, lambda: self._laser_temp_timer.start())
-        QTimer.singleShot(230, lambda: self._xenon_pressure_timer.start())
-        QTimer.singleShot(260, lambda: self._n2_pressure_timer.start())
-        QTimer.singleShot(290, lambda: self._vacuum_pressure_timer.start())
-        QTimer.singleShot(320, lambda: self._fan_1131_timer.start())
-        if not self._problematic_registers_timer.isActive():
-            self._problematic_registers_timer.start()
-
-        # Таймеры автообновления setpoint (UI-логика)
-        self._water_chiller_setpoint_auto_update_timer.start()
-        self._magnet_psu_setpoint_auto_update_timer.start()
-        self._laser_psu_setpoint_auto_update_timer.start()
-        self._seop_cell_setpoint_auto_update_timer.start()
-        # self._pid_controller_setpoint_auto_update_timer.start()
-        self._xenon_setpoint_auto_update_timer.start()
-        self._n2_setpoint_auto_update_timer.start()
+        self._startPollingTimersAfterConnect()
 
         logger.info("Успешное подключение к Modbus устройству (I/O в фоне)")
 
@@ -1712,6 +1846,14 @@ class ModbusManager(QObject):
                 # Читаем состояние обратно через 1100 мс после успешной записи
                 # Это синхронизирует UI с устройством ПОСЛЕ того, как закончится блокировка (1.0 сек)
                 QTimer.singleShot(1100, lambda: self._readStateAfterWrite(key))
+            elif key in ("1421", "1421_pid"):
+                self._seop_cell_setpoint_user_interaction = False
+                self._pid_controller_setpoint_user_interaction = False
+                QTimer.singleShot(300, lambda: self._readSeopCellSetpoint() if self._is_connected else None)
+            elif key == "1531":
+                self._water_chiller_setpoint_user_interaction = False
+                self._discard_client_problematic_for_key("1531")
+                QTimer.singleShot(300, lambda: self._readWaterChillerSetpoint() if self._is_connected else None)
         else:
             logger.warning(f"Modbus write failed: {key} meta={meta}")
             # КРИТИЧНО: при ошибке записи очищаем ВЕСЬ кэш, чтобы не применять старые значения
@@ -1958,7 +2100,9 @@ class ModbusManager(QObject):
         except Exception:
             return
             
+        self._water_chiller_inlet_temperature = temperature
         self._water_chiller_temperature = temperature
+        self.waterChillerInletTemperatureChanged.emit(temperature)
         self.waterChillerTemperatureChanged.emit(temperature)
         logger.debug(f"✅ [1511] Water Chiller Temperature обновлена: {temperature}°C")
 
@@ -1977,10 +2121,9 @@ class ModbusManager(QObject):
         except Exception:
             return
 
-        if self._water_chiller_setpoint != setpoint:
-            self._water_chiller_setpoint = setpoint
-            self.waterChillerSetpointChanged.emit(setpoint)
-            logger.info(f"✅ [1531] Water Chiller Setpoint обновлен из устройства: {setpoint}°C (применено напрямую)")
+        self._water_chiller_setpoint = setpoint
+        self.waterChillerSetpointChanged.emit(setpoint)
+        logger.info(f"✅ [1531] Water Chiller Setpoint обновлен из устройства: {setpoint}°C")
 
     def _applySeopCellTemperatureValue(self, value: object):
         self._reading_1411 = False
@@ -1999,27 +2142,31 @@ class ModbusManager(QObject):
         self.seopCellTemperatureChanged.emit(temperature)
         logger.debug(f"✅ [1411] SEOP Cell Temperature обновлена: {temperature}°C")
 
+    def _apply_setpoint_from_register_1421(self, setpoint: float) -> None:
+        """Регистр 1421 общий для SEOP Cell и PID Controller setpoint."""
+        updated = False
+        if not self._seop_cell_setpoint_user_interaction and self._seop_cell_setpoint != setpoint:
+            self._seop_cell_setpoint = setpoint
+            self.seopCellSetpointChanged.emit(setpoint)
+            updated = True
+        if not self._pid_controller_setpoint_user_interaction and self._pid_controller_setpoint != setpoint:
+            self._pid_controller_setpoint = setpoint
+            self.pidControllerSetpointChanged.emit(setpoint)
+            updated = True
+        if updated:
+            logger.info(f"✅ [1421] Setpoint обновлен из устройства: {setpoint}°C")
+
     def _applySeopCellSetpointValue(self, value: object):
         self._reading_1421 = False
         if value is None:
             return
 
-        # Если пользователь сейчас редактирует поле, не обновляем его из устройства
-        if self._seop_cell_setpoint_user_interaction:
-            return
-
         try:
-            # Прямое применение, без проверок времени записи
-            # Исправлено масштабирование: делим на 10.0, а не на 100.0
-            # Если 324 -> 32.4, значит делитель 10
             setpoint = float(int(value)) / 10.0
         except Exception:
             return
 
-        if self._seop_cell_setpoint != setpoint:
-            self._seop_cell_setpoint = setpoint
-            self.seopCellSetpointChanged.emit(setpoint)
-            logger.info(f"✅ [1421] SEOP Cell Setpoint обновлен из устройства: {setpoint}°C (применено напрямую)")
+        self._apply_setpoint_from_register_1421(setpoint)
 
     def _applyMagnetPSUCurrentValue(self, value: object):
         self._reading_1341 = False
@@ -2065,20 +2212,14 @@ class ModbusManager(QObject):
         if value is None or not isinstance(value, dict):
             return
 
-        def _to_scaled(raw) -> Optional[float]:
-            try:
-                return float(int(raw)) / 100.0
-            except Exception:
-                return None
-
-        current = _to_scaled(value.get("1231"))
+        current = _laser_psu_register_to_amps(value.get("1231"))
         if current is not None and self._laser_psu_current != current:
             self._laser_psu_current = current
             self.laserPSUCurrentChanged.emit(current)
             logger.debug(f"✅ [1231] Laser PSU Current: {current} A")
 
         if not self._laser_psu_setpoint_user_interaction:
-            current_sp = _to_scaled(value.get("1241"))
+            current_sp = _laser_psu_register_to_amps(value.get("1241"))
             if current_sp is not None and self._laser_psu_setpoint != current_sp:
                 self._laser_psu_setpoint = current_sp
                 self.laserPSUSetpointChanged.emit(current_sp)
@@ -2341,12 +2482,6 @@ class ModbusManager(QObject):
             temp = float(value['temperature'])
             self._pid_controller_temperature = temp
             self.pidControllerTemperatureChanged.emit(temp)
-        if 'setpoint' in value:
-            setpoint = float(value['setpoint'])
-            # Обновляем только если пользователь не взаимодействует с полем
-            if not self._pid_controller_setpoint_user_interaction:
-                self._pid_controller_setpoint = setpoint
-                self.pidControllerSetpointChanged.emit(setpoint)
         if 'state' in value:
             state = bool(value['state'])
             self._pid_controller_state = state
@@ -3272,11 +3407,24 @@ class ModbusManager(QObject):
 
         # Останавливаем polling таймеры, чтобы не засыпать очередь запросами во время reconnect
         # НО НЕ закрываем соединение - оно должно оставаться открытым
+        self._reconnect_polling_stopped = True
         try:
             for t in self._polling_timers:
                 t.stop()
         except Exception:
             pass
+        for t in (
+            self._water_chiller_setpoint_auto_update_timer,
+            self._magnet_psu_setpoint_auto_update_timer,
+            self._laser_psu_setpoint_auto_update_timer,
+            self._seop_cell_setpoint_auto_update_timer,
+            self._xenon_setpoint_auto_update_timer,
+            self._n2_setpoint_auto_update_timer,
+        ):
+            try:
+                t.stop()
+            except Exception:
+                pass
         
         # Сбрасываем время возобновления опроса, чтобы после переподключения установилось новое время
         self._polling_resumed_time = 0.0
@@ -3393,8 +3541,8 @@ class ModbusManager(QObject):
             return
 
         client = self._modbus_client
-        # Используем обычный pymodbus вместо прямого сокета (более стабильно)
-        self._enqueue_read("1511", lambda: client.read_input_register(1511))
+        self._discard_client_problematic_for_key("1511")
+        self._enqueue_read("1511", lambda: client.read_register_1511_direct())
     
     def _readWaterChillerSetpoint(self):
         """
@@ -3411,8 +3559,7 @@ class ModbusManager(QObject):
             return
 
         client = self._modbus_client
-        # Используем обычный pymodbus
-        # Регистр 1531 - Holding Register (записываемый)
+        self._discard_client_problematic_for_key("1531")
         self._enqueue_read("1531", lambda: client.read_holding_register(1531))
     
     def _readMagnetPSUSetpoint(self):
@@ -3441,19 +3588,23 @@ class ModbusManager(QObject):
             logger.debug("Laser PSU setpoint: сброс флага ввода, читаем значение с устройства")
         self._readLaserPSURegisters()
 
+    def _autoUpdateWaterChillerSetpoint(self):
+        """Сбрасывает блокировку ввода и читает setpoint (1531) с устройства."""
+        if self._water_chiller_setpoint_user_interaction:
+            self._water_chiller_setpoint_user_interaction = False
+        self._readWaterChillerSetpoint()
+
     def _applyLaserTempValue(self, value: object):
         """Температура лазера (регистр 1841)."""
         self._reading_laser_temp = False
         if value is None:
             return
-        try:
-            temp = float(int(value))
-        except Exception:
+        temp = _laser_temp_register_to_celsius(value)
+        if temp is None:
             return
-        if self._laser_temp != temp:
-            self._laser_temp = temp
-            self.laserTempChanged.emit(temp)
-            logger.debug(f"✅ [1841] Laser Temp: {temp}")
+        self._laser_temp = temp
+        self.laserTempChanged.emit(temp)
+        logger.debug(f"✅ [1841] Laser Temp: {temp}°C")
 
     def _readLaserTemp(self):
         """Чтение регистра 1841 (температура лазера)."""
@@ -3588,16 +3739,21 @@ class ModbusManager(QObject):
         self._seop_cell_setpoint_auto_update_timer.start()
         return self.setSeopCellTemperature(new_temp)
     
+    def _autoUpdateSeopCellSetpoint(self):
+        """Сбрасывает блокировку ввода и читает setpoint (1421) с устройства."""
+        if self._seop_cell_setpoint_user_interaction:
+            self._seop_cell_setpoint_user_interaction = False
+        if self._pid_controller_setpoint_user_interaction:
+            self._pid_controller_setpoint_user_interaction = False
+        self._readSeopCellSetpoint()
+
     def _readSeopCellSetpoint(self):
         """
-        Чтение регистра 1421 (setpoint SEOP Cell) из устройства
+        Чтение регистра 1421 (setpoint SEOP Cell / PID Controller) из устройства
         """
         if not self._is_connected or self._modbus_client is None:
             return
-        
-        # Если пользователь взаимодействует с полем, не читаем (чтобы не сбивать ввод)
-        if self._seop_cell_setpoint_user_interaction:
-            return
+
         if not self._try_begin_register_read("_reading_1421", "_read_1421_start_time"):
             return
         if "1421" in self._problematic_registers and not self._checking_problematic_register:
@@ -3607,25 +3763,6 @@ class ModbusManager(QObject):
         client = self._modbus_client
         # Используем обычный pymodbus
         self._enqueue_read("1421", lambda: client.read_holding_register(1421))
-    
-    def _autoUpdatePIDControllerSetpoint(self):
-        """
-        Автоматическое обновление setpoint PID Controller из текущей температуры, если пользователь не взаимодействует с полем
-        Вызывается каждые 20 секунд
-        """
-        if not self._is_connected:
-            return
-        
-        # Если пользователь не взаимодействовал с полем, обновляем setpoint из текущей температуры
-        if not self._pid_controller_setpoint_user_interaction:
-            # Не обновляем если текущая температура равна 0.0 или невалидная (устройство только подключено)
-            if self._pid_controller_temperature > 0.1 and abs(self._pid_controller_temperature - self._pid_controller_setpoint) > 0.1:  # Обновляем только если разница > 0.1°C и температура валидная
-                logger.info(f"Автообновление setpoint PID Controller: {self._pid_controller_setpoint}°C -> {self._pid_controller_temperature}°C")
-                self._pid_controller_setpoint = self._pid_controller_temperature
-                self.pidControllerSetpointChanged.emit(self._pid_controller_temperature)
-        else:
-            # Сбрасываем флаг взаимодействия для следующего цикла
-            self._pid_controller_setpoint_user_interaction = False
     
     def _readXenonSetpoint(self):
         """
@@ -4295,6 +4432,7 @@ class ModbusManager(QObject):
             }
             
             if key in read_methods:
+                self._discard_client_problematic_for_key(key)
                 # Первая попытка чтения
                 read_methods[key]()
                 # Ждем немного перед второй попыткой
@@ -4392,11 +4530,19 @@ class ModbusManager(QObject):
             
             result = {}
             
-            # Laser PSU (1231 A, 1241 A sp, 1251 on/off — ÷100)
-            laser_current = _register_to_scaled(laser_current_reg)
+            # Laser PSU (1231 A, 1241 A sp, 1251 on/off — ÷10)
+            laser_current = (
+                _laser_psu_register_to_amps(laser_current_reg[0])
+                if laser_current_reg and len(laser_current_reg) >= 1
+                else None
+            )
             if laser_current is not None:
                 result['laser_current'] = laser_current
-            laser_current_sp = _register_to_scaled(laser_current_setpoint_reg)
+            laser_current_sp = (
+                _laser_psu_register_to_amps(laser_current_setpoint_reg[0])
+                if laser_current_setpoint_reg and len(laser_current_setpoint_reg) >= 1
+                else None
+            )
             if laser_current_sp is not None:
                 result['laser_current_setpoint'] = laser_current_sp
             if laser_state_reg and len(laser_state_reg) >= 1:
@@ -4433,18 +4579,13 @@ class ModbusManager(QObject):
             # Регистр 1411 - температура (value) в градусах Цельсия
             # Используем обычный pymodbus для согласованности
             temp_value = client.read_input_register(1411)
-            # Регистр 1421 - setpoint в градусах Цельсия
-            setpoint_value = client.read_input_register(1421)
-            # Регистр 1431 - on/off (1 = вкл, 0 = выкл)
+            # Регистр 1431 - on/off (1 = вкл, 0 = выкл); setpoint 1421 читается отдельным таймером
             state_value = client.read_input_register(1431)
             
             result = {}
             if temp_value is not None:
                 # Преобразуем из int (температура * 10) в float
                 result['temperature'] = float(temp_value) / 10.0
-            if setpoint_value is not None:
-                # Преобразуем из int (температура * 10) в float
-                result['setpoint'] = float(setpoint_value) / 10.0
             if state_value is not None:
                 result['state'] = bool(int(state_value) & 0x01)
             
@@ -4595,8 +4736,9 @@ class ModbusManager(QObject):
                 # Output Power - значение уже в нужных единицах
                 result['output_power'] = float(output_power_value)
             if temp_value is not None:
-                # Temp - значение уже в нужных единицах
-                result['temp'] = float(temp_value)
+                temp = _laser_temp_register_to_celsius(temp_value)
+                if temp is not None:
+                    result['temp'] = temp
             
             return result
         
@@ -6677,85 +6819,67 @@ class ModbusManager(QObject):
         self._water_chiller_setpoint_auto_update_timer.start()
         return True
     
+    def _write_water_chiller_setpoint_register(self, register_value: int, temperature: float) -> bool:
+        """Запись setpoint Water Chiller (1531): прямой сокет, при неудаче — pymodbus."""
+        client = self._modbus_client
+        if client is None:
+            return False
+        client.discard_problematic_register(1531)
+        result = client.write_register_1531_direct(register_value)
+        if not result:
+            logger.warning("Прямая запись 1531 не удалась, пробуем write_holding_register")
+            result = client.write_holding_register(1531, register_value)
+        if result:
+            logger.info(f"✅ Заданная температура Water Chiller установлена: {temperature}°C (1531={register_value})")
+        else:
+            logger.error(f"❌ Не удалось записать setpoint Water Chiller: {temperature}°C (1531={register_value})")
+        return bool(result)
+
     @Slot(float, result=bool)
     def setWaterChillerTemperature(self, temperature: float) -> bool:
-        """
-        Установка температуры Water Chiller в регистр 1531
-        
-        Args:
-            temperature: Температура в градусах Цельсия (например, 23.0)
-        
-        Returns:
-            True если успешно, False в противном случае
-        """
-        logger.info(f"🔵 setWaterChillerTemperature вызван с температурой: {temperature}°C")
-        
-        # Обновляем статус (даже без подключения)
+        """Установка заданной температуры Water Chiller в регистр 1531."""
+        self._addLog(f"Water Chiller Temperature: {temperature}°C")
+        logger.info(f"🔵 setWaterChillerTemperature: {temperature}°C")
         self._updateActionStatus(f"set water chiller to {temperature:.2f}")
-        
+
         if not self._is_connected or self._modbus_client is None:
             logger.warning("Попытка установки температуры Water Chiller без подключения")
             return False
-        
-        # Обновляем внутреннее значение setpoint сразу (до отправки на устройство)
-        # Это нужно для того, чтобы стрелки работали с актуальным значением
-        # Всегда обновляем и эмитируем сигнал, даже если значение не изменилось
-        # Это гарантирует обновление UI при нажатии на стрелки
-        logger.info(f"🔵 Обновление _water_chiller_setpoint: {self._water_chiller_setpoint}°C -> {temperature}°C")
+
         self._water_chiller_setpoint = temperature
-        # Отправляем сигнал для обновления UI (setpoint)
-        logger.info(f"🔵 Эмитируем сигнал waterChillerSetpointChanged: {temperature}°C")
         self.waterChillerSetpointChanged.emit(temperature)
-        
-        # Преобразуем температуру в значение для регистра (умножаем на 100)
-        # Например, 23.0°C -> 2300
-        register_value = int(temperature * 100)
-        
-        logger.info(f"Установка температуры Water Chiller: {temperature}°C (регистр 1531 = {register_value})")
-        
-        client = self._modbus_client
+
+        register_value = int(round(temperature * 100))
+        logger.info(f"Запись Water Chiller setpoint: {temperature}°C -> регистр 1531 = {register_value}")
 
         def task() -> bool:
-            result = client.write_register_1531_direct(register_value)
-            if result:
-                logger.info(f"✅ Заданная температура Water Chiller успешно установлена: {temperature}°C")
-            else:
-                logger.error(f"❌ Не удалось установить заданную температуру Water Chiller: {temperature}°C")
-            return bool(result)
+            return self._write_water_chiller_setpoint_register(register_value, temperature)
 
         self._enqueue_write("1531", task, {"temperature": temperature})
         return True
-    
+
     @Slot(result=bool)
     def increaseWaterChillerTemperature(self) -> bool:
         """Увеличение заданной температуры Water Chiller на 1°C"""
         if not self._is_connected:
             return False
-        logger.debug(f"Увеличение температуры: текущее значение = {self._water_chiller_setpoint}°C")
         new_temp = self._water_chiller_setpoint + 1.0
-        logger.debug(f"Новое значение после увеличения: {new_temp}°C")
-        # Отмечаем, что пользователь взаимодействует с полем
         self._water_chiller_setpoint_user_interaction = True
-        # Перезапускаем таймер автообновления
         self._water_chiller_setpoint_auto_update_timer.stop()
         self._water_chiller_setpoint_auto_update_timer.start()
         return self.setWaterChillerTemperature(new_temp)
-    
+
     @Slot(result=bool)
     def decreaseWaterChillerTemperature(self) -> bool:
         """Уменьшение заданной температуры Water Chiller на 1°C"""
         if not self._is_connected:
             return False
-        logger.debug(f"Уменьшение температуры: текущее значение = {self._water_chiller_setpoint}°C")
         new_temp = self._water_chiller_setpoint - 1.0
-        logger.debug(f"Новое значение после уменьшения: {new_temp}°C")
-        # Отмечаем, что пользователь взаимодействует с полем
         self._water_chiller_setpoint_user_interaction = True
-        # Перезапускаем таймер автообновления
         self._water_chiller_setpoint_auto_update_timer.stop()
         self._water_chiller_setpoint_auto_update_timer.start()
         return self.setWaterChillerTemperature(new_temp)
-    
+
     @Slot(float, result=bool)
     def setMagnetPSUSetpointValue(self, temperature: float) -> bool:
         """
@@ -7135,7 +7259,7 @@ class ModbusManager(QObject):
         self._laser_psu_setpoint = current
         self.laserPSUSetpointChanged.emit(current)
         self._laser_psu_setpoint_user_interaction = False
-        register_value = int(current * 100)
+        register_value = _laser_psu_amps_to_register(current)
         logger.info(f"Установка тока Laser PSU: {current} A (регистр 1241 = {register_value})")
         client = self._modbus_client
 
@@ -7322,85 +7446,6 @@ class ModbusManager(QObject):
         self._pid_controller_state = state
         self.pidControllerStateChanged.emit(state)
         return True
-    
-    # ===== Water Chiller методы записи =====
-    @Slot(float, result=bool)
-    def setWaterChillerTemperature(self, temperature: float) -> bool:
-        """
-        Установка заданной температуры Water Chiller в регистр 1531
-        
-        Args:
-            temperature: Температура в градусах Цельсия (например, 23.0)
-        
-        Returns:
-            True если успешно, False в противном случае
-        """
-        # Логируем действие
-        self._addLog(f"Water Chiller Temperature: {temperature}°C")
-        logger.info(f"🔵 setWaterChillerTemperature вызван с температурой: {temperature}°C")
-        
-        # Обновляем статус (даже без подключения)
-        self._updateActionStatus(f"set water chiller to {temperature:.2f}")
-        
-        if not self._is_connected or self._modbus_client is None:
-            logger.warning("Попытка установки температуры Water Chiller без подключения")
-            return False
-        
-        # Обновляем внутреннее значение setpoint сразу (до отправки на устройство)
-        logger.info(f"🔵 Обновление _water_chiller_setpoint: {self._water_chiller_setpoint}°C -> {temperature}°C")
-        self._water_chiller_setpoint = temperature
-        # Отправляем сигнал для обновления UI (setpoint)
-        logger.info(f"🔵 Эмитируем сигнал waterChillerSetpointChanged: {temperature}°C")
-        self.waterChillerSetpointChanged.emit(temperature)
-        
-        # Преобразуем температуру в значение для регистра (умножаем на 100)
-        # Например, 23.0°C -> 2300
-        register_value = int(temperature * 100)
-        
-        logger.info(f"Установка температуры Water Chiller: {temperature}°C (регистр 1531 = {register_value})")
-        
-        client = self._modbus_client
-
-        def task() -> bool:
-            result = client.write_register_1531_direct(register_value)
-            if result:
-                logger.info(f"✅ Заданная температура Water Chiller успешно установлена: {temperature}°C")
-            else:
-                logger.error(f"❌ Не удалось установить заданную температуру Water Chiller: {temperature}°C")
-            return bool(result)
-
-        self._enqueue_write("1531", task, {"temperature": temperature})
-        return True
-    
-    @Slot(result=bool)
-    def increaseWaterChillerTemperature(self) -> bool:
-        """Увеличение заданной температуры Water Chiller на 1°C"""
-        if not self._is_connected:
-            return False
-        logger.debug(f"Увеличение температуры Water Chiller: текущее значение = {self._water_chiller_setpoint}°C")
-        new_temp = self._water_chiller_setpoint + 1.0
-        logger.debug(f"Новое значение после увеличения: {new_temp}°C")
-        # Отмечаем, что пользователь взаимодействует с полем
-        self._water_chiller_setpoint_user_interaction = True
-        # Перезапускаем таймер автообновления
-        self._water_chiller_setpoint_auto_update_timer.stop()
-        self._water_chiller_setpoint_auto_update_timer.start()
-        return self.setWaterChillerTemperature(new_temp)
-    
-    @Slot(result=bool)
-    def decreaseWaterChillerTemperature(self) -> bool:
-        """Уменьшение заданной температуры Water Chiller на 1°C"""
-        if not self._is_connected:
-            return False
-        logger.debug(f"Уменьшение температуры Water Chiller: текущее значение = {self._water_chiller_setpoint}°C")
-        new_temp = self._water_chiller_setpoint - 1.0
-        logger.debug(f"Новое значение после уменьшения: {new_temp}°C")
-        # Отмечаем, что пользователь взаимодействует с полем
-        self._water_chiller_setpoint_user_interaction = True
-        # Перезапускаем таймер автообновления
-        self._water_chiller_setpoint_auto_update_timer.stop()
-        self._water_chiller_setpoint_auto_update_timer.start()
-        return self.setWaterChillerTemperature(new_temp)
     
     @Slot(bool, result=bool)
     def setLaserBeam(self, state: bool) -> bool:

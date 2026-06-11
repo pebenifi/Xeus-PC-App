@@ -2027,17 +2027,15 @@ Item {
                             function onMagnetPSUVoltageChanged(value) {
                                 magnetVoltageValue.text = value.toFixed(2) + " V"
                             }
-                            function onMagnetPSUCurrentChanged(value) {
-                                magnetCurrentValue.text = value.toFixed(2) + " A"
-                            }
                             function onMagnetPSUVoltageSetpointChanged(value) {
                                 if (!magnetVoltageSetpoint.activeFocus) {
                                     magnetVoltageSetpoint.text = value.toFixed(2)
                                 }
                             }
                             function onMagnetPSUSetpointChanged(value) {
+                                magnetCurrentValue.text = value.toFixed(3) + " A"
                                 if (!magnetCurrentSetpoint.activeFocus) {
-                                    magnetCurrentSetpoint.text = value.toFixed(2)
+                                    magnetCurrentSetpoint.text = value.toFixed(3)
                                 }
                             }
                         }
@@ -6028,6 +6026,16 @@ Item {
                                     background: Rectangle {
                                         color: Constants.colorGrey
                                     }
+                                    onEditingFinished: {
+                                        if (!modbusManager || !modbusManager.isConnected) return
+                                        var value = parseFloat(text.trim())
+                                        if (!isNaN(value) && value >= 0) {
+                                            modbusManager.setWaterChillerSetpointValue(value)
+                                            modbusManager.setWaterChillerTemperature(value)
+                                        }
+                                    }
+                                    Keys.onReturnPressed: editingFinished()
+                                    Keys.onEnterPressed: editingFinished()
                                 }
                                 Text { text: "°C"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                                 Button {

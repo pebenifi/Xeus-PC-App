@@ -42,6 +42,14 @@ class ModbusClient:
         self._problematic_registers: set[int] = set()
         # Последний регистр, который читался перед разрывом соединения
         self._last_read_register: Optional[int] = None
+
+    def clear_problematic_registers(self) -> None:
+        """Сброс списка проблемных регистров (после connect / перед повторной попыткой)."""
+        self._problematic_registers.clear()
+
+    def discard_problematic_register(self, address: int) -> None:
+        """Убрать один регистр из списка проблемных перед повторным чтением."""
+        self._problematic_registers.discard(address)
     
     def connect(self) -> bool:
         """
@@ -1288,6 +1296,8 @@ class ModbusClient:
             if sock is None:
                 logger.warning("Не удалось получить сокет для прямой записи в регистр 1531")
                 return False
+
+            self._flush_socket()
             
             # Отправляем запрос дважды
             write_frame = self._build_write_frame_1531(value)
@@ -1474,7 +1484,7 @@ class ModbusClient:
             return False
 
     def write_register_1241_direct(self, value: int) -> bool:
-        """Запись setpoint тока Laser PSU (регистр 1241, A×100)."""
+        """Запись setpoint тока Laser PSU (регистр 1241, A×10)."""
         return self.write_register_direct(1241, value)
 
     def write_register_1251_direct(self, value: int) -> bool:
