@@ -2137,7 +2137,7 @@ Item {
                                         radius: 3
                                     }
                                     onClicked: {
-                                        if (modbusManager) modbusManager.setPIDControllerPower(pidControllerPower.checked)
+                                        if (modbusManager) modbusManager.setPIDController(pidControllerPower.checked)
                                     }
                                     Connections {
                                         target: modbusManager

@@ -37,6 +37,21 @@ def _laser_temp_register_to_celsius(raw: object) -> Optional[float]:
         return None
 
 
+# Water chiller temp/setpoint (1511, 1521, 1531): устройство хранит °C × 10 (175 → 17.5°C)
+_WATER_CHILLER_TEMP_SCALE = 10.0
+
+
+def _water_chiller_register_to_celsius(raw: object) -> Optional[float]:
+    try:
+        return float(int(raw)) / _WATER_CHILLER_TEMP_SCALE
+    except Exception:
+        return None
+
+
+def _water_chiller_celsius_to_register(celsius: float) -> int:
+    return int(round(celsius * _WATER_CHILLER_TEMP_SCALE))
+
+
 class _ModbusIoWorker(QObject):
     """
     Выполняет блокирующие Modbus операции в отдельном потоке.
@@ -200,7 +215,8 @@ class ModbusManager(QObject):
     fanStateChanged = Signal(int, bool)  # fanIndex, state
     valveStateChanged = Signal(int, bool)  # valveIndex, state
     magnetPSUStateChanged = Signal(bool)
-    pidControllerStateChanged = Signal(bool)  # Состояние PID Controller (вкл/выкл, регистр 1431)
+    pidControllerStateChanged = Signal(bool)  # Состояние реле PID Controller (регистр 1021, бит 5)
+    pidControllerDriverStateChanged = Signal(bool)  # On/off драйвера PID (регистр 1431)
     pidControllerTemperatureChanged = Signal(float)  # Температура PID Controller в градусах Цельсия (регистр 1411)
     pidControllerSetpointChanged = Signal(float)  # Заданная температура PID Controller в градусах Цельсия (регистр 1421)
     waterChillerStateChanged = Signal(bool)  # Состояние Water Chiller (вкл/выкл, регистр 1541)
@@ -355,7 +371,7 @@ class ModbusManager(QObject):
         self._seop_cell_setpoint = 0.0  # Заданная температура SEOP Cell (регистр 1421)
         self._pid_controller_temperature = 0.0  # Температура PID Controller (регистр 1411)
         self._pid_controller_setpoint = 0.0  # Заданная температура PID Controller (регистр 1421)
-        self._pid_controller_state = False  # Состояние PID Controller (вкл/выкл, регистр 1431)
+        self._pid_controller_driver_on = False  # On/off драйвера PID Controller (регистр 1431)
         self._pid_controller_setpoint_user_interaction = False  # Флаг: пользователь взаимодействует с полем ввода
         self._pid_controller_setpoint_auto_update_timer = QTimer(self)  # Таймер для автообновления setpoint
         self._pid_controller_setpoint_auto_update_timer.timeout.connect(self._autoUpdateSeopCellSetpoint)
@@ -824,6 +840,7 @@ class ModbusManager(QObject):
         self.vacuumPumpStateChanged.emit(self._relay_states['vacuum_pump'])
         self.vacuumGaugeStateChanged.emit(self._relay_states['vacuum_gauge'])
         self.pidControllerStateChanged.emit(self._relay_states['pid_controller'])
+        self.pidControllerDriverStateChanged.emit(self._pid_controller_driver_on)
         self.opCellHeatingStateChanged.emit(self._relay_states['op_cell_heating'])
         
         # Отправляем состояния клапанов из буфера
@@ -2094,12 +2111,10 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        try:
-            # Регистр хранит °C × 100 (как при записи в 1531: temp * 100)
-            temperature = float(int(value)) / 100.0
-        except Exception:
+        temperature = _water_chiller_register_to_celsius(value)
+        if temperature is None:
             return
-            
+
         self._water_chiller_inlet_temperature = temperature
         self._water_chiller_temperature = temperature
         self.waterChillerInletTemperatureChanged.emit(temperature)
@@ -2115,10 +2130,8 @@ class ModbusManager(QObject):
         if self._water_chiller_setpoint_user_interaction:
             return
 
-        try:
-            # Регистр хранит °C × 100 (согласовано с setWaterChillerTemperature)
-            setpoint = float(int(value)) / 100.0
-        except Exception:
+        setpoint = _water_chiller_register_to_celsius(value)
+        if setpoint is None:
             return
 
         self._water_chiller_setpoint = setpoint
@@ -2483,9 +2496,10 @@ class ModbusManager(QObject):
             self._pid_controller_temperature = temp
             self.pidControllerTemperatureChanged.emit(temp)
         if 'state' in value:
-            state = bool(value['state'])
-            self._pid_controller_state = state
-            self.pidControllerStateChanged.emit(state)
+            driver_on = bool(value['state'])
+            self._pid_controller_driver_on = driver_on
+            self.pidControllerDriverStateChanged.emit(driver_on)
+            logger.debug(f"✅ [1431] PID Controller driver on/off: {driver_on}")
     
     def _applyWaterChillerValue(self, value: object):
         """Применение результатов чтения Water Chiller (1511, 1521, 1531, 1541)"""
@@ -4617,14 +4631,17 @@ class ModbusManager(QObject):
             
             result = {}
             if inlet_temp_value is not None:
-                # Преобразуем из int (температура * 100) в float
-                result['inlet_temperature'] = float(inlet_temp_value) / 100.0
+                temp = _water_chiller_register_to_celsius(inlet_temp_value)
+                if temp is not None:
+                    result['inlet_temperature'] = temp
             if outlet_temp_value is not None:
-                # Преобразуем из int (температура * 100) в float
-                result['outlet_temperature'] = float(outlet_temp_value) / 100.0
+                temp = _water_chiller_register_to_celsius(outlet_temp_value)
+                if temp is not None:
+                    result['outlet_temperature'] = temp
             if setpoint_value is not None:
-                # Преобразуем из int (температура * 100) в float
-                result['setpoint'] = float(int(setpoint_value)) / 100.0
+                sp = _water_chiller_register_to_celsius(setpoint_value)
+                if sp is not None:
+                    result['setpoint'] = sp
             if state_value is not None:
                 result['state'] = bool(int(state_value) & 0x01)
             
@@ -6849,7 +6866,7 @@ class ModbusManager(QObject):
         self._water_chiller_setpoint = temperature
         self.waterChillerSetpointChanged.emit(temperature)
 
-        register_value = int(round(temperature * 100))
+        register_value = _water_chiller_celsius_to_register(temperature)
         logger.info(f"Запись Water Chiller setpoint: {temperature}°C -> регистр 1531 = {register_value}")
 
         def task() -> bool:
@@ -7429,23 +7446,10 @@ class ModbusManager(QObject):
     
     @Slot(bool, result=bool)
     def setPIDControllerPower(self, state: bool) -> bool:
-        """Управление PID Controller (регистр 1431: 1 = вкл, 0 = выкл)"""
-        # Логируем действие
+        """Управление PID Controller через реле 1021 (бит 5). Кнопка — только реле, как на главном экране."""
         self._addLog(f"PID Controller Power: {'ON' if state else 'OFF'}")
-        logger.info(f"🔵 setPIDControllerPower вызван: {state}")
-        if not self._is_connected or self._modbus_client is None:
-            return False
-        register_value = 1 if state else 0
-        client = self._modbus_client
-        def task() -> bool:
-            # TODO: добавить метод write_register_1431_direct в modbus_client.py
-            result = client.write_holding_register(1431, register_value)
-            return bool(result)
-        self._enqueue_write("1431", task, {"state": state})
-        # Обновляем UI сразу
-        self._pid_controller_state = state
-        self.pidControllerStateChanged.emit(state)
-        return True
+        logger.info(f"🔵 setPIDControllerPower -> setPIDController (реле 1021): {state}")
+        return self.setPIDController(state)
     
     @Slot(bool, result=bool)
     def setLaserBeam(self, state: bool) -> bool:

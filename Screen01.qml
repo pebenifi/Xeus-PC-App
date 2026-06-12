@@ -1782,13 +1782,6 @@ Rectangle {
                     width: parent.width - 48
                     height: parent.height
                     color: Constants.colorWhite
-                    text: {
-                        if (modbusManager && modbusManager.magnetPSUSetpoint !== undefined) {
-                            return modbusManager.magnetPSUSetpoint.toFixed(3)
-                        } else {
-                            return "0.000"
-                        }
-                    }
                     font: Constants.fontTinyPx
                     selectByMouse: true
                     verticalAlignment: Text.AlignVCenter
@@ -1798,13 +1791,21 @@ Rectangle {
                     validator: RegularExpressionValidator {
                         regularExpression: /^\d*\.?\d*$/
                     }
+
+                    Component.onCompleted: {
+                        if (modbusManager) {
+                            textInput5.text = modbusManager.magnetPSUSetpoint.toFixed(3)
+                        } else {
+                            textInput5.text = "0.000"
+                        }
+                    }
                     
                     Connections {
                         target: modbusManager
                         function onMagnetPSUSetpointChanged(setpoint) {
                             if (!textInput5.activeFocus) {
                                 var currentText = parseFloat(textInput5.text)
-                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.001) {
+                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.0001) {
                                     textInput5.text = setpoint.toFixed(3)
                                 }
                             }
@@ -1816,12 +1817,13 @@ Rectangle {
                             var textValue = text.trim()
                             var value = parseFloat(textValue)
                             if (!isNaN(value) && value >= 0) {
+                                textInput5.text = value.toFixed(3)
                                 modbusManager.setMagnetPSUSetpointValue(value)
                                 if (modbusManager.isConnected) {
                                     modbusManager.setMagnetPSUTemperature(value)
                                 }
                             } else {
-                                text = modbusManager ? modbusManager.magnetPSUSetpoint.toFixed(3) : "0.000"
+                                textInput5.text = modbusManager ? modbusManager.magnetPSUSetpoint.toFixed(3) : "0.000"
                             }
                         }
                     }
@@ -1832,16 +1834,6 @@ Rectangle {
                             var cursorPos = cursorPosition
                             text = cleaned
                             cursorPosition = Math.min(cursorPos, text.length)
-                        }
-                        
-                        if (modbusManager && text.trim() !== "") {
-                            var value = parseFloat(text)
-                            if (!isNaN(value) && value >= 0) {
-                                var currentSetpoint = modbusManager.magnetPSUSetpoint
-                                if (Math.abs(value - currentSetpoint) > 0.001) {
-                                    modbusManager.setMagnetPSUSetpointValue(value)
-                                }
-                            }
                         }
                     }
                     
@@ -1890,9 +1882,9 @@ Rectangle {
                                 currentValue = modbusManager.magnetPSUSetpoint
                             }
                             
-                            // Вычисляем новое значение (увеличиваем на 0.01)
-                            var newValue = currentValue + 0.01
-                            textInput5.text = newValue.toFixed(2)
+                            // Вычисляем новое значение (увеличиваем на 0.001)
+                            var newValue = currentValue + 0.001
+                            textInput5.text = newValue.toFixed(3)
                             modbusManager.setMagnetPSUSetpointValue(newValue)
                         }
                     }
@@ -1964,8 +1956,9 @@ Rectangle {
                 
                 onClicked: {
                     if (modbusManager && modbusManager.isConnected) {
-                        var value = parseFloat(textInput5.text)
+                        var value = parseFloat(textInput5.text.trim())
                         if (!isNaN(value) && value >= 0) {
+                            textInput5.text = value.toFixed(3)
                             modbusManager.setMagnetPSUSetpointValue(value)
                             modbusManager.setMagnetPSUTemperature(value)
                         }

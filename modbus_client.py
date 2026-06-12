@@ -1285,7 +1285,7 @@ class ModbusClient:
         """Запись в регистр 1531 (установка температуры Water Chiller) через прямой сокет (функция 06)
         
         Args:
-            value: Значение для записи (температура * 100, например 2300 для 23.00°C)
+            value: Значение для записи (температура × 10, например 175 для 17.5°C)
         """
         if self.client is None or not self.client.is_socket_open():
             return False
