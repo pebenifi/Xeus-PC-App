@@ -1507,9 +1507,9 @@ Rectangle {
                     color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.n2Setpoint !== undefined) {
-                            return modbusManager.n2Setpoint.toFixed(0)
+                            return modbusManager.n2Setpoint.toFixed(2)
                         } else {
-                            return "0"
+                            return "0.00"
                         }
                     }
                     font: Constants.fontTinyPx
@@ -1527,8 +1527,8 @@ Rectangle {
                         function onN2SetpointChanged(setpoint) {
                             if (!textInput3.activeFocus) {
                                 var currentText = parseFloat(textInput3.text)
-                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.5) {
-                                    textInput3.text = setpoint.toFixed(0)
+                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.01) {
+                                    textInput3.text = setpoint.toFixed(2)
                                 }
                             }
                         }
@@ -1544,7 +1544,7 @@ Rectangle {
                                     modbusManager.setN2Pressure(value)
                                 }
                             } else {
-                                text = modbusManager ? modbusManager.n2Setpoint.toFixed(0) : "0"
+                                text = modbusManager ? modbusManager.n2Setpoint.toFixed(2) : "0.00"
                             }
                         }
                     }
@@ -1561,7 +1561,7 @@ Rectangle {
                             var value = parseFloat(text)
                             if (!isNaN(value) && value >= 0) {
                                 var currentSetpoint = modbusManager.n2Setpoint
-                                if (Math.abs(value - currentSetpoint) > 0.5) {
+                                if (Math.abs(value - currentSetpoint) > 0.01) {
                                     modbusManager.setN2SetpointValue(value)
                                 }
                             }
@@ -1614,7 +1614,7 @@ Rectangle {
                             }
                             
                             var newValue = currentValue + 1
-                            textInput3.text = newValue.toFixed(0)
+                            textInput3.text = newValue.toFixed(2)
                             modbusManager.setN2SetpointValue(newValue)
                         }
                     }
@@ -1652,7 +1652,7 @@ Rectangle {
                             
                             var newValue = currentValue - 1
                             if (newValue < 0) newValue = 0
-                            textInput3.text = newValue.toFixed(0)
+                            textInput3.text = newValue.toFixed(2)
                             modbusManager.setN2SetpointValue(newValue)
                         }
                     }
@@ -1702,13 +1702,13 @@ Rectangle {
             width: 77
             height: 18
             color: Constants.colorWhite
-            text: modbusManager ? (modbusManager.n2Pressure.toFixed(0) + " Torr") : qsTr("--")
+            text: modbusManager ? (modbusManager.n2Pressure.toFixed(2) + " Torr") : qsTr("--")
             font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
                 function onN2PressureChanged(pressure) {
-                    label2.text = pressure.toFixed(0) + " Torr"
+                    label2.text = pressure.toFixed(2) + " Torr"
                 }
             }
         }
@@ -2285,13 +2285,13 @@ Rectangle {
             x: 42
             y: 28
             color: Constants.colorWhite
-            text: modbusManager ? (modbusManager.xenonPressure.toFixed(0) + " Torr") : qsTr("--")
+            text: modbusManager ? (modbusManager.xenonPressure.toFixed(2) + " Torr") : qsTr("--")
             font: Constants.fontTinyPx
             
             Connections {
                 target: modbusManager
                 function onXenonPressureChanged(pressure) {
-                    label3.text = pressure.toFixed(0) + " Torr"
+                    label3.text = pressure.toFixed(2) + " Torr"
                 }
             }
         }
@@ -2332,9 +2332,9 @@ Rectangle {
                     color: Constants.colorWhite
                     text: {
                         if (modbusManager && modbusManager.xenonSetpoint !== undefined) {
-                            return modbusManager.xenonSetpoint.toFixed(0)
+                            return modbusManager.xenonSetpoint.toFixed(2)
                         } else {
-                            return "0"
+                            return "0.00"
                         }
                     }
                     font: Constants.fontTinyPx
@@ -2353,8 +2353,8 @@ Rectangle {
                         function onXenonSetpointChanged(setpoint) {
                             if (!textInput4.activeFocus) {
                                 var currentText = parseFloat(textInput4.text)
-                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.5) {
-                                    textInput4.text = setpoint.toFixed(0)
+                                if (isNaN(currentText) || Math.abs(currentText - setpoint) > 0.01) {
+                                    textInput4.text = setpoint.toFixed(2)
                                 }
                             }
                         }
@@ -2371,7 +2371,7 @@ Rectangle {
                                     modbusManager.setXenonPressure(value)
                                 }
                             } else {
-                                text = modbusManager ? modbusManager.xenonSetpoint.toFixed(0) : "0"
+                                text = modbusManager ? modbusManager.xenonSetpoint.toFixed(2) : "0.00"
                             }
                         }
                     }
@@ -2393,7 +2393,7 @@ Rectangle {
                             var value = parseFloat(text)
                             if (!isNaN(value) && value >= 0) {
                                 var currentSetpoint = modbusManager.xenonSetpoint
-                                if (Math.abs(value - currentSetpoint) > 0.5) {
+                                if (Math.abs(value - currentSetpoint) > 0.01) {
                                     modbusManager.setXenonSetpointValue(value)
                                 }
                             }
@@ -2450,7 +2450,7 @@ Rectangle {
                             }
                             
                             var newValue = currentValue + 1
-                            textInput4.text = newValue.toFixed(0)
+                            textInput4.text = newValue.toFixed(2)
                             modbusManager.setXenonSetpointValue(newValue)
                         }
                     }
@@ -2491,7 +2491,7 @@ Rectangle {
                             
                             var newValue = currentValue - 1
                             if (newValue < 0) newValue = 0
-                            textInput4.text = newValue.toFixed(0)
+                            textInput4.text = newValue.toFixed(2)
                             modbusManager.setXenonSetpointValue(newValue)
                         }
                     }
