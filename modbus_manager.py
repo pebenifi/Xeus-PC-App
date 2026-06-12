@@ -60,16 +60,19 @@ def _water_chiller_setpoint_celsius_to_register(celsius: float) -> int:
     return int(round(celsius * _WATER_CHILLER_SETPOINT_SCALE))
 
 
+# Alicat N2/Xenon (1611/1621/1651/1661): register = Torr × 10 (14960 → 1496.00)
+_ALICAT_TORR_SCALE = 10.0
+
+
 def _alicat_register_to_torr(raw: object) -> Optional[float]:
-    """Alicat N2/Xenon (1611/1621/1651/1661): register value = Torr (integer)."""
     try:
-        return float(int(raw))
+        return float(int(raw)) / _ALICAT_TORR_SCALE
     except Exception:
         return None
 
 
 def _alicat_torr_to_register(torr: float) -> int:
-    return int(round(torr))
+    return int(round(torr * _ALICAT_TORR_SCALE))
 
 
 class _ModbusIoWorker(QObject):
@@ -571,6 +574,8 @@ class ModbusManager(QObject):
         self._valve_states = {i: False for i in range(5, 12)}
         # Вентиляторы (регистр 1131) - индексы 0-10
         self._fan_states = {i: False for i in range(11)}
+        self._fans_reg_1131: Optional[int] = None
+        self._fans_reg_1132: Optional[int] = None
         # Буфер для регистров (для быстрого доступа без блокировки UI)
         self._register_cache = {}  # address -> value
         # Флаг паузы опросов (чтобы при переключении экранов не блокировать UI)
@@ -1636,6 +1641,8 @@ class ModbusManager(QObject):
             self.fanStateChanged.emit(8, False)   # opcell fan 3
             self.fanStateChanged.emit(9, False)   # opcell fan 4
             self.fanStateChanged.emit(10, False)  # laser fan
+            self._fans_reg_1131 = None
+            self._fans_reg_1132 = None
             
             # Сбрасываем числовые значения (температуры, токи, давления) при отключении
             self._water_chiller_temperature = 0.0
@@ -2350,69 +2357,46 @@ class ModbusManager(QObject):
             logger.debug(f"✅ [1701] Vacuum Pressure обновлено: {pressure} Torr")
 
     def _applyFan1131Value(self, value: object):
-        # logger.debug(f"🔍 [1131] RAW VALUE: {value} (type={type(value)})")
         self._reading_1131 = False
         if value is None:
             return
+
+        value_int: Optional[int] = None
+        value_1132: Optional[int] = None
         if isinstance(value, dict):
-            try:
-                value_int = int(value.get("1131", 0))
-                value_1132 = int(value.get("1132", 0))
-            except Exception:
+            if "1131" in value and value["1131"] is not None:
+                try:
+                    value_int = int(value["1131"])
+                except Exception:
+                    return
+            if "1132" in value and value["1132"] is not None:
+                try:
+                    value_1132 = int(value["1132"])
+                except Exception:
+                    return
+            if value_int is None and value_1132 is None:
                 return
         else:
             try:
                 value_int = int(value)
-                value_1132 = 0
             except Exception:
                 return
 
-        laser_fan_mask = 0b11  # fan 17 → bit 0, fan 18 → bit 1 in register 1132
+        if value_int is not None:
+            self._fans_reg_1131 = value_int
+        elif self._fans_reg_1131 is not None:
+            value_int = self._fans_reg_1131
+        else:
+            value_int = None
 
-        # КРИТИЧНО: если это происходит сразу после начала записи (в течение 2 секунд),
-        # то обновляем только тот вентилятор, который мы записывали
-        time_since_write = time.time() - self._last_write_time
-        if time_since_write < 2.0:
-            if hasattr(self, '_last_write_key'):
-                if self._last_write_key.startswith("fan:"):
-                    try:
-                        written_fan_index = int(self._last_write_key.split(":")[1])
-                    except:
-                        written_fan_index = -1
-                    
-                    fan_mapping = {
-                        0: 0, 1: 1, 2: 2, 3: 3, 6: 4, 7: 5, 8: 6, 9: 7, 4: 8, 5: 9
-                    }
-                    
-                    # Check regular fans
-                    if written_fan_index in fan_mapping:
-                        bit_pos = fan_mapping[written_fan_index]
-                        new_state = bool(value_int & (1 << bit_pos))
-                        current_state = self._fan_states[written_fan_index]
-                        if new_state != current_state:
-                             self._fan_states[written_fan_index] = new_state
-                             logger.info(f"✅ [1131] Синхронизация вентилятора {written_fan_index} после записи: {current_state} -> {new_state} (применено напрямую)")
-                             self.fanStateChanged.emit(written_fan_index, new_state)
-                        return
-                    
-                    # Check laser fan (fans 17+18 → register 1132 bits 0+1)
-                    if written_fan_index == 10:
-                        new_state = (value_1132 & laser_fan_mask) == laser_fan_mask
-                        current_state = self._fan_states[10]
-                        if new_state != current_state:
-                             self._fan_states[10] = new_state
-                             logger.info(f"✅ [1131] Синхронизация Laser Fan после записи: {current_state} -> {new_state} (применено напрямую)")
-                             self.fanStateChanged.emit(10, new_state)
-                        return
+        if value_1132 is not None:
+            self._fans_reg_1132 = value_1132
+        elif self._fans_reg_1132 is not None:
+            value_1132 = self._fans_reg_1132
+        else:
+            value_1132 = None
 
-                    return
-                else:
-                    return
-
-        # КРИТИЧНО: если активен режим записи (флаг _write_in_progress), блокируем кэширование
-        # if self._write_in_progress:
-            # logger.debug(f"⏭️ [1131] Пропускаем сохранение в кэш (_write_in_progress=True)")
-            # return
+        laser_fan_mask = 0b11
 
         fan_mapping = {
             0: 0,
@@ -2427,46 +2411,22 @@ class ModbusManager(QObject):
             5: 9,
         }
 
-        # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
-        time_since_connection = time.time() - self._connection_time
-        is_initial_connection = time_since_connection < 2.0 and self._connection_time > 0
-        
-        current_time = time.time()
-        for fan_index, bit_pos in fan_mapping.items():
-            new_state = bool(value_int & (1 << bit_pos))
-            current_state = self._fan_states[fan_index]
-            
-            if new_state != current_state:
-                # Временно применяем ВСЕГДА напрямую
-                if True:
+        if value_int is not None:
+            for fan_index, bit_pos in fan_mapping.items():
+                new_state = bool(value_int & (1 << bit_pos))
+                current_state = self._fan_states[fan_index]
+                if new_state != current_state:
                     self._fan_states[fan_index] = new_state
-                    logger.info(f"✅ [1131] Изменение вентилятора {fan_index}: {current_state} -> {new_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
+                    logger.info(f"✅ [1131] Изменение вентилятора {fan_index}: {current_state} -> {new_state}")
                     self.fanStateChanged.emit(fan_index, new_state)
-                # if is_initial_connection:
-                #     self._fan_states[fan_index] = new_state
-                #     logger.info(f"✅ [1131] Начальное значение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (применено напрямую)")
-                #     self.fanStateChanged.emit(fan_index, new_state)
-                # else:
-                #     self._pending_fan_updates[fan_index] = (new_state, current_time)
-                #     logger.debug(f"📝 [1131] Изменение вентилятора {fan_index}: {self._fan_states[fan_index]} -> {new_state} (добавлено в кэш)")
 
-        # laser fans 17+18 → register 1132 bits 0+1
-        new_laser_fan_state = (value_1132 & laser_fan_mask) == laser_fan_mask
-        current_laser_fan_state = self._fan_states[10]
-        if new_laser_fan_state != current_laser_fan_state:
-             # Временно применяем ВСЕГДА напрямую
-             if True:
+        if value_1132 is not None:
+            new_laser_fan_state = (value_1132 & laser_fan_mask) == laser_fan_mask
+            current_laser_fan_state = self._fan_states[10]
+            if new_laser_fan_state != current_laser_fan_state:
                 self._fan_states[10] = new_laser_fan_state
-                logger.info(f"✅ [1131] Изменение Laser Fan: {current_laser_fan_state} -> {new_laser_fan_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
+                logger.info(f"✅ [1132] Изменение Laser Fan: {current_laser_fan_state} -> {new_laser_fan_state}")
                 self.fanStateChanged.emit(10, new_laser_fan_state)
-            # if is_initial_connection:
-            #     self._fan_states[10] = new_laser_fan_state
-            #     logger.info(f"✅ [1131] Начальное значение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (применено напрямую)")
-            #     self.fanStateChanged.emit(10, new_laser_fan_state)
-            # else:
-            #     # Для остальных значений сохраняем в кэш для последующего применения
-            #     self._pending_fan_updates[10] = (new_laser_fan_state, current_time)
-            #     logger.debug(f"📝 [1131] Изменение Laser Fan: {self._fan_states[10]} -> {new_laser_fan_state} (добавлено в кэш)")
 
     def _applyPowerSupplyValue(self, value: object):
         """Применение результатов чтения Power Supply (Laser PSU и Magnet PSU)"""
@@ -3898,7 +3858,7 @@ class ModbusManager(QObject):
         # Если пользователь не взаимодействовал с полем, обновляем setpoint из текущего давления
         if not self._xenon_setpoint_user_interaction:
             # Не обновляем если текущее давление равно 0.0 или невалидное (устройство только подключено)
-            if self._xenon_pressure > 0.5 and abs(self._xenon_pressure - self._xenon_setpoint) > 0.5:
+            if self._xenon_pressure > 0.01 and abs(self._xenon_pressure - self._xenon_setpoint) > 0.01:
                 logger.info(f"Автообновление setpoint Xenon: {self._xenon_setpoint} Torr -> {self._xenon_pressure} Torr")
                 self._xenon_setpoint = self._xenon_pressure
                 self.xenonSetpointChanged.emit(self._xenon_pressure)
@@ -4130,14 +4090,11 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def read_fan_registers():
-            reg_1131 = client.read_input_register(1131)
-            reg_1132 = client.read_input_register(1132)
-            if reg_1131 is None and reg_1132 is None:
+            regs = client.read_fan_registers()
+            if regs is None:
                 return None
-            return {
-                "1131": reg_1131 if reg_1131 is not None else 0,
-                "1132": reg_1132 if reg_1132 is not None else 0,
-            }
+            reg_1131, reg_1132 = regs
+            return {"1131": reg_1131, "1132": reg_1132}
 
         self._enqueue_read("1131", read_fan_registers)
     
@@ -6678,6 +6635,9 @@ class ModbusManager(QObject):
             True если успешно, False в противном случае
         """
         logger.info(f"⚡ setFan вызван: fanIndex={fanIndex}, state={state} - МГНОВЕННОЕ обновление UI")
+        if 0 <= fanIndex <= 10 and self._fan_states.get(fanIndex) != state:
+            self._fan_states[fanIndex] = state
+            self.fanStateChanged.emit(fanIndex, state)
         # Маппинг fanIndex (из QML) -> бит в регистре 1131
         fan_bit_mapping = {
             0: 0,   # inlet fan 1 (button4) -> бит 0 (бит 1 считая с 1)
