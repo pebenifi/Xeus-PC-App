@@ -60,6 +60,18 @@ def _water_chiller_setpoint_celsius_to_register(celsius: float) -> int:
     return int(round(celsius * _WATER_CHILLER_SETPOINT_SCALE))
 
 
+def _alicat_register_to_torr(raw: object) -> Optional[float]:
+    """Alicat N2/Xenon (1611/1621/1651/1661): register value = Torr (integer)."""
+    try:
+        return float(int(raw))
+    except Exception:
+        return None
+
+
+def _alicat_torr_to_register(torr: float) -> int:
+    return int(round(torr))
+
+
 class _ModbusIoWorker(QObject):
     """
     Выполняет блокирующие Modbus операции в отдельном потоке.
@@ -1879,6 +1891,9 @@ class ModbusManager(QObject):
                 self._water_chiller_setpoint_user_interaction = False
                 self._discard_client_problematic_for_key("1531")
                 QTimer.singleShot(300, lambda: self._readWaterChillerSetpoint() if self._is_connected else None)
+            elif key == "1241":
+                self._laser_psu_setpoint_user_interaction = False
+                QTimer.singleShot(300, lambda: self._readLaserPSURegisters() if self._is_connected else None)
         else:
             logger.warning(f"Modbus write failed: {key} meta={meta}")
             # КРИТИЧНО: при ошибке записи очищаем ВЕСЬ кэш, чтобы не применять старые значения
@@ -2261,11 +2276,8 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        try:
-            # Прямое применение, без проверок времени записи
-            # Давление Xenon, делитель 10000
-            pressure = float(int(value)) / 10000.0
-        except Exception:
+        pressure = _alicat_register_to_torr(value)
+        if pressure is None:
             return
         if self._xenon_pressure != pressure:
             self._xenon_pressure = pressure
@@ -2281,11 +2293,8 @@ class ModbusManager(QObject):
         if self._xenon_setpoint_user_interaction:
             return
 
-        try:
-            # Прямое применение, без проверок времени записи
-            # Setpoint Xenon, делитель 10000
-            setpoint = float(int(value)) / 10000.0
-        except Exception:
+        setpoint = _alicat_register_to_torr(value)
+        if setpoint is None:
             return
 
         if self._xenon_setpoint != setpoint:
@@ -2298,11 +2307,8 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        try:
-            # Прямое применение, без проверок времени записи
-            # Давление N2, делитель 10000
-            pressure = float(int(value)) / 10000.0
-        except Exception:
+        pressure = _alicat_register_to_torr(value)
+        if pressure is None:
             return
         if self._n2_pressure != pressure:
             self._n2_pressure = pressure
@@ -2318,11 +2324,8 @@ class ModbusManager(QObject):
         if self._n2_setpoint_user_interaction:
             return
 
-        try:
-            # Прямое применение, без проверок времени записи
-            # Setpoint N2, делитель 10000
-            setpoint = float(int(value)) / 10000.0
-        except Exception:
+        setpoint = _alicat_register_to_torr(value)
+        if setpoint is None:
             return
 
         if self._n2_setpoint != setpoint:
@@ -3867,9 +3870,7 @@ class ModbusManager(QObject):
         logger.info(f"🔵 Эмитируем сигнал xenonSetpointChanged: {pressure} Torr")
         self.xenonSetpointChanged.emit(pressure)
         
-        # Преобразуем давление в значение для регистра (умножаем на 10000)
-        # Например, 0.2000 Torr -> 2000
-        register_value = int(pressure * 10000)
+        register_value = _alicat_torr_to_register(pressure)
         
         logger.info(f"Установка давления Xenon: {pressure} Torr (регистр 1621 = {register_value})")
         
@@ -3897,7 +3898,7 @@ class ModbusManager(QObject):
         # Если пользователь не взаимодействовал с полем, обновляем setpoint из текущего давления
         if not self._xenon_setpoint_user_interaction:
             # Не обновляем если текущее давление равно 0.0 или невалидное (устройство только подключено)
-            if self._xenon_pressure > 0.01 and abs(self._xenon_pressure - self._xenon_setpoint) > 0.01:  # Обновляем только если разница > 0.01 Torr и давление валидное
+            if self._xenon_pressure > 0.5 and abs(self._xenon_pressure - self._xenon_setpoint) > 0.5:
                 logger.info(f"Автообновление setpoint Xenon: {self._xenon_setpoint} Torr -> {self._xenon_pressure} Torr")
                 self._xenon_setpoint = self._xenon_pressure
                 self.xenonSetpointChanged.emit(self._xenon_pressure)
@@ -3969,8 +3970,7 @@ class ModbusManager(QObject):
         self._n2_setpoint = pressure
         self.n2SetpointChanged.emit(pressure)
         
-        # Преобразуем давление в значение для регистра (умножаем на 10000)
-        register_value = int(pressure * 10000)
+        register_value = _alicat_torr_to_register(pressure)
         
         logger.info(f"Установка давления N2: {pressure} Torr (регистр 1661 = {register_value})")
         
@@ -3989,11 +3989,11 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def increaseN2Pressure(self) -> bool:
-        """Увеличение заданного давления N2 на 0.01 Torr"""
+        """Увеличение заданного давления N2 на 1 Torr"""
         if not self._is_connected:
             return False
         logger.debug(f"Увеличение давления N2: текущее значение = {self._n2_setpoint} Torr")
-        new_pressure = self._n2_setpoint + 0.01
+        new_pressure = self._n2_setpoint + 1
         logger.debug(f"Новое значение после увеличения: {new_pressure} Torr")
         # Отмечаем, что пользователь взаимодействует с полем
         self._n2_setpoint_user_interaction = True
@@ -4004,11 +4004,11 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def decreaseN2Pressure(self) -> bool:
-        """Уменьшение заданного давления N2 на 0.01 Torr"""
+        """Уменьшение заданного давления N2 на 1 Torr"""
         if not self._is_connected:
             return False
         logger.debug(f"Уменьшение давления N2: текущее значение = {self._n2_setpoint} Torr")
-        new_pressure = self._n2_setpoint - 0.01
+        new_pressure = self._n2_setpoint - 1
         logger.debug(f"Новое значение после уменьшения: {new_pressure} Torr")
         # Отмечаем, что пользователь взаимодействует с полем
         self._n2_setpoint_user_interaction = True
@@ -4680,17 +4680,21 @@ class ModbusManager(QObject):
             
             result = {}
             if xenon_value is not None:
-                # Преобразуем из int (давление * 100) в float
-                result['xenon_pressure'] = float(xenon_value) / 100.0
+                torr = _alicat_register_to_torr(xenon_value)
+                if torr is not None:
+                    result['xenon_pressure'] = torr
             if xenon_setpoint_value is not None:
-                # Преобразуем из int (давление * 100) в float
-                result['xenon_setpoint'] = float(int(xenon_setpoint_value)) / 100.0
+                torr = _alicat_register_to_torr(xenon_setpoint_value)
+                if torr is not None:
+                    result['xenon_setpoint'] = torr
             if n2_value is not None:
-                # Преобразуем из int (давление * 100) в float
-                result['n2_pressure'] = float(n2_value) / 100.0
+                torr = _alicat_register_to_torr(n2_value)
+                if torr is not None:
+                    result['n2_pressure'] = torr
             if n2_setpoint_value is not None:
-                # Преобразуем из int (давление * 100) в float
-                result['n2_setpoint'] = float(int(n2_setpoint_value)) / 100.0
+                torr = _alicat_register_to_torr(n2_setpoint_value)
+                if torr is not None:
+                    result['n2_setpoint'] = torr
             
             return result
         
@@ -7283,7 +7287,7 @@ class ModbusManager(QObject):
             return False
         self._laser_psu_setpoint = current
         self.laserPSUSetpointChanged.emit(current)
-        self._laser_psu_setpoint_user_interaction = False
+        self._laser_psu_setpoint_user_interaction = True
         register_value = _laser_psu_amps_to_register(current)
         logger.info(f"Установка тока Laser PSU: {current} A (регистр 1241 = {register_value})")
         client = self._modbus_client
