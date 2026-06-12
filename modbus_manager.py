@@ -37,19 +37,27 @@ def _laser_temp_register_to_celsius(raw: object) -> Optional[float]:
         return None
 
 
-# Water chiller temp/setpoint (1511, 1521, 1531): устройство хранит °C × 10 (175 → 17.5°C)
-_WATER_CHILLER_TEMP_SCALE = 10.0
+# Water chiller: температура 1511/1521 — °C × 100 (1670 → 16.7); setpoint 1531 — °C × 10 (175 → 17.5)
+_WATER_CHILLER_TEMP_SCALE = 100.0
+_WATER_CHILLER_SETPOINT_SCALE = 10.0
 
 
-def _water_chiller_register_to_celsius(raw: object) -> Optional[float]:
+def _water_chiller_temp_register_to_celsius(raw: object) -> Optional[float]:
     try:
         return float(int(raw)) / _WATER_CHILLER_TEMP_SCALE
     except Exception:
         return None
 
 
-def _water_chiller_celsius_to_register(celsius: float) -> int:
-    return int(round(celsius * _WATER_CHILLER_TEMP_SCALE))
+def _water_chiller_setpoint_register_to_celsius(raw: object) -> Optional[float]:
+    try:
+        return float(int(raw)) / _WATER_CHILLER_SETPOINT_SCALE
+    except Exception:
+        return None
+
+
+def _water_chiller_setpoint_celsius_to_register(celsius: float) -> int:
+    return int(round(celsius * _WATER_CHILLER_SETPOINT_SCALE))
 
 
 class _ModbusIoWorker(QObject):
@@ -2111,7 +2119,7 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        temperature = _water_chiller_register_to_celsius(value)
+        temperature = _water_chiller_temp_register_to_celsius(value)
         if temperature is None:
             return
 
@@ -2130,7 +2138,7 @@ class ModbusManager(QObject):
         if self._water_chiller_setpoint_user_interaction:
             return
 
-        setpoint = _water_chiller_register_to_celsius(value)
+        setpoint = _water_chiller_setpoint_register_to_celsius(value)
         if setpoint is None:
             return
 
@@ -4631,15 +4639,15 @@ class ModbusManager(QObject):
             
             result = {}
             if inlet_temp_value is not None:
-                temp = _water_chiller_register_to_celsius(inlet_temp_value)
+                temp = _water_chiller_temp_register_to_celsius(inlet_temp_value)
                 if temp is not None:
                     result['inlet_temperature'] = temp
             if outlet_temp_value is not None:
-                temp = _water_chiller_register_to_celsius(outlet_temp_value)
+                temp = _water_chiller_temp_register_to_celsius(outlet_temp_value)
                 if temp is not None:
                     result['outlet_temperature'] = temp
             if setpoint_value is not None:
-                sp = _water_chiller_register_to_celsius(setpoint_value)
+                sp = _water_chiller_setpoint_register_to_celsius(setpoint_value)
                 if sp is not None:
                     result['setpoint'] = sp
             if state_value is not None:
@@ -6866,7 +6874,7 @@ class ModbusManager(QObject):
         self._water_chiller_setpoint = temperature
         self.waterChillerSetpointChanged.emit(temperature)
 
-        register_value = _water_chiller_celsius_to_register(temperature)
+        register_value = _water_chiller_setpoint_celsius_to_register(temperature)
         logger.info(f"Запись Water Chiller setpoint: {temperature}°C -> регистр 1531 = {register_value}")
 
         def task() -> bool:
