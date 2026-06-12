@@ -1943,7 +1943,7 @@ class ModbusClient:
         """Запись в регистр 1621 (установка давления Xenon) через прямой сокет (функция 06)
         
         Args:
-            value: Значение для записи (давление * 100, например 2300 для 23.00 Torr)
+            value: Значение для записи (Torr, например 2000)
         """
         if self.client is None or not self.client.is_socket_open():
             return False
@@ -2019,7 +2019,7 @@ class ModbusClient:
         """Запись в регистр 1661 (установка давления N2) через прямой сокет (функция 06)
         
         Args:
-            value: Значение для записи (давление * 100, например 2300 для 23.00 Torr)
+            value: Значение для записи (Torr, например 1152)
         """
         if self.client is None or not self.client.is_socket_open():
             return False

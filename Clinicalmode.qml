@@ -2306,19 +2306,19 @@ Item {
                         Connections {
                             target: modbusManager
                             function onXenonPressureChanged(value) {
-                                xenonPressure.text = value.toFixed(2) + " Torr"
+                                xenonPressure.text = value.toFixed(0) + " Torr"
                             }
                             function onXenonSetpointChanged(value) {
                                 if (!xenonSetpoint.activeFocus) {
-                                    xenonSetpoint.text = value.toFixed(2)
+                                    xenonSetpoint.text = value.toFixed(0)
                                 }
                             }
                             function onN2PressureChanged(value) {
-                                n2Pressure.text = value.toFixed(2) + " Torr"
+                                n2Pressure.text = value.toFixed(0) + " Torr"
                             }
                             function onN2SetpointChanged(value) {
                                 if (!n2Setpoint.activeFocus) {
-                                    n2Setpoint.text = value.toFixed(2)
+                                    n2Setpoint.text = value.toFixed(0)
                                 }
                             }
                         }
