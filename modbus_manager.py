@@ -1886,6 +1886,8 @@ class ModbusManager(QObject):
                 self._last_write_time = time.time()
                 # Запоминаем, какой регистр был изменен
                 self._last_write_key = key
+                if key.startswith("fan:") and isinstance(meta, dict):
+                    self._applyFanWriteToRegisterCache(key, meta)
                 logger.debug(f"📝 Запись {key} успешна, читаем состояние обратно через 250 мс для синхронизации")
                 # Читаем состояние обратно через 1100 мс после успешной записи
                 # Это синхронизирует UI с устройством ПОСЛЕ того, как закончится блокировка (1.0 сек)
@@ -2421,9 +2423,20 @@ class ModbusManager(QObject):
                     self.fanStateChanged.emit(fan_index, new_state)
 
         if value_1132 is not None:
-            new_laser_fan_state = (value_1132 & laser_fan_mask) == laser_fan_mask
+            new_laser_fan_state = bool(value_1132 & laser_fan_mask)
             current_laser_fan_state = self._fan_states[10]
-            if new_laser_fan_state != current_laser_fan_state:
+            time_since_write = time.time() - self._last_write_time
+            if (
+                not new_laser_fan_state
+                and current_laser_fan_state
+                and time_since_write < 2.5
+                and self._last_write_key == "fan:10"
+            ):
+                logger.debug(
+                    f"⏭️ [1132] Пропускаем сброс Laser Fan (устройство ещё не отразило запись, "
+                    f"прошло {time_since_write:.2f} сек)"
+                )
+            elif new_laser_fan_state != current_laser_fan_state:
                 self._fan_states[10] = new_laser_fan_state
                 logger.info(f"✅ [1132] Изменение Laser Fan: {current_laser_fan_state} -> {new_laser_fan_state}")
                 self.fanStateChanged.emit(10, new_laser_fan_state)
@@ -6739,8 +6752,35 @@ class ModbusManager(QObject):
                 logger.error(f"Ошибка при асинхронной установке Laser Fan: {e}", exc_info=True)
                 return False
 
-        self._enqueue_write("fan:10", task, {"state": state})
+        self._enqueue_write("fan:10", task, {"fanIndex": 10, "state": state})
     
+    def _applyFanWriteToRegisterCache(self, key: str, meta: dict) -> None:
+        """Обновить кэш регистров 1131/1132 после успешной записи вентилятора."""
+        try:
+            fan_index = int(meta.get("fanIndex", int(key.split(":")[1])))
+        except Exception:
+            return
+        state = bool(meta.get("state", False))
+        reg_1131 = self._fans_reg_1131 if self._fans_reg_1131 is not None else 0
+        reg_1132 = self._fans_reg_1132 if self._fans_reg_1132 is not None else 0
+
+        fan_bit_mapping = {
+            0: 0, 1: 1, 2: 2, 3: 3, 6: 4, 7: 5, 8: 6, 9: 7, 4: 8, 5: 9,
+        }
+        if fan_index == 10:
+            if state:
+                reg_1132 |= 0b11
+            else:
+                reg_1132 &= ~0b11
+            self._fans_reg_1132 = reg_1132
+        elif fan_index in fan_bit_mapping:
+            bit = fan_bit_mapping[fan_index]
+            if state:
+                reg_1131 |= 1 << bit
+            else:
+                reg_1131 &= ~(1 << bit)
+            self._fans_reg_1131 = reg_1131
+
     def _setRelayAsync(self, relay_num: int, state: bool, name: str):
         """Асинхронная установка состояния реле (не блокирует UI)"""
         client = self._modbus_client
