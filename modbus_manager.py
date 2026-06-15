@@ -75,6 +75,25 @@ def _water_chiller_setpoint_celsius_to_register(celsius: float) -> int:
     return int(round(celsius * _WATER_CHILLER_SETPOINT_SCALE))
 
 
+# SEOP Parameters (3011-3151): температуры/мощность/ток ×10; 129Xe mMol ×100; H2O proton Mol ×10
+_SEOP_TEMP_SCALE = 10.0
+_SEOP_POWER_SCALE = 10.0
+_SEOP_CURRENT_SCALE = 10.0
+_SEOP_XE_CONCENTRATION_SCALE = 100.0
+_SEOP_WATER_PROTON_SCALE = 10.0
+
+
+def _seop_register_to_scaled(raw: object, scale: float) -> Optional[float]:
+    try:
+        return float(int(raw)) / scale
+    except Exception:
+        return None
+
+
+def _seop_scaled_to_register(value: float, scale: float) -> int:
+    return int(round(value * scale))
+
+
 # Alicat N2/Xenon (1611/1621/1651/1661): register = Torr × 10 (14960 → 1496.00)
 _ALICAT_TORR_SCALE = 10.0
 
@@ -777,7 +796,7 @@ class ModbusManager(QObject):
         # Таймер для чтения регистров SEOP Parameters (3011-3081) - быстрое обновление
         self._seop_parameters_timer = QTimer(self)
         self._seop_parameters_timer.timeout.connect(self._readSEOPParameters)
-        # self._seop_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._seop_parameters_timer.setInterval(300)
         self._reading_seop_parameters = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров Calculated Parameters (4011-4101) - быстрое обновление
@@ -4814,43 +4833,61 @@ class ModbusManager(QObject):
             
             result = {}
             if laser_max_temp_regs and len(laser_max_temp_regs) >= 1:
-                result['laser_max_temp'] = float(int(laser_max_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(laser_max_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['laser_max_temp'] = v
             if laser_min_temp_regs and len(laser_min_temp_regs) >= 1:
-                result['laser_min_temp'] = float(int(laser_min_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(laser_min_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['laser_min_temp'] = v
             if cell_max_temp_regs and len(cell_max_temp_regs) >= 1:
-                result['cell_max_temp'] = float(int(cell_max_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(cell_max_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['cell_max_temp'] = v
             if cell_min_temp_regs and len(cell_min_temp_regs) >= 1:
-                result['cell_min_temp'] = float(int(cell_min_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(cell_min_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['cell_min_temp'] = v
             if ramp_temp_regs and len(ramp_temp_regs) >= 1:
-                result['ramp_temp'] = float(int(ramp_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(ramp_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['ramp_temp'] = v
             if seop_temp_regs and len(seop_temp_regs) >= 1:
-                result['seop_temp'] = float(int(seop_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(seop_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['seop_temp'] = v
             if cell_refill_temp_regs and len(cell_refill_temp_regs) >= 1:
-                result['cell_refill_temp'] = float(int(cell_refill_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(cell_refill_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['cell_refill_temp'] = v
             if loop_time_regs and len(loop_time_regs) >= 1:
-                # SEOP loop time в секундах - значение уже в секундах
                 result['loop_time'] = float(int(loop_time_regs[0]))
             if process_duration_regs and len(process_duration_regs) >= 1:
-                # SEOP process duration в секундах - значение уже в секундах (отображается как m:s)
                 result['process_duration'] = float(int(process_duration_regs[0]))
             if laser_max_output_power_regs and len(laser_max_output_power_regs) >= 1:
-                # Laser Max Output Power в W - преобразуем из int (W * 100) в float
-                result['laser_max_output_power'] = float(int(laser_max_output_power_regs[0])) / 100.0
+                v = _seop_register_to_scaled(laser_max_output_power_regs[0], _SEOP_POWER_SCALE)
+                if v is not None:
+                    result['laser_max_output_power'] = v
             if laser_psu_max_current_regs and len(laser_psu_max_current_regs) >= 1:
-                # Laser PSU MAX Current в A - преобразуем из int (A * 100) в float
-                result['laser_psu_max_current'] = float(int(laser_psu_max_current_regs[0])) / 100.0
+                v = _seop_register_to_scaled(laser_psu_max_current_regs[0], _SEOP_CURRENT_SCALE)
+                if v is not None:
+                    result['laser_psu_max_current'] = v
             if water_chiller_max_temp_regs and len(water_chiller_max_temp_regs) >= 1:
-                # Water Chiller Max Temp в C - преобразуем из int (температура * 100) в float
-                result['water_chiller_max_temp'] = float(int(water_chiller_max_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(water_chiller_max_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['water_chiller_max_temp'] = v
             if water_chiller_min_temp_regs and len(water_chiller_min_temp_regs) >= 1:
-                # Water Chiller Min Temp в C - преобразуем из int (температура * 100) в float
-                result['water_chiller_min_temp'] = float(int(water_chiller_min_temp_regs[0])) / 100.0
+                v = _seop_register_to_scaled(water_chiller_min_temp_regs[0], _SEOP_TEMP_SCALE)
+                if v is not None:
+                    result['water_chiller_min_temp'] = v
             if xe_concentration_regs and len(xe_concentration_regs) >= 1:
-                # 129Xe concentration в mMol - значение уже в mMol, ничего умножать не надо
-                result['xe_concentration'] = float(int(xe_concentration_regs[0]))
+                v = _seop_register_to_scaled(xe_concentration_regs[0], _SEOP_XE_CONCENTRATION_SCALE)
+                if v is not None:
+                    result['xe_concentration'] = v
             if water_proton_concentration_regs and len(water_proton_concentration_regs) >= 1:
-                # Water proton concentration в Mol - преобразуем из int (Mol * 100) в float
-                result['water_proton_concentration'] = float(int(water_proton_concentration_regs[0])) / 100.0
+                v = _seop_register_to_scaled(water_proton_concentration_regs[0], _SEOP_WATER_PROTON_SCALE)
+                if v is not None:
+                    result['water_proton_concentration'] = v
             if cell_number_regs and len(cell_number_regs) >= 1:
                 # Cell number - целое число
                 result['cell_number'] = int(cell_number_regs[0])
@@ -7553,7 +7590,7 @@ class ModbusManager(QObject):
         self._seop_laser_max_temp = temperature
         self._seop_laser_max_temp_user_interaction = True
         self.seopLaserMaxTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3011, register_value)
@@ -7579,7 +7616,7 @@ class ModbusManager(QObject):
         self._seop_laser_min_temp = temperature
         self._seop_laser_min_temp_user_interaction = True
         self.seopLaserMinTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3021, register_value)
@@ -7605,7 +7642,7 @@ class ModbusManager(QObject):
         self._seop_cell_max_temp = temperature
         self._seop_cell_max_temp_user_interaction = True
         self.seopCellMaxTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3031, register_value)
@@ -7631,7 +7668,7 @@ class ModbusManager(QObject):
         self._seop_cell_min_temp = temperature
         self._seop_cell_min_temp_user_interaction = True
         self.seopCellMinTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3041, register_value)
@@ -7657,7 +7694,7 @@ class ModbusManager(QObject):
         self._seop_ramp_temp = temperature
         self._seop_ramp_temp_user_interaction = True
         self.seopRampTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3051, register_value)
@@ -7683,7 +7720,7 @@ class ModbusManager(QObject):
         self._seop_temp = temperature
         self._seop_temp_user_interaction = True
         self.seopTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3061, register_value)
@@ -7709,7 +7746,7 @@ class ModbusManager(QObject):
         self._seop_cell_refill_temp = temperature
         self._seop_cell_refill_temp_user_interaction = True
         self.seopCellRefillTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3071, register_value)
@@ -7853,7 +7890,7 @@ class ModbusManager(QObject):
         self._seop_laser_max_output_power = power_w
         self._seop_laser_max_output_power_user_interaction = True
         self.seopLaserMaxOutputPowerChanged.emit(power_w)
-        register_value = int(power_w * 100)
+        register_value = _seop_scaled_to_register(power_w, _SEOP_POWER_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3101, register_value)
@@ -7879,7 +7916,7 @@ class ModbusManager(QObject):
         self._seop_laser_psu_max_current = current_a
         self._seop_laser_psu_max_current_user_interaction = True
         self.seopLaserPSUMaxCurrentChanged.emit(current_a)
-        register_value = int(current_a * 100)
+        register_value = _seop_scaled_to_register(current_a, _SEOP_CURRENT_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3111, register_value)
@@ -7905,7 +7942,7 @@ class ModbusManager(QObject):
         self._seop_water_chiller_max_temp = temperature
         self._seop_water_chiller_max_temp_user_interaction = True
         self.seopWaterChillerMaxTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3121, register_value)
@@ -7931,7 +7968,7 @@ class ModbusManager(QObject):
         self._seop_water_chiller_min_temp = temperature
         self._seop_water_chiller_min_temp_user_interaction = True
         self.seopWaterChillerMinTempChanged.emit(temperature)
-        register_value = int(temperature * 100)
+        register_value = _seop_scaled_to_register(temperature, _SEOP_TEMP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3131, register_value)
@@ -7957,7 +7994,7 @@ class ModbusManager(QObject):
         self._seop_xe_concentration = concentration_mmol
         self._seop_xe_concentration_user_interaction = True
         self.seopXeConcentrationChanged.emit(concentration_mmol)
-        register_value = int(concentration_mmol)  # Уже в mMol, целое число
+        register_value = _seop_scaled_to_register(concentration_mmol, _SEOP_XE_CONCENTRATION_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3141, register_value)
@@ -7983,7 +8020,7 @@ class ModbusManager(QObject):
         self._seop_water_proton_concentration = concentration_mol
         self._seop_water_proton_concentration_user_interaction = True
         self.seopWaterProtonConcentrationChanged.emit(concentration_mol)
-        register_value = int(concentration_mol * 100)
+        register_value = _seop_scaled_to_register(concentration_mol, _SEOP_WATER_PROTON_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(3151, register_value)
