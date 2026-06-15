@@ -2358,6 +2358,72 @@ class ModbusClient:
             reg_1132 if reg_1132 is not None else 0,
         )
 
+    def _build_write_frame_registers(self, address: int, values: list) -> bytes:
+        """Modbus RTU: запись нескольких holding/input registers (функция 16)."""
+        count = len(values)
+        byte_count = count * 2
+        frame = bytes([
+            self.unit_id, 16,
+            (address >> 8) & 0xFF, address & 0xFF,
+            (count >> 8) & 0xFF, count & 0xFF,
+            byte_count,
+        ])
+        for v in values:
+            v16 = int(v) & 0xFFFF
+            frame += bytes([(v16 >> 8) & 0xFF, v16 & 0xFF])
+        crc = self._crc16_modbus(frame)
+        return frame + bytes([crc & 0xFF, (crc >> 8) & 0xFF])
+
+    def write_fan_registers_direct(self, reg_1131: int, reg_1132: int) -> bool:
+        """Запись 1131 и 1132 одним пакетом (FC16), чтобы один регистр не сбрасывал другой."""
+        reg_1131 = int(reg_1131) & 0xFFFF
+        reg_1132 = int(reg_1132) & 0xFFFF
+
+        try:
+            if self.client is not None and self.client.is_socket_open():
+                result = self.client.write_registers(1131, [reg_1131, reg_1132], device_id=self.unit_id)
+                if not result.isError():
+                    logger.debug(f"✅ Запись fans 1131={reg_1131}, 1132={reg_1132} (pymodbus FC16)")
+                    return True
+        except Exception as e:
+            logger.debug(f"Не удалось записать 1131/1132 через pymodbus FC16: {e}")
+
+        if self.client is None or not self.client.is_socket_open():
+            return False
+
+        try:
+            sock = self._get_socket()
+            if sock is None:
+                logger.warning("Не удалось получить сокет для записи 1131/1132 (FC16)")
+                return False
+
+            write_frame = self._build_write_frame_registers(1131, [reg_1131, reg_1132])
+            for i in range(2):
+                try:
+                    sock.sendall(write_frame)
+                    time.sleep(0.02)
+                    resp = sock.recv(256)
+                    if resp and len(resp) >= 8 and resp[0] == self.unit_id and resp[1] == 16:
+                        logger.debug(f"✅ Запись fans 1131={reg_1131}, 1132={reg_1132} (direct FC16)")
+                        return True
+                except (ConnectionError, OSError) as e:
+                    if i == 0:
+                        logger.debug(f"Первая попытка FC16 1131/1132 не удалась: {e}")
+                    else:
+                        raise
+                if i < 1:
+                    time.sleep(0.05)
+        except Exception as e:
+            logger.warning(f"FC16 direct для 1131/1132 не удался: {e}")
+
+        # Fallback: поочерёдная запись; 1132 в конце, т.к. запись 1131 сбрасывает laser fans
+        self._flush_socket()
+        if not self.write_register_1131_direct(reg_1131):
+            return False
+        self._flush_socket()
+        time.sleep(0.05)
+        return self.write_register_1132_direct(reg_1132)
+
     def set_fan_1131(self, fan_bit: int, state: bool) -> bool:
         """Установка состояния вентилятора в регистре 1131
         
@@ -2381,13 +2447,7 @@ class ModbusClient:
             new_value = current_value & ~(1 << fan_bit)
 
         self._flush_socket()
-        if not self.write_register_1131_direct(new_value):
-            return False
-
-        # Запись 1131 может сбросить 1132 на устройстве — восстанавливаем laser fans
-        self._flush_socket()
-        time.sleep(0.05)
-        return self.write_register_1132_direct(reg_1132)
+        return self.write_fan_registers_direct(new_value, reg_1132)
 
     def read_register_1132_direct(self) -> Optional[int]:
         """Чтение регистра 1132 через прямой сокет (функция 04) — fans 17+18."""
@@ -2520,13 +2580,7 @@ class ModbusClient:
             new_1132 = current_1132 & ~laser_mask
 
         self._flush_socket()
-        if not self.write_register_1132_direct(new_1132):
-            return False
-
-        # Запись 1132 может сбросить 1131 на устройстве — восстанавливаем остальные fans
-        self._flush_socket()
-        time.sleep(0.05)
-        return self.write_register_1131_direct(reg_1131)
+        return self.write_fan_registers_direct(reg_1131, new_1132)
 
     def _flush_socket(self):
         """Вычитывание и сброс всех данных из входного буфера сокета"""
