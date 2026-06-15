@@ -4056,8 +4056,11 @@ Item {
                         // Connections для обновления значений Measured Parameters
                         Connections {
                             target: modbusManager
+                            function formatMeasuredUnavailable(value) {
+                                return (value === 0) ? "-----" : value.toFixed(0)
+                            }
                             function onMeasuredCurrentIRSignalChanged(value) {
-                                measuredCurrentIRSignal.text = value.toFixed(0)
+                                measuredCurrentIRSignal.text = formatMeasuredUnavailable(value)
                             }
                             function onMeasuredColdCellIRSignalChanged(value) {
                                 if (!measuredColdCellIRSignal.activeFocus) {
@@ -4071,24 +4074,24 @@ Item {
                             }
                             function onMeasuredWater1HNMRReferenceSignalChanged(value) {
                                 if (!measuredWater1HNMRReferenceSignal.activeFocus) {
-                                    measuredWater1HNMRReferenceSignal.text = value.toFixed(0)
+                                    measuredWater1HNMRReferenceSignal.text = value.toFixed(3)
                                 }
                             }
                             function onMeasuredWaterT2Changed(value) {
                                 if (!measuredWaterT2.activeFocus) {
-                                    measuredWaterT2.text = value.toFixed(2)
+                                    measuredWaterT2.text = value.toFixed(1)
                                 }
                             }
                             function onMeasuredHP129XeNMRSignalChanged(value) {
-                                measuredHP129XeNMRSignal.text = value.toFixed(0)
+                                measuredHP129XeNMRSignal.text = formatMeasuredUnavailable(value)
                             }
                             function onMeasuredHP129XeT2Changed(value) {
                                 if (!measuredHP129XeT2.activeFocus) {
-                                    measuredHP129XeT2.text = value.toFixed(2)
+                                    measuredHP129XeT2.text = (value === 0) ? "-----" : value.toFixed(1)
                                 }
                             }
                             function onMeasuredT2CorrectionFactorChanged(value) {
-                                measuredT2CorrectionFactor.text = value.toFixed(0)
+                                measuredT2CorrectionFactor.text = formatMeasuredUnavailable(value)
                             }
                         }
                     }
@@ -5218,17 +5221,17 @@ Item {
                             target: modbusManager
                             function onAdditionalMagnetPSUCurrentProtonNMRChanged(value) {
                                 if (!additionalMagnetPSUCurrentProtonNMR.activeFocus) {
-                                    additionalMagnetPSUCurrentProtonNMR.text = value.toFixed(2)
+                                    additionalMagnetPSUCurrentProtonNMR.text = value.toFixed(3)
                                 }
                             }
                             function onAdditionalMagnetPSUCurrent129XeNMRChanged(value) {
                                 if (!additionalMagnetPSUCurrent129XeNMR.activeFocus) {
-                                    additionalMagnetPSUCurrent129XeNMR.text = value.toFixed(2)
+                                    additionalMagnetPSUCurrent129XeNMR.text = value.toFixed(3)
                                 }
                             }
                             function onAdditionalOperationalLaserPSUCurrentChanged(value) {
                                 if (!additionalOperationalLaserPSUCurrent.activeFocus) {
-                                    additionalOperationalLaserPSUCurrent.text = value.toFixed(2)
+                                    additionalOperationalLaserPSUCurrent.text = value.toFixed(1)
                                 }
                             }
                             function onAdditionalRFPulseDurationChanged(value) {
@@ -5238,27 +5241,27 @@ Item {
                             }
                             function onAdditionalResonanceFrequencyChanged(value) {
                                 if (!additionalResonanceFrequency.activeFocus) {
-                                    additionalResonanceFrequency.text = value.toFixed(2)
+                                    additionalResonanceFrequency.text = value.toFixed(1)
                                 }
                             }
                             function onAdditionalProtonRFPulsePowerChanged(value) {
                                 if (!additionalProtonRFPulsePower.activeFocus) {
-                                    additionalProtonRFPulsePower.text = value.toFixed(2)
+                                    additionalProtonRFPulsePower.text = value.toFixed(1)
                                 }
                             }
                             function onAdditionalHP129XeRFPulsePowerChanged(value) {
                                 if (!additionalHP129XeRFPulsePower.activeFocus) {
-                                    additionalHP129XeRFPulsePower.text = value.toFixed(2)
+                                    additionalHP129XeRFPulsePower.text = value.toFixed(1)
                                 }
                             }
                             function onAdditionalStepSizeB0SweepHP129XeChanged(value) {
                                 if (!additionalStepSizeB0SweepHP129Xe.activeFocus) {
-                                    additionalStepSizeB0SweepHP129Xe.text = value.toFixed(2)
+                                    additionalStepSizeB0SweepHP129Xe.text = value.toFixed(3)
                                 }
                             }
                             function onAdditionalStepSizeB0SweepProtonsChanged(value) {
                                 if (!additionalStepSizeB0SweepProtons.activeFocus) {
-                                    additionalStepSizeB0SweepProtons.text = value.toFixed(2)
+                                    additionalStepSizeB0SweepProtons.text = value.toFixed(3)
                                 }
                             }
                             function onAdditionalXeAlicatsPressureChanged(value) {
@@ -5273,7 +5276,7 @@ Item {
                             }
                             function onAdditionalChillerTempSetpointChanged(value) {
                                 if (!additionalChillerTempSetpoint.activeFocus) {
-                                    additionalChillerTempSetpoint.text = value.toFixed(0)
+                                    additionalChillerTempSetpoint.text = value.toFixed(1)
                                 }
                             }
                             function onAdditionalSEOPResonanceFrequencyChanged(value) {
@@ -5283,7 +5286,7 @@ Item {
                             }
                             function onAdditionalSEOPResonanceFrequencyToleranceChanged(value) {
                                 if (!additionalSEOPResonanceFrequencyTolerance.activeFocus) {
-                                    additionalSEOPResonanceFrequencyTolerance.text = value.toFixed(0)
+                                    additionalSEOPResonanceFrequencyTolerance.text = value.toFixed(2)
                                 }
                             }
                             function onAdditionalIRSpectrometerNumberOfScansChanged(value) {
@@ -5565,19 +5568,33 @@ Item {
                                     width: 100
                                     height: 28
                                     font: Constants.fontMicroPx
-                                    placeholderText: "0.00"
+                                    placeholderText: "0"
                                     background: Rectangle {
                                         color: Constants.colorGrey
                                     }
                                     onEditingFinished: {
-                                        var val = parseFloat(text)
+                                        var val = parseInt(text)
                                         if (!isNaN(val) && modbusManager) {
+                                            val = Math.max(0, Math.min(2, val))
+                                            text = val.toString()
                                             modbusManager.setManualModeNMRGainValue(val)
                                             modbusManager.setManualModeNMRGain(val)
                                         }
                                     }
                                 }
-                                Text { text: "dB"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
+                                Text {
+                                    id: manualModeNMRGainHint
+                                    font: Constants.fontMicroPx
+                                    color: Constants.colorTextGrey
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: {
+                                        var idx = parseInt(manualModeNMRGain.text)
+                                        if (idx === 0) return "(74 dB)"
+                                        if (idx === 1) return "(86 dB)"
+                                        if (idx === 2) return "(96 dB)"
+                                        return ""
+                                    }
+                                }
                                 Button {
                                     width: 30
                                     height: 28
@@ -5833,27 +5850,27 @@ Item {
                             target: modbusManager
                             function onManualModeRFPulseFrequencyChanged(value) {
                                 if (!manualModeRFPulseFrequency.activeFocus) {
-                                    manualModeRFPulseFrequency.text = value.toFixed(2)
+                                    manualModeRFPulseFrequency.text = value.toFixed(1)
                                 }
                             }
                             function onManualModeRFPulsePowerChanged(value) {
                                 if (!manualModeRFPulsePower.activeFocus) {
-                                    manualModeRFPulsePower.text = value.toFixed(2)
+                                    manualModeRFPulsePower.text = value.toFixed(1)
                                 }
                             }
                             function onManualModeRFPulseDurationChanged(value) {
                                 if (!manualModeRFPulseDuration.activeFocus) {
-                                    manualModeRFPulseDuration.text = value.toFixed(2)
+                                    manualModeRFPulseDuration.text = value.toFixed(0)
                                 }
                             }
                             function onManualModePreAcquisitionChanged(value) {
                                 if (!manualModePreAcquisition.activeFocus) {
-                                    manualModePreAcquisition.text = value.toFixed(2)
+                                    manualModePreAcquisition.text = value.toFixed(0)
                                 }
                             }
                             function onManualModeNMRGainChanged(value) {
                                 if (!manualModeNMRGain.activeFocus) {
-                                    manualModeNMRGain.text = value.toFixed(2)
+                                    manualModeNMRGain.text = value.toFixed(0)
                                 }
                             }
                             function onManualModeNMRNumberOfScansChanged(value) {
@@ -5863,17 +5880,17 @@ Item {
                             }
                             function onManualModeNMRRecoveryChanged(value) {
                                 if (!manualModeNMRRecovery.activeFocus) {
-                                    manualModeNMRRecovery.text = value.toFixed(2)
+                                    manualModeNMRRecovery.text = value.toFixed(0)
                                 }
                             }
                             function onManualModeCenterFrequencyChanged(value) {
                                 if (!manualModeCenterFrequency.activeFocus) {
-                                    manualModeCenterFrequency.text = value.toFixed(2)
+                                    manualModeCenterFrequency.text = value.toFixed(1)
                                 }
                             }
                             function onManualModeFrequencySpanChanged(value) {
                                 if (!manualModeFrequencySpan.activeFocus) {
-                                    manualModeFrequencySpan.text = value.toFixed(2)
+                                    manualModeFrequencySpan.text = value.toFixed(1)
                                 }
                             }
                         }

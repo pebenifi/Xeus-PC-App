@@ -94,6 +94,56 @@ def _seop_scaled_to_register(value: float, scale: float) -> int:
     return int(round(value * scale))
 
 
+# Measured Parameters (5011-5081): IR — uint32 (high reg−1, low reg); Water 1H ÷1000; T2 ms ÷10
+_MEASURED_WATER_1H_NMR_SCALE = 1000.0
+_MEASURED_T2_MS_SCALE = 10.0
+
+
+def _measured_ir_registers_to_value(high_raw: object, low_raw: object) -> Optional[float]:
+    try:
+        high = int(high_raw) & 0xFFFF
+        low = int(low_raw) & 0xFFFF
+        return float((high << 16) | low)
+    except Exception:
+        return None
+
+
+def _measured_ir_value_to_registers(value: float) -> tuple[int, int]:
+    v = int(value)
+    return (v >> 16) & 0xFFFF, v & 0xFFFF
+
+
+def _read_measured_ir_uint32(client, low_register: int) -> Optional[float]:
+    high_regs = client.read_input_registers_direct(low_register - 1, 1, max_chunk=10)
+    low_regs = client.read_input_registers_direct(low_register, 1, max_chunk=10)
+    if not high_regs or not low_regs:
+        return None
+    return _measured_ir_registers_to_value(high_regs[0], low_regs[0])
+
+
+def _write_measured_ir_uint32(client, low_register: int, value: float) -> bool:
+    high, low = _measured_ir_value_to_registers(value)
+    ok_high = bool(client.write_holding_register(low_register - 1, high))
+    ok_low = bool(client.write_holding_register(low_register, low))
+    return ok_high and ok_low
+
+
+# Additional Parameters (6011-6201)
+_ADDITIONAL_MAGNET_CURRENT_SCALE = 1000.0  # A (858 → 0.858)
+_ADDITIONAL_LASER_CURRENT_SCALE = 10.0  # A (375 → 37.5)
+_ADDITIONAL_SCALE_10 = 10.0  # kHz, %, baseline kHz, chiller °C
+_ADDITIONAL_STEP_SCALE = 1000.0  # B0 sweep step A (20 → 0.020)
+_ADDITIONAL_PRESSURE_SCALE = 100.0  # Torr setpoint (2000 → 20.00)
+_ADDITIONAL_NM_SCALE = 100.0  # SEOP resonance nm (13939 → 139.39)
+_ADDITIONAL_TOLERANCE_SCALE = 100.0  # SEOP tolerance (5 → 0.05)
+_ADDITIONAL_EXPOSURE_SCALE = 100.0  # IR exposure (120 → 1.20)
+
+
+# Manual mode settings (6301-6381): kHz/% ×10; duration, pre-acq, recovery — 1:1; gain — index 0/1/2
+_MANUAL_MODE_FREQ_SCALE = 10.0
+_MANUAL_MODE_POWER_SCALE = 10.0
+
+
 # Alicat N2/Xenon (1611/1621/1651/1661): register = Torr × 10 (14960 → 1496.00)
 _ALICAT_TORR_SCALE = 10.0
 
@@ -808,19 +858,19 @@ class ModbusManager(QObject):
         # Таймер для чтения регистров Measured Parameters (5011-5081) - быстрое обновление
         self._measured_parameters_timer = QTimer(self)
         self._measured_parameters_timer.timeout.connect(self._readMeasuredParameters)
-        # self._measured_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._measured_parameters_timer.setInterval(300)
         self._reading_measured_parameters = False  # Флаг для предотвращения параллельных чтений
 
         # Таймер для чтения регистров Additional Parameters (6011-6201) - быстрое обновление
         self._additional_parameters_timer = QTimer(self)
         self._additional_parameters_timer.timeout.connect(self._readAdditionalParameters)
-        # self._additional_parameters_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._additional_parameters_timer.setInterval(300)
         self._reading_additional_parameters = False  # Флаг для предотвращения параллельных чтений
         
         # Таймер для чтения регистров Manual mode settings (6301-6381) - быстрое обновление
         self._manual_mode_settings_timer = QTimer(self)
         self._manual_mode_settings_timer.timeout.connect(self._readManualModeSettings)
-        # self._manual_mode_settings_timer.setInterval(300)  # ВРЕМЕННО ОТКЛЮЧЕНО
+        self._manual_mode_settings_timer.setInterval(300)
         self._reading_manual_mode_settings = False  # Флаг для предотвращения параллельных чтений
 
         # Список таймеров для паузы/возобновления опросов
@@ -5031,44 +5081,45 @@ class ModbusManager(QObject):
         
         def task():
             """Чтение всех регистров Measured Parameters"""
-            # Регистры идут с шагом 10 (5011, 5021, 5031...), поэтому читаем их по отдельности
-            # Но используем max_chunk=10 для оптимизации внутри read_input_registers_direct
-            current_ir_signal_regs = client.read_input_registers_direct(5011, 1, max_chunk=10)
-            cold_cell_ir_signal_regs = client.read_input_registers_direct(5021, 1, max_chunk=10)
-            hot_cell_ir_signal_regs = client.read_input_registers_direct(5031, 1, max_chunk=10)
-            water_1h_nmr_reference_signal_regs = client.read_input_registers_direct(5041, 1, max_chunk=10)
-            water_t2_regs = client.read_input_registers_direct(5051, 1, max_chunk=10)
-            hp_129xe_nmr_signal_regs = client.read_input_registers_direct(5061, 1, max_chunk=10)
-            hp_129xe_t2_regs = client.read_input_registers_direct(5071, 1, max_chunk=10)
-            t2_correction_factor_regs = client.read_input_registers_direct(5081, 1, max_chunk=10)
-            
             result = {}
-            if current_ir_signal_regs and len(current_ir_signal_regs) >= 1:
-                # Current IR Signal - значение уже в нужных единицах
-                result['current_ir_signal'] = float(int(current_ir_signal_regs[0]))
-            if cold_cell_ir_signal_regs and len(cold_cell_ir_signal_regs) >= 1:
-                # Cold Cell IR Signal - значение уже в нужных единицах
-                result['cold_cell_ir_signal'] = float(int(cold_cell_ir_signal_regs[0]))
-            if hot_cell_ir_signal_regs and len(hot_cell_ir_signal_regs) >= 1:
-                # Hot Cell IR Signal - значение уже в нужных единицах
-                result['hot_cell_ir_signal'] = float(int(hot_cell_ir_signal_regs[0]))
-            if water_1h_nmr_reference_signal_regs and len(water_1h_nmr_reference_signal_regs) >= 1:
-                # Water 1H NMR Reference Signal - значение уже в нужных единицах
-                result['water_1h_nmr_reference_signal'] = float(int(water_1h_nmr_reference_signal_regs[0]))
+
+            current_ir = _read_measured_ir_uint32(client, 5011)
+            if current_ir is not None:
+                result['current_ir_signal'] = current_ir
+            cold_ir = _read_measured_ir_uint32(client, 5021)
+            if cold_ir is not None:
+                result['cold_cell_ir_signal'] = cold_ir
+            hot_ir = _read_measured_ir_uint32(client, 5031)
+            if hot_ir is not None:
+                result['hot_cell_ir_signal'] = hot_ir
+
+            water_1h_regs = client.read_input_registers_direct(5041, 1, max_chunk=10)
+            if water_1h_regs and len(water_1h_regs) >= 1:
+                v = _seop_register_to_scaled(water_1h_regs[0], _MEASURED_WATER_1H_NMR_SCALE)
+                if v is not None:
+                    result['water_1h_nmr_reference_signal'] = v
+
+            water_t2_regs = client.read_input_registers_direct(5051, 1, max_chunk=10)
             if water_t2_regs and len(water_t2_regs) >= 1:
-                # Water T2 в ms - преобразуем из int (ms * 100) в float
-                result['water_t2'] = float(int(water_t2_regs[0])) / 100.0
-            if hp_129xe_nmr_signal_regs and len(hp_129xe_nmr_signal_regs) >= 1:
-                # HP 129Xe NMR Signal - значение уже в нужных единицах
-                result['hp_129xe_nmr_signal'] = float(int(hp_129xe_nmr_signal_regs[0]))
+                v = _seop_register_to_scaled(water_t2_regs[0], _MEASURED_T2_MS_SCALE)
+                if v is not None:
+                    result['water_t2'] = v
+
+            hp_129xe_ir = _read_measured_ir_uint32(client, 5061)
+            if hp_129xe_ir is not None:
+                result['hp_129xe_nmr_signal'] = hp_129xe_ir
+
+            hp_129xe_t2_regs = client.read_input_registers_direct(5071, 1, max_chunk=10)
             if hp_129xe_t2_regs and len(hp_129xe_t2_regs) >= 1:
-                # HP 129Xe T2 в ms - преобразуем из int (ms * 100) в float
-                result['hp_129xe_t2'] = float(int(hp_129xe_t2_regs[0])) / 100.0
-            if t2_correction_factor_regs and len(t2_correction_factor_regs) >= 1:
-                # T2* correction factor - значение уже в нужных единицах
-                result['t2_correction_factor'] = float(int(t2_correction_factor_regs[0]))
-            
-            return result
+                v = _seop_register_to_scaled(hp_129xe_t2_regs[0], _MEASURED_T2_MS_SCALE)
+                if v is not None:
+                    result['hp_129xe_t2'] = v
+
+            t2_corr = _read_measured_ir_uint32(client, 5081)
+            if t2_corr is not None:
+                result['t2_correction_factor'] = t2_corr
+
+            return result if result else None
         
         self._enqueue_read("measured_parameters", task)
     
@@ -5164,67 +5215,79 @@ class ModbusManager(QObject):
             
             result = {}
             if magnet_psu_current_proton_nmr_regs and len(magnet_psu_current_proton_nmr_regs) >= 1:
-                # Magnet PSU current for proton NMR в A - преобразуем из int (A * 100) в float
-                result['magnet_psu_current_proton_nmr'] = float(int(magnet_psu_current_proton_nmr_regs[0])) / 100.0
+                v = _seop_register_to_scaled(magnet_psu_current_proton_nmr_regs[0], _ADDITIONAL_MAGNET_CURRENT_SCALE)
+                if v is not None:
+                    result['magnet_psu_current_proton_nmr'] = v
             if magnet_psu_current_129xe_nmr_regs and len(magnet_psu_current_129xe_nmr_regs) >= 1:
-                # Magnet PSU current for 129Xe NMR в A - преобразуем из int (A * 100) в float
-                result['magnet_psu_current_129xe_nmr'] = float(int(magnet_psu_current_129xe_nmr_regs[0])) / 100.0
+                v = _seop_register_to_scaled(magnet_psu_current_129xe_nmr_regs[0], _ADDITIONAL_MAGNET_CURRENT_SCALE)
+                if v is not None:
+                    result['magnet_psu_current_129xe_nmr'] = v
             if operational_laser_psu_current_regs and len(operational_laser_psu_current_regs) >= 1:
-                # Operational Laser PSU current в A - преобразуем из int (A * 100) в float
-                result['operational_laser_psu_current'] = float(int(operational_laser_psu_current_regs[0])) / 100.0
+                v = _seop_register_to_scaled(operational_laser_psu_current_regs[0], _ADDITIONAL_LASER_CURRENT_SCALE)
+                if v is not None:
+                    result['operational_laser_psu_current'] = v
             if rf_pulse_duration_regs and len(rf_pulse_duration_regs) >= 1:
-                # RF pulse duration - значение уже в нужных единицах
                 result['rf_pulse_duration'] = float(int(rf_pulse_duration_regs[0]))
             if resonance_frequency_regs and len(resonance_frequency_regs) >= 1:
-                # Resonance frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['resonance_frequency'] = float(int(resonance_frequency_regs[0])) / 100.0
+                v = _seop_register_to_scaled(resonance_frequency_regs[0], _ADDITIONAL_SCALE_10)
+                if v is not None:
+                    result['resonance_frequency'] = v
             if proton_rf_pulse_power_regs and len(proton_rf_pulse_power_regs) >= 1:
-                # Proton RF pulse power в % - преобразуем из int (% * 100) в float
-                result['proton_rf_pulse_power'] = float(int(proton_rf_pulse_power_regs[0])) / 100.0
+                v = _seop_register_to_scaled(proton_rf_pulse_power_regs[0], _ADDITIONAL_SCALE_10)
+                if v is not None:
+                    result['proton_rf_pulse_power'] = v
             if hp_129xe_rf_pulse_power_regs and len(hp_129xe_rf_pulse_power_regs) >= 1:
-                # HP 129Xe RF pulse power в % - преобразуем из int (% * 100) в float
-                result['hp_129xe_rf_pulse_power'] = float(int(hp_129xe_rf_pulse_power_regs[0])) / 100.0
+                v = _seop_register_to_scaled(hp_129xe_rf_pulse_power_regs[0], _ADDITIONAL_SCALE_10)
+                if v is not None:
+                    result['hp_129xe_rf_pulse_power'] = v
             if step_size_b0_sweep_hp_129xe_regs and len(step_size_b0_sweep_hp_129xe_regs) >= 1:
-                # Step size during B0 field sweep for HP 129Xe в A - преобразуем из int (A * 100) в float
-                result['step_size_b0_sweep_hp_129xe'] = float(int(step_size_b0_sweep_hp_129xe_regs[0])) / 100.0
+                v = _seop_register_to_scaled(step_size_b0_sweep_hp_129xe_regs[0], _ADDITIONAL_STEP_SCALE)
+                if v is not None:
+                    result['step_size_b0_sweep_hp_129xe'] = v
             if step_size_b0_sweep_protons_regs and len(step_size_b0_sweep_protons_regs) >= 1:
-                # Step size during B0 field sweep for protons в A - преобразуем из int (A * 100) в float
-                result['step_size_b0_sweep_protons'] = float(int(step_size_b0_sweep_protons_regs[0])) / 100.0
+                v = _seop_register_to_scaled(step_size_b0_sweep_protons_regs[0], _ADDITIONAL_STEP_SCALE)
+                if v is not None:
+                    result['step_size_b0_sweep_protons'] = v
             if xe_alicats_pressure_regs and len(xe_alicats_pressure_regs) >= 1:
-                # Xe ALICATS pressure в Torr - преобразуем из int (Torr * 100) в float
-                result['xe_alicats_pressure'] = float(int(xe_alicats_pressure_regs[0])) / 100.0
+                v = _seop_register_to_scaled(xe_alicats_pressure_regs[0], _ADDITIONAL_PRESSURE_SCALE)
+                if v is not None:
+                    result['xe_alicats_pressure'] = v
             if nitrogen_alicats_pressure_regs and len(nitrogen_alicats_pressure_regs) >= 1:
-                # Nitrogen ALICATS pressure в Torr - преобразуем из int (Torr * 100) в float
-                result['nitrogen_alicats_pressure'] = float(int(nitrogen_alicats_pressure_regs[0])) / 100.0
+                v = _seop_register_to_scaled(nitrogen_alicats_pressure_regs[0], _ADDITIONAL_PRESSURE_SCALE)
+                if v is not None:
+                    result['nitrogen_alicats_pressure'] = v
             if chiller_temp_setpoint_regs and len(chiller_temp_setpoint_regs) >= 1:
-                # Chiller Temp setpoint - значение уже в нужных единицах (предполагаем что это int)
-                result['chiller_temp_setpoint'] = float(int(chiller_temp_setpoint_regs[0]))
+                v = _seop_register_to_scaled(chiller_temp_setpoint_regs[0], _ADDITIONAL_SCALE_10)
+                if v is not None:
+                    result['chiller_temp_setpoint'] = v
             if seop_resonance_frequency_regs and len(seop_resonance_frequency_regs) >= 1:
-                # SEOP Resonance Frequency в nm - преобразуем из int (nm * 100) в float
-                result['seop_resonance_frequency'] = float(int(seop_resonance_frequency_regs[0])) / 100.0
+                v = _seop_register_to_scaled(seop_resonance_frequency_regs[0], _ADDITIONAL_NM_SCALE)
+                if v is not None:
+                    result['seop_resonance_frequency'] = v
             if seop_resonance_frequency_tolerance_regs and len(seop_resonance_frequency_tolerance_regs) >= 1:
-                # SEOP Resonance Frequency Tolerance - значение уже в нужных единицах (предполагаем что это int)
-                result['seop_resonance_frequency_tolerance'] = float(int(seop_resonance_frequency_tolerance_regs[0]))
+                v = _seop_register_to_scaled(seop_resonance_frequency_tolerance_regs[0], _ADDITIONAL_TOLERANCE_SCALE)
+                if v is not None:
+                    result['seop_resonance_frequency_tolerance'] = v
             if ir_spectrometer_number_of_scans_regs and len(ir_spectrometer_number_of_scans_regs) >= 1:
-                # IR spectrometer number of scans - значение уже в нужных единицах (предполагаем что это int)
                 result['ir_spectrometer_number_of_scans'] = float(int(ir_spectrometer_number_of_scans_regs[0]))
             if ir_spectrometer_exposure_duration_regs and len(ir_spectrometer_exposure_duration_regs) >= 1:
-                # IR spectrometer exposure duration в ms - преобразуем из int (ms * 100) в float
-                result['ir_spectrometer_exposure_duration'] = float(int(ir_spectrometer_exposure_duration_regs[0])) / 100.0
+                v = _seop_register_to_scaled(ir_spectrometer_exposure_duration_regs[0], _ADDITIONAL_EXPOSURE_SCALE)
+                if v is not None:
+                    result['ir_spectrometer_exposure_duration'] = v
             if h1_reference_n_scans_regs and len(h1_reference_n_scans_regs) >= 1:
-                # 1H Reference N Scans - значение уже в нужных единицах (предполагаем что это int)
                 result['h1_reference_n_scans'] = float(int(h1_reference_n_scans_regs[0]))
             if h1_current_sweep_n_scans_regs and len(h1_current_sweep_n_scans_regs) >= 1:
-                # 1H Current Sweep N Scans - значение уже в нужных единицах (предполагаем что это int)
                 result['h1_current_sweep_n_scans'] = float(int(h1_current_sweep_n_scans_regs[0]))
             if baseline_correction_min_frequency_regs and len(baseline_correction_min_frequency_regs) >= 1:
-                # Baseline correction min frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['baseline_correction_min_frequency'] = float(int(baseline_correction_min_frequency_regs[0])) / 100.0
+                v = _seop_register_to_scaled(baseline_correction_min_frequency_regs[0], _ADDITIONAL_SCALE_10)
+                if v is not None:
+                    result['baseline_correction_min_frequency'] = v
             if baseline_correction_max_frequency_regs and len(baseline_correction_max_frequency_regs) >= 1:
-                # Baseline correction max frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['baseline_correction_max_frequency'] = float(int(baseline_correction_max_frequency_regs[0])) / 100.0
-            
-            return result
+                v = _seop_register_to_scaled(baseline_correction_max_frequency_regs[0], _ADDITIONAL_SCALE_10)
+                if v is not None:
+                    result['baseline_correction_max_frequency'] = v
+
+            return result if result else None
         
         self._enqueue_read("additional_parameters", task)
     
@@ -5383,34 +5446,33 @@ class ModbusManager(QObject):
             
             result = {}
             if rf_pulse_frequency_regs and len(rf_pulse_frequency_regs) >= 1:
-                # RF pulse frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['rf_pulse_frequency'] = float(int(rf_pulse_frequency_regs[0])) / 100.0
+                v = _seop_register_to_scaled(rf_pulse_frequency_regs[0], _MANUAL_MODE_FREQ_SCALE)
+                if v is not None:
+                    result['rf_pulse_frequency'] = v
             if rf_pulse_power_regs and len(rf_pulse_power_regs) >= 1:
-                # RF pulse power в % - преобразуем из int (% * 100) в float
-                result['rf_pulse_power'] = float(int(rf_pulse_power_regs[0])) / 100.0
+                v = _seop_register_to_scaled(rf_pulse_power_regs[0], _MANUAL_MODE_POWER_SCALE)
+                if v is not None:
+                    result['rf_pulse_power'] = v
             if rf_pulse_duration_regs and len(rf_pulse_duration_regs) >= 1:
-                # RF pulse duration в T/2 - преобразуем из int (T/2 * 100) в float
-                result['rf_pulse_duration'] = float(int(rf_pulse_duration_regs[0])) / 100.0
+                result['rf_pulse_duration'] = float(int(rf_pulse_duration_regs[0]))
             if pre_acquisition_regs and len(pre_acquisition_regs) >= 1:
-                # Pre acquisition в ms - преобразуем из int (ms * 100) в float
-                result['pre_acquisition'] = float(int(pre_acquisition_regs[0])) / 100.0
+                result['pre_acquisition'] = float(int(pre_acquisition_regs[0]))
             if nmr_gain_regs and len(nmr_gain_regs) >= 1:
-                # NMR gain в dB - преобразуем из int (dB * 100) в float
-                result['nmr_gain'] = float(int(nmr_gain_regs[0])) / 100.0
+                result['nmr_gain'] = float(int(nmr_gain_regs[0]))
             if nmr_number_of_scans_regs and len(nmr_number_of_scans_regs) >= 1:
-                # NMR number of scans - значение уже в нужных единицах (предполагаем что это int)
                 result['nmr_number_of_scans'] = float(int(nmr_number_of_scans_regs[0]))
             if nmr_recovery_regs and len(nmr_recovery_regs) >= 1:
-                # NMR recovery в ms - преобразуем из int (ms * 100) в float
-                result['nmr_recovery'] = float(int(nmr_recovery_regs[0])) / 100.0
+                result['nmr_recovery'] = float(int(nmr_recovery_regs[0]))
             if center_frequency_regs and len(center_frequency_regs) >= 1:
-                # Center frequency в kHz - преобразуем из int (kHz * 100) в float
-                result['center_frequency'] = float(int(center_frequency_regs[0])) / 100.0
+                v = _seop_register_to_scaled(center_frequency_regs[0], _MANUAL_MODE_FREQ_SCALE)
+                if v is not None:
+                    result['center_frequency'] = v
             if frequency_span_regs and len(frequency_span_regs) >= 1:
-                # Frequency span в kHz - преобразуем из int (kHz * 100) в float
-                result['frequency_span'] = float(int(frequency_span_regs[0])) / 100.0
-            
-            return result
+                v = _seop_register_to_scaled(frequency_span_regs[0], _MANUAL_MODE_FREQ_SCALE)
+                if v is not None:
+                    result['frequency_span'] = v
+
+            return result if result else None
         
         self._enqueue_read("manual_mode_settings", task)
     
@@ -5489,11 +5551,9 @@ class ModbusManager(QObject):
         self._measured_cold_cell_ir_signal = value
         self._measured_cold_cell_ir_signal_user_interaction = True
         self.measuredColdCellIRSignalChanged.emit(value)
-        register_value = int(value)
         client = self._modbus_client
         def task() -> bool:
-            result = client.write_holding_register(5021, register_value)
-            return bool(result)
+            return _write_measured_ir_uint32(client, 5021, value)
         self._enqueue_write("measured_cold_cell_ir_signal", task, {"value": value})
         return True
     
@@ -5517,11 +5577,9 @@ class ModbusManager(QObject):
         self._measured_hot_cell_ir_signal = value
         self._measured_hot_cell_ir_signal_user_interaction = True
         self.measuredHotCellIRSignalChanged.emit(value)
-        register_value = int(value)
         client = self._modbus_client
         def task() -> bool:
-            result = client.write_holding_register(5031, register_value)
-            return bool(result)
+            return _write_measured_ir_uint32(client, 5031, value)
         self._enqueue_write("measured_hot_cell_ir_signal", task, {"value": value})
         return True
     
@@ -5545,7 +5603,7 @@ class ModbusManager(QObject):
         self._measured_water_1h_nmr_reference_signal = value
         self._measured_water_1h_nmr_reference_signal_user_interaction = True
         self.measuredWater1HNMRReferenceSignalChanged.emit(value)
-        register_value = int(value)
+        register_value = _seop_scaled_to_register(value, _MEASURED_WATER_1H_NMR_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(5041, register_value)
@@ -5555,13 +5613,13 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def increaseMeasuredWater1HNMRReferenceSignal(self) -> bool:
-        """Увеличение Water 1H NMR Reference Signal на 1"""
-        return self.setMeasuredWater1HNMRReferenceSignal(self._measured_water_1h_nmr_reference_signal + 1.0)
+        """Увеличение Water 1H NMR Reference Signal на 0.001"""
+        return self.setMeasuredWater1HNMRReferenceSignal(self._measured_water_1h_nmr_reference_signal + 0.001)
     
     @Slot(result=bool)
     def decreaseMeasuredWater1HNMRReferenceSignal(self) -> bool:
-        """Уменьшение Water 1H NMR Reference Signal на 1"""
-        return self.setMeasuredWater1HNMRReferenceSignal(self._measured_water_1h_nmr_reference_signal - 1.0)
+        """Уменьшение Water 1H NMR Reference Signal на 0.001"""
+        return self.setMeasuredWater1HNMRReferenceSignal(self._measured_water_1h_nmr_reference_signal - 0.001)
     
     @Slot(float, result=bool)
     def setMeasuredWaterT2(self, value_ms: float) -> bool:
@@ -5573,7 +5631,7 @@ class ModbusManager(QObject):
         self._measured_water_t2 = value_ms
         self._measured_water_t2_user_interaction = True
         self.measuredWaterT2Changed.emit(value_ms)
-        register_value = int(value_ms * 100)
+        register_value = _seop_scaled_to_register(value_ms, _MEASURED_T2_MS_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(5051, register_value)
@@ -5583,13 +5641,13 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def increaseMeasuredWaterT2(self) -> bool:
-        """Увеличение Water T2 на 0.01 ms"""
-        return self.setMeasuredWaterT2(self._measured_water_t2 + 0.01)
+        """Увеличение Water T2 на 0.1 ms"""
+        return self.setMeasuredWaterT2(self._measured_water_t2 + 0.1)
     
     @Slot(result=bool)
     def decreaseMeasuredWaterT2(self) -> bool:
-        """Уменьшение Water T2 на 0.01 ms"""
-        return self.setMeasuredWaterT2(self._measured_water_t2 - 0.01)
+        """Уменьшение Water T2 на 0.1 ms"""
+        return self.setMeasuredWaterT2(self._measured_water_t2 - 0.1)
     
     @Slot(float, result=bool)
     def setMeasuredHP129XeT2(self, value_ms: float) -> bool:
@@ -5601,7 +5659,7 @@ class ModbusManager(QObject):
         self._measured_hp_129xe_t2 = value_ms
         self._measured_hp_129xe_t2_user_interaction = True
         self.measuredHP129XeT2Changed.emit(value_ms)
-        register_value = int(value_ms * 100)
+        register_value = _seop_scaled_to_register(value_ms, _MEASURED_T2_MS_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(5071, register_value)
@@ -5611,13 +5669,13 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def increaseMeasuredHP129XeT2(self) -> bool:
-        """Увеличение HP 129Xe T2 на 0.01 ms"""
-        return self.setMeasuredHP129XeT2(self._measured_hp_129xe_t2 + 0.01)
+        """Увеличение HP 129Xe T2 на 0.1 ms"""
+        return self.setMeasuredHP129XeT2(self._measured_hp_129xe_t2 + 0.1)
     
     @Slot(result=bool)
     def decreaseMeasuredHP129XeT2(self) -> bool:
-        """Уменьшение HP 129Xe T2 на 0.01 ms"""
-        return self.setMeasuredHP129XeT2(self._measured_hp_129xe_t2 - 0.01)
+        """Уменьшение HP 129Xe T2 на 0.1 ms"""
+        return self.setMeasuredHP129XeT2(self._measured_hp_129xe_t2 - 0.1)
     
     # Методы setValue для TextField (ввод с клавиатуры)
     @Slot(float, result=bool)
@@ -5671,7 +5729,7 @@ class ModbusManager(QObject):
         self._additional_magnet_psu_current_proton_nmr = current_a
         self._additional_magnet_psu_current_proton_nmr_user_interaction = True
         self.additionalMagnetPSUCurrentProtonNMRChanged.emit(current_a)
-        register_value = int(current_a * 100)
+        register_value = _seop_scaled_to_register(current_a, _ADDITIONAL_MAGNET_CURRENT_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6011, register_value)
@@ -5682,12 +5740,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalMagnetPSUCurrentProtonNMR(self) -> bool:
         """Увеличение Magnet PSU current for proton NMR на 0.01 A"""
-        return self.setAdditionalMagnetPSUCurrentProtonNMR(self._additional_magnet_psu_current_proton_nmr + 0.01)
+        return self.setAdditionalMagnetPSUCurrentProtonNMR(self._additional_magnet_psu_current_proton_nmr + 0.001)
     
     @Slot(result=bool)
     def decreaseAdditionalMagnetPSUCurrentProtonNMR(self) -> bool:
         """Уменьшение Magnet PSU current for proton NMR на 0.01 A"""
-        return self.setAdditionalMagnetPSUCurrentProtonNMR(self._additional_magnet_psu_current_proton_nmr - 0.01)
+        return self.setAdditionalMagnetPSUCurrentProtonNMR(self._additional_magnet_psu_current_proton_nmr - 0.001)
     
     @Slot(float, result=bool)
     def setAdditionalMagnetPSUCurrent129XeNMR(self, current_a: float) -> bool:
@@ -5699,7 +5757,7 @@ class ModbusManager(QObject):
         self._additional_magnet_psu_current_129xe_nmr = current_a
         self._additional_magnet_psu_current_129xe_nmr_user_interaction = True
         self.additionalMagnetPSUCurrent129XeNMRChanged.emit(current_a)
-        register_value = int(current_a * 100)
+        register_value = _seop_scaled_to_register(current_a, _ADDITIONAL_MAGNET_CURRENT_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6021, register_value)
@@ -5710,12 +5768,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalMagnetPSUCurrent129XeNMR(self) -> bool:
         """Увеличение Magnet PSU current for 129Xe NMR на 0.01 A"""
-        return self.setAdditionalMagnetPSUCurrent129XeNMR(self._additional_magnet_psu_current_129xe_nmr + 0.01)
+        return self.setAdditionalMagnetPSUCurrent129XeNMR(self._additional_magnet_psu_current_129xe_nmr + 0.001)
     
     @Slot(result=bool)
     def decreaseAdditionalMagnetPSUCurrent129XeNMR(self) -> bool:
         """Уменьшение Magnet PSU current for 129Xe NMR на 0.01 A"""
-        return self.setAdditionalMagnetPSUCurrent129XeNMR(self._additional_magnet_psu_current_129xe_nmr - 0.01)
+        return self.setAdditionalMagnetPSUCurrent129XeNMR(self._additional_magnet_psu_current_129xe_nmr - 0.001)
     
     @Slot(float, result=bool)
     def setAdditionalOperationalLaserPSUCurrent(self, current_a: float) -> bool:
@@ -5727,7 +5785,7 @@ class ModbusManager(QObject):
         self._additional_operational_laser_psu_current = current_a
         self._additional_operational_laser_psu_current_user_interaction = True
         self.additionalOperationalLaserPSUCurrentChanged.emit(current_a)
-        register_value = int(current_a * 100)
+        register_value = _seop_scaled_to_register(current_a, _ADDITIONAL_LASER_CURRENT_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6031, register_value)
@@ -5738,12 +5796,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalOperationalLaserPSUCurrent(self) -> bool:
         """Увеличение Operational Laser PSU current на 0.01 A"""
-        return self.setAdditionalOperationalLaserPSUCurrent(self._additional_operational_laser_psu_current + 0.01)
+        return self.setAdditionalOperationalLaserPSUCurrent(self._additional_operational_laser_psu_current + 0.1)
     
     @Slot(result=bool)
     def decreaseAdditionalOperationalLaserPSUCurrent(self) -> bool:
         """Уменьшение Operational Laser PSU current на 0.01 A"""
-        return self.setAdditionalOperationalLaserPSUCurrent(self._additional_operational_laser_psu_current - 0.01)
+        return self.setAdditionalOperationalLaserPSUCurrent(self._additional_operational_laser_psu_current - 0.1)
     
     @Slot(float, result=bool)
     def setAdditionalRFPulseDuration(self, duration: float) -> bool:
@@ -5783,7 +5841,7 @@ class ModbusManager(QObject):
         self._additional_resonance_frequency = frequency_khz
         self._additional_resonance_frequency_user_interaction = True
         self.additionalResonanceFrequencyChanged.emit(frequency_khz)
-        register_value = int(frequency_khz * 100)
+        register_value = _seop_scaled_to_register(frequency_khz, _ADDITIONAL_SCALE_10)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6051, register_value)
@@ -5794,12 +5852,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalResonanceFrequency(self) -> bool:
         """Увеличение Resonance frequency на 0.01 kHz"""
-        return self.setAdditionalResonanceFrequency(self._additional_resonance_frequency + 0.01)
+        return self.setAdditionalResonanceFrequency(self._additional_resonance_frequency + 0.1)
     
     @Slot(result=bool)
     def decreaseAdditionalResonanceFrequency(self) -> bool:
         """Уменьшение Resonance frequency на 0.01 kHz"""
-        return self.setAdditionalResonanceFrequency(self._additional_resonance_frequency - 0.01)
+        return self.setAdditionalResonanceFrequency(self._additional_resonance_frequency - 0.1)
     
     @Slot(float, result=bool)
     def setAdditionalProtonRFPulsePower(self, power_percent: float) -> bool:
@@ -5811,7 +5869,7 @@ class ModbusManager(QObject):
         self._additional_proton_rf_pulse_power = power_percent
         self._additional_proton_rf_pulse_power_user_interaction = True
         self.additionalProtonRFPulsePowerChanged.emit(power_percent)
-        register_value = int(power_percent * 100)
+        register_value = _seop_scaled_to_register(power_percent, _ADDITIONAL_SCALE_10)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6061, register_value)
@@ -5822,12 +5880,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalProtonRFPulsePower(self) -> bool:
         """Увеличение Proton RF pulse power на 0.01%"""
-        return self.setAdditionalProtonRFPulsePower(self._additional_proton_rf_pulse_power + 0.01)
+        return self.setAdditionalProtonRFPulsePower(self._additional_proton_rf_pulse_power + 0.1)
     
     @Slot(result=bool)
     def decreaseAdditionalProtonRFPulsePower(self) -> bool:
         """Уменьшение Proton RF pulse power на 0.01%"""
-        return self.setAdditionalProtonRFPulsePower(self._additional_proton_rf_pulse_power - 0.01)
+        return self.setAdditionalProtonRFPulsePower(self._additional_proton_rf_pulse_power - 0.1)
     
     @Slot(float, result=bool)
     def setAdditionalHP129XeRFPulsePower(self, power_percent: float) -> bool:
@@ -5839,7 +5897,7 @@ class ModbusManager(QObject):
         self._additional_hp_129xe_rf_pulse_power = power_percent
         self._additional_hp_129xe_rf_pulse_power_user_interaction = True
         self.additionalHP129XeRFPulsePowerChanged.emit(power_percent)
-        register_value = int(power_percent * 100)
+        register_value = _seop_scaled_to_register(power_percent, _ADDITIONAL_SCALE_10)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6071, register_value)
@@ -5850,12 +5908,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalHP129XeRFPulsePower(self) -> bool:
         """Увеличение HP 129Xe RF pulse power на 0.01%"""
-        return self.setAdditionalHP129XeRFPulsePower(self._additional_hp_129xe_rf_pulse_power + 0.01)
+        return self.setAdditionalHP129XeRFPulsePower(self._additional_hp_129xe_rf_pulse_power + 0.1)
     
     @Slot(result=bool)
     def decreaseAdditionalHP129XeRFPulsePower(self) -> bool:
         """Уменьшение HP 129Xe RF pulse power на 0.01%"""
-        return self.setAdditionalHP129XeRFPulsePower(self._additional_hp_129xe_rf_pulse_power - 0.01)
+        return self.setAdditionalHP129XeRFPulsePower(self._additional_hp_129xe_rf_pulse_power - 0.1)
     
     @Slot(float, result=bool)
     def setAdditionalStepSizeB0SweepHP129Xe(self, step_size_a: float) -> bool:
@@ -5867,7 +5925,7 @@ class ModbusManager(QObject):
         self._additional_step_size_b0_sweep_hp_129xe = step_size_a
         self._additional_step_size_b0_sweep_hp_129xe_user_interaction = True
         self.additionalStepSizeB0SweepHP129XeChanged.emit(step_size_a)
-        register_value = int(step_size_a * 100)
+        register_value = _seop_scaled_to_register(step_size_a, _ADDITIONAL_STEP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6081, register_value)
@@ -5878,12 +5936,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalStepSizeB0SweepHP129Xe(self) -> bool:
         """Увеличение Step size during B0 field sweep for HP 129Xe на 0.01 A"""
-        return self.setAdditionalStepSizeB0SweepHP129Xe(self._additional_step_size_b0_sweep_hp_129xe + 0.01)
+        return self.setAdditionalStepSizeB0SweepHP129Xe(self._additional_step_size_b0_sweep_hp_129xe + 0.001)
     
     @Slot(result=bool)
     def decreaseAdditionalStepSizeB0SweepHP129Xe(self) -> bool:
         """Уменьшение Step size during B0 field sweep for HP 129Xe на 0.01 A"""
-        return self.setAdditionalStepSizeB0SweepHP129Xe(self._additional_step_size_b0_sweep_hp_129xe - 0.01)
+        return self.setAdditionalStepSizeB0SweepHP129Xe(self._additional_step_size_b0_sweep_hp_129xe - 0.001)
     
     @Slot(float, result=bool)
     def setAdditionalStepSizeB0SweepProtons(self, step_size_a: float) -> bool:
@@ -5895,7 +5953,7 @@ class ModbusManager(QObject):
         self._additional_step_size_b0_sweep_protons = step_size_a
         self._additional_step_size_b0_sweep_protons_user_interaction = True
         self.additionalStepSizeB0SweepProtonsChanged.emit(step_size_a)
-        register_value = int(step_size_a * 100)
+        register_value = _seop_scaled_to_register(step_size_a, _ADDITIONAL_STEP_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6091, register_value)
@@ -5906,12 +5964,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalStepSizeB0SweepProtons(self) -> bool:
         """Увеличение Step size during B0 field sweep for protons на 0.01 A"""
-        return self.setAdditionalStepSizeB0SweepProtons(self._additional_step_size_b0_sweep_protons + 0.01)
+        return self.setAdditionalStepSizeB0SweepProtons(self._additional_step_size_b0_sweep_protons + 0.001)
     
     @Slot(result=bool)
     def decreaseAdditionalStepSizeB0SweepProtons(self) -> bool:
         """Уменьшение Step size during B0 field sweep for protons на 0.01 A"""
-        return self.setAdditionalStepSizeB0SweepProtons(self._additional_step_size_b0_sweep_protons - 0.01)
+        return self.setAdditionalStepSizeB0SweepProtons(self._additional_step_size_b0_sweep_protons - 0.001)
     
     @Slot(float, result=bool)
     def setAdditionalXeAlicatsPressure(self, pressure_torr: float) -> bool:
@@ -5923,7 +5981,7 @@ class ModbusManager(QObject):
         self._additional_xe_alicats_pressure = pressure_torr
         self._additional_xe_alicats_pressure_user_interaction = True
         self.additionalXeAlicatsPressureChanged.emit(pressure_torr)
-        register_value = int(pressure_torr * 100)
+        register_value = _seop_scaled_to_register(pressure_torr, _ADDITIONAL_PRESSURE_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6101, register_value)
@@ -5951,7 +6009,7 @@ class ModbusManager(QObject):
         self._additional_nitrogen_alicats_pressure = pressure_torr
         self._additional_nitrogen_alicats_pressure_user_interaction = True
         self.additionalNitrogenAlicatsPressureChanged.emit(pressure_torr)
-        register_value = int(pressure_torr * 100)
+        register_value = _seop_scaled_to_register(pressure_torr, _ADDITIONAL_PRESSURE_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6111, register_value)
@@ -5979,7 +6037,7 @@ class ModbusManager(QObject):
         self._additional_chiller_temp_setpoint = setpoint
         self._additional_chiller_temp_setpoint_user_interaction = True
         self.additionalChillerTempSetpointChanged.emit(setpoint)
-        register_value = int(setpoint)
+        register_value = _seop_scaled_to_register(setpoint, _ADDITIONAL_SCALE_10)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6121, register_value)
@@ -5990,12 +6048,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalChillerTempSetpoint(self) -> bool:
         """Увеличение Chiller Temp setpoint на 1"""
-        return self.setAdditionalChillerTempSetpoint(self._additional_chiller_temp_setpoint + 1.0)
+        return self.setAdditionalChillerTempSetpoint(self._additional_chiller_temp_setpoint + 0.1)
     
     @Slot(result=bool)
     def decreaseAdditionalChillerTempSetpoint(self) -> bool:
         """Уменьшение Chiller Temp setpoint на 1"""
-        return self.setAdditionalChillerTempSetpoint(self._additional_chiller_temp_setpoint - 1.0)
+        return self.setAdditionalChillerTempSetpoint(self._additional_chiller_temp_setpoint - 0.1)
     
     @Slot(float, result=bool)
     def setAdditionalSEOPResonanceFrequency(self, frequency_nm: float) -> bool:
@@ -6007,7 +6065,7 @@ class ModbusManager(QObject):
         self._additional_seop_resonance_frequency = frequency_nm
         self._additional_seop_resonance_frequency_user_interaction = True
         self.additionalSEOPResonanceFrequencyChanged.emit(frequency_nm)
-        register_value = int(frequency_nm * 100)
+        register_value = _seop_scaled_to_register(frequency_nm, _ADDITIONAL_NM_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6131, register_value)
@@ -6035,7 +6093,7 @@ class ModbusManager(QObject):
         self._additional_seop_resonance_frequency_tolerance = tolerance
         self._additional_seop_resonance_frequency_tolerance_user_interaction = True
         self.additionalSEOPResonanceFrequencyToleranceChanged.emit(tolerance)
-        register_value = int(tolerance)
+        register_value = _seop_scaled_to_register(tolerance, _ADDITIONAL_TOLERANCE_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6141, register_value)
@@ -6046,12 +6104,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseAdditionalSEOPResonanceFrequencyTolerance(self) -> bool:
         """Увеличение SEOP Resonance Frequency Tolerance на 1"""
-        return self.setAdditionalSEOPResonanceFrequencyTolerance(self._additional_seop_resonance_frequency_tolerance + 1.0)
+        return self.setAdditionalSEOPResonanceFrequencyTolerance(self._additional_seop_resonance_frequency_tolerance + 0.01)
     
     @Slot(result=bool)
     def decreaseAdditionalSEOPResonanceFrequencyTolerance(self) -> bool:
         """Уменьшение SEOP Resonance Frequency Tolerance на 1"""
-        return self.setAdditionalSEOPResonanceFrequencyTolerance(self._additional_seop_resonance_frequency_tolerance - 1.0)
+        return self.setAdditionalSEOPResonanceFrequencyTolerance(self._additional_seop_resonance_frequency_tolerance - 0.01)
     
     @Slot(float, result=bool)
     def setAdditionalIRSpectrometerNumberOfScans(self, num_scans: float) -> bool:
@@ -6091,7 +6149,7 @@ class ModbusManager(QObject):
         self._additional_ir_spectrometer_exposure_duration = duration_ms
         self._additional_ir_spectrometer_exposure_duration_user_interaction = True
         self.additionalIRSpectrometerExposureDurationChanged.emit(duration_ms)
-        register_value = int(duration_ms * 100)
+        register_value = _seop_scaled_to_register(duration_ms, _ADDITIONAL_EXPOSURE_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6161, register_value)
@@ -6175,7 +6233,7 @@ class ModbusManager(QObject):
         self._additional_baseline_correction_min_frequency = frequency_khz
         self._additional_baseline_correction_min_frequency_user_interaction = True
         self.additionalBaselineCorrectionMinFrequencyChanged.emit(frequency_khz)
-        register_value = int(frequency_khz * 100)
+        register_value = _seop_scaled_to_register(frequency_khz, _ADDITIONAL_SCALE_10)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6191, register_value)
@@ -6203,7 +6261,7 @@ class ModbusManager(QObject):
         self._additional_baseline_correction_max_frequency = frequency_khz
         self._additional_baseline_correction_max_frequency_user_interaction = True
         self.additionalBaselineCorrectionMaxFrequencyChanged.emit(frequency_khz)
-        register_value = int(frequency_khz * 100)
+        register_value = _seop_scaled_to_register(frequency_khz, _ADDITIONAL_SCALE_10)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6201, register_value)
@@ -6393,7 +6451,7 @@ class ModbusManager(QObject):
         self._manual_mode_rf_pulse_frequency = frequency_khz
         self._manual_mode_rf_pulse_frequency_user_interaction = True
         self.manualModeRFPulseFrequencyChanged.emit(frequency_khz)
-        register_value = int(frequency_khz * 100)
+        register_value = _seop_scaled_to_register(frequency_khz, _MANUAL_MODE_FREQ_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6301, register_value)
@@ -6404,12 +6462,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModeRFPulseFrequency(self) -> bool:
         """Увеличение RF pulse frequency на 0.01 kHz"""
-        return self.setManualModeRFPulseFrequency(self._manual_mode_rf_pulse_frequency + 0.01)
+        return self.setManualModeRFPulseFrequency(self._manual_mode_rf_pulse_frequency + 0.1)
     
     @Slot(result=bool)
     def decreaseManualModeRFPulseFrequency(self) -> bool:
         """Уменьшение RF pulse frequency на 0.01 kHz"""
-        return self.setManualModeRFPulseFrequency(self._manual_mode_rf_pulse_frequency - 0.01)
+        return self.setManualModeRFPulseFrequency(self._manual_mode_rf_pulse_frequency - 0.1)
     
     @Slot(float, result=bool)
     def setManualModeRFPulsePower(self, power_percent: float) -> bool:
@@ -6421,7 +6479,7 @@ class ModbusManager(QObject):
         self._manual_mode_rf_pulse_power = power_percent
         self._manual_mode_rf_pulse_power_user_interaction = True
         self.manualModeRFPulsePowerChanged.emit(power_percent)
-        register_value = int(power_percent * 100)
+        register_value = _seop_scaled_to_register(power_percent, _MANUAL_MODE_POWER_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6311, register_value)
@@ -6432,12 +6490,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModeRFPulsePower(self) -> bool:
         """Увеличение RF pulse power на 0.01%"""
-        return self.setManualModeRFPulsePower(self._manual_mode_rf_pulse_power + 0.01)
+        return self.setManualModeRFPulsePower(self._manual_mode_rf_pulse_power + 0.1)
     
     @Slot(result=bool)
     def decreaseManualModeRFPulsePower(self) -> bool:
         """Уменьшение RF pulse power на 0.01%"""
-        return self.setManualModeRFPulsePower(self._manual_mode_rf_pulse_power - 0.01)
+        return self.setManualModeRFPulsePower(self._manual_mode_rf_pulse_power - 0.1)
     
     @Slot(float, result=bool)
     def setManualModeRFPulseDuration(self, duration_t2: float) -> bool:
@@ -6449,7 +6507,7 @@ class ModbusManager(QObject):
         self._manual_mode_rf_pulse_duration = duration_t2
         self._manual_mode_rf_pulse_duration_user_interaction = True
         self.manualModeRFPulseDurationChanged.emit(duration_t2)
-        register_value = int(duration_t2 * 100)
+        register_value = int(round(duration_t2))
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6321, register_value)
@@ -6460,12 +6518,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModeRFPulseDuration(self) -> bool:
         """Увеличение RF pulse duration на 0.01 T/2"""
-        return self.setManualModeRFPulseDuration(self._manual_mode_rf_pulse_duration + 0.01)
+        return self.setManualModeRFPulseDuration(self._manual_mode_rf_pulse_duration + 1.0)
     
     @Slot(result=bool)
     def decreaseManualModeRFPulseDuration(self) -> bool:
         """Уменьшение RF pulse duration на 0.01 T/2"""
-        return self.setManualModeRFPulseDuration(self._manual_mode_rf_pulse_duration - 0.01)
+        return self.setManualModeRFPulseDuration(self._manual_mode_rf_pulse_duration - 1.0)
     
     @Slot(float, result=bool)
     def setManualModePreAcquisition(self, duration_ms: float) -> bool:
@@ -6477,7 +6535,7 @@ class ModbusManager(QObject):
         self._manual_mode_pre_acquisition = duration_ms
         self._manual_mode_pre_acquisition_user_interaction = True
         self.manualModePreAcquisitionChanged.emit(duration_ms)
-        register_value = int(duration_ms * 100)
+        register_value = int(round(duration_ms))
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6331, register_value)
@@ -6488,24 +6546,25 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModePreAcquisition(self) -> bool:
         """Увеличение Pre acquisition на 0.01 ms"""
-        return self.setManualModePreAcquisition(self._manual_mode_pre_acquisition + 0.01)
+        return self.setManualModePreAcquisition(self._manual_mode_pre_acquisition + 1.0)
     
     @Slot(result=bool)
     def decreaseManualModePreAcquisition(self) -> bool:
         """Уменьшение Pre acquisition на 0.01 ms"""
-        return self.setManualModePreAcquisition(self._manual_mode_pre_acquisition - 0.01)
+        return self.setManualModePreAcquisition(self._manual_mode_pre_acquisition - 1.0)
     
     @Slot(float, result=bool)
-    def setManualModeNMRGain(self, gain_db: float) -> bool:
-        """Установка NMR gain в dB (регистр 6341)"""
+    def setManualModeNMRGain(self, gain_index: float) -> bool:
+        """Установка NMR gain index (регистр 6341): 0=74dB, 1=86dB, 2=96dB."""
         # Логируем действие
-        self._addLog(f"NMR Gain: {gain_db} dB")
+        gain_index = float(max(0, min(2, int(round(gain_index)))))
+        self._addLog(f"NMR Gain index: {int(gain_index)}")
         if not self._is_connected or self._modbus_client is None:
             return False
-        self._manual_mode_nmr_gain = gain_db
+        self._manual_mode_nmr_gain = gain_index
         self._manual_mode_nmr_gain_user_interaction = True
-        self.manualModeNMRGainChanged.emit(gain_db)
-        register_value = int(gain_db * 100)
+        self.manualModeNMRGainChanged.emit(gain_index)
+        register_value = int(gain_index)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6341, register_value)
@@ -6515,13 +6574,15 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def increaseManualModeNMRGain(self) -> bool:
-        """Увеличение NMR gain на 0.01 dB"""
-        return self.setManualModeNMRGain(self._manual_mode_nmr_gain + 0.01)
+        """Увеличение NMR gain index (0→1→2)"""
+        idx = int(round(self._manual_mode_nmr_gain))
+        return self.setManualModeNMRGain(min(2, idx + 1))
     
     @Slot(result=bool)
     def decreaseManualModeNMRGain(self) -> bool:
-        """Уменьшение NMR gain на 0.01 dB"""
-        return self.setManualModeNMRGain(self._manual_mode_nmr_gain - 0.01)
+        """Уменьшение NMR gain index (2→1→0)"""
+        idx = int(round(self._manual_mode_nmr_gain))
+        return self.setManualModeNMRGain(max(0, idx - 1))
     
     @Slot(float, result=bool)
     def setManualModeNMRNumberOfScans(self, num_scans: float) -> bool:
@@ -6561,7 +6622,7 @@ class ModbusManager(QObject):
         self._manual_mode_nmr_recovery = duration_ms
         self._manual_mode_nmr_recovery_user_interaction = True
         self.manualModeNMRRecoveryChanged.emit(duration_ms)
-        register_value = int(duration_ms * 100)
+        register_value = int(round(duration_ms))
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6361, register_value)
@@ -6572,12 +6633,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModeNMRRecovery(self) -> bool:
         """Увеличение NMR recovery на 0.01 ms"""
-        return self.setManualModeNMRRecovery(self._manual_mode_nmr_recovery + 0.01)
+        return self.setManualModeNMRRecovery(self._manual_mode_nmr_recovery + 1.0)
     
     @Slot(result=bool)
     def decreaseManualModeNMRRecovery(self) -> bool:
         """Уменьшение NMR recovery на 0.01 ms"""
-        return self.setManualModeNMRRecovery(self._manual_mode_nmr_recovery - 0.01)
+        return self.setManualModeNMRRecovery(self._manual_mode_nmr_recovery - 1.0)
     
     @Slot(float, result=bool)
     def setManualModeCenterFrequency(self, frequency_khz: float) -> bool:
@@ -6589,7 +6650,7 @@ class ModbusManager(QObject):
         self._manual_mode_center_frequency = frequency_khz
         self._manual_mode_center_frequency_user_interaction = True
         self.manualModeCenterFrequencyChanged.emit(frequency_khz)
-        register_value = int(frequency_khz * 100)
+        register_value = _seop_scaled_to_register(frequency_khz, _MANUAL_MODE_FREQ_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6371, register_value)
@@ -6600,12 +6661,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModeCenterFrequency(self) -> bool:
         """Увеличение Center frequency на 0.01 kHz"""
-        return self.setManualModeCenterFrequency(self._manual_mode_center_frequency + 0.01)
+        return self.setManualModeCenterFrequency(self._manual_mode_center_frequency + 0.1)
     
     @Slot(result=bool)
     def decreaseManualModeCenterFrequency(self) -> bool:
         """Уменьшение Center frequency на 0.01 kHz"""
-        return self.setManualModeCenterFrequency(self._manual_mode_center_frequency - 0.01)
+        return self.setManualModeCenterFrequency(self._manual_mode_center_frequency - 0.1)
     
     @Slot(float, result=bool)
     def setManualModeFrequencySpan(self, frequency_khz: float) -> bool:
@@ -6617,7 +6678,7 @@ class ModbusManager(QObject):
         self._manual_mode_frequency_span = frequency_khz
         self._manual_mode_frequency_span_user_interaction = True
         self.manualModeFrequencySpanChanged.emit(frequency_khz)
-        register_value = int(frequency_khz * 100)
+        register_value = _seop_scaled_to_register(frequency_khz, _MANUAL_MODE_FREQ_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6381, register_value)
@@ -6628,12 +6689,12 @@ class ModbusManager(QObject):
     @Slot(result=bool)
     def increaseManualModeFrequencySpan(self) -> bool:
         """Увеличение Frequency span на 0.01 kHz"""
-        return self.setManualModeFrequencySpan(self._manual_mode_frequency_span + 0.01)
+        return self.setManualModeFrequencySpan(self._manual_mode_frequency_span + 0.1)
     
     @Slot(result=bool)
     def decreaseManualModeFrequencySpan(self) -> bool:
         """Уменьшение Frequency span на 0.01 kHz"""
-        return self.setManualModeFrequencySpan(self._manual_mode_frequency_span - 0.01)
+        return self.setManualModeFrequencySpan(self._manual_mode_frequency_span - 0.1)
     
     # Методы setValue для TextField (ввод с клавиатуры)
     @Slot(float, result=bool)
