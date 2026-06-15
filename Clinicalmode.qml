@@ -3386,14 +3386,24 @@ Item {
                                     seopRefillCycle.text = value.toString()
                                 }
                             }
+                            function onSeopXeConcentrationChanged(value) {
+                                if (!seopXeConcentration.activeFocus) {
+                                    seopXeConcentration.text = value.toFixed(2)
+                                }
+                            }
+                            function onSeopWaterProtonConcentrationChanged(value) {
+                                if (!seopWaterProtonConcentration.activeFocus) {
+                                    seopWaterProtonConcentration.text = value.toFixed(1)
+                                }
+                            }
                             function onSeopLaserMaxOutputPowerChanged(value) {
                                 if (!seopLaserMaxOutputPower.activeFocus) {
-                                    seopLaserMaxOutputPower.text = value.toFixed(2)
+                                    seopLaserMaxOutputPower.text = value.toFixed(1)
                                 }
                             }
                             function onSeopLaserPSUMaxCurrentChanged(value) {
                                 if (!seopLaserPSUMaxCurrent.activeFocus) {
-                                    seopLaserPSUMaxCurrent.text = value.toFixed(2)
+                                    seopLaserPSUMaxCurrent.text = value.toFixed(1)
                                 }
                             }
                             function onSeopWaterChillerMaxTempChanged(value) {
@@ -3404,16 +3414,6 @@ Item {
                             function onSeopWaterChillerMinTempChanged(value) {
                                 if (!seopWaterChillerMinTemp.activeFocus) {
                                     seopWaterChillerMinTemp.text = value.toFixed(2)
-                                }
-                            }
-                            function onSeopXeConcentrationChanged(value) {
-                                if (!seopXeConcentration.activeFocus) {
-                                    seopXeConcentration.text = value.toFixed(0)
-                                }
-                            }
-                            function onSeopWaterProtonConcentrationChanged(value) {
-                                if (!seopWaterProtonConcentration.activeFocus) {
-                                    seopWaterProtonConcentration.text = value.toFixed(2)
                                 }
                             }
                         }
