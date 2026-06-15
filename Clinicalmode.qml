@@ -1784,6 +1784,17 @@ Item {
                                     background: Rectangle {
                                         color: Constants.colorGrey
                                     }
+                                    onEditingFinished: {
+                                        if (modbusManager) {
+                                            var value = parseFloat(text.trim())
+                                            if (!isNaN(value) && value >= 0) {
+                                                text = value.toFixed(2)
+                                                modbusManager.setLaserPSUVoltageSetpoint(value)
+                                            } else {
+                                                text = modbusManager.laserPSUVoltageSetpoint.toFixed(2)
+                                            }
+                                        }
+                                    }
                                 }
                                 Text { text: "V"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
@@ -1915,6 +1926,17 @@ Item {
                                     background: Rectangle {
                                         color: Constants.colorGrey
                                     }
+                                    onEditingFinished: {
+                                        if (modbusManager) {
+                                            var value = parseFloat(text.trim())
+                                            if (!isNaN(value) && value >= 0) {
+                                                text = value.toFixed(2)
+                                                modbusManager.setMagnetPSUVoltageSetpoint(value)
+                                            } else {
+                                                text = modbusManager.magnetPSUVoltageSetpoint.toFixed(2)
+                                            }
+                                        }
+                                    }
                                 }
                                 Text { text: "V"; font: Constants.fontMicroPx; color: Constants.colorTextGrey; anchors.verticalCenter: parent.verticalCenter }
                             }
@@ -2032,10 +2054,12 @@ Item {
                                     magnetVoltageSetpoint.text = value.toFixed(2)
                                 }
                             }
+                            function onMagnetPSUCurrentChanged(value) {
+                                magnetCurrentValue.text = value.toFixed(2) + " A"
+                            }
                             function onMagnetPSUSetpointChanged(value) {
-                                magnetCurrentValue.text = value.toFixed(3) + " A"
                                 if (!magnetCurrentSetpoint.activeFocus) {
-                                    magnetCurrentSetpoint.text = value.toFixed(3)
+                                    magnetCurrentSetpoint.text = value.toFixed(2)
                                 }
                             }
                         }
