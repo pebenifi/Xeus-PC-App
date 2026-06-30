@@ -163,9 +163,9 @@ def parse_read_response(resp: bytes) -> dict:
 
 def find_modbus_frame_start(data: bytes) -> int:
     """Находит начало Modbus фрейма в данных (может быть мусор в начале)"""
-    # Ищем паттерн: unit_id (обычно 01) + функция (04 для чтения, 84 для ошибки)
     for i in range(len(data) - 4):
-        if data[i] == UNIT_ID and (data[i+1] == 4 or data[i+1] == 0x84):
+        fn = data[i + 1]
+        if data[i] == UNIT_ID and fn in (3, 4, 0x83, 0x84):
             return i
     return 0  # Если не нашли, возвращаем 0
 
@@ -1476,6 +1476,272 @@ def parse_write_response(resp: bytes) -> dict:
     
     return None
 
+def write_register_direct(sock, address: int, value: int):
+    """Прямая запись в регистр (FC 06) без предварительного чтения. Возвращает сокет."""
+    if value < 0 or value > 0xFFFF:
+        print("Значение должно быть от 0 до 65535")
+        return sock
+
+    write_frame = build_write_frame(6, address, value)
+    print(f"\nЗапись (FC 06): регистр {address} (0x{address:04X}) = {value} (0x{value:04X})")
+
+    for i in range(2):
+        print(f"\n--- Попытка записи {i+1} ---")
+        max_retries = 3
+        retry_count = 0
+        success = False
+
+        while retry_count < max_retries and not success:
+            try:
+                send_frame(sock, write_frame, is_write=True)
+                success = True
+            except (ConnectionError, OSError) as e:
+                retry_count += 1
+                print(f"  ⚠️  Ошибка соединения: {e}")
+                if retry_count < max_retries:
+                    print(f"  Переподключение (попытка {retry_count}/{max_retries - 1})...")
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+                    try:
+                        sock = connect_socket()
+                        time.sleep(0.3)
+                        print("  ✓ Переподключено, повтор запроса...")
+                    except Exception as e2:
+                        print(f"  ❌ Ошибка переподключения: {e2}")
+                        if retry_count >= max_retries:
+                            raise
+                else:
+                    print(f"  ❌ Не удалось переподключиться после {max_retries} попыток")
+                    raise
+
+        if i < 1:
+            time.sleep(0.5)
+
+    return sock
+
+REG600_START = 600
+REG600_COUNT = 30  # на устройстве доступны 600-629; 630+ → Illegal Data Address
+REG600_HEADER_BYTES = 6  # 4 datetime + 1 text color + 1 bg color
+
+
+def decode_color_322(byte_val: int) -> dict:
+    """RGB в формате 3-2-2: старшие 3 бита — красный, 2 — зелёный, 2 — голубой."""
+    r = (byte_val >> 5) & 0x07
+    g = (byte_val >> 2) & 0x03
+    b = byte_val & 0x03
+    r8 = round(r * 255 / 7) if r else 0
+    g8 = round(g * 255 / 3) if g else 0
+    b8 = round(b * 255 / 3) if b else 0
+    return {
+        'raw': byte_val,
+        'hex': f"0x{byte_val:02X}",
+        'binary': format(byte_val, '08b'),
+        'r': r, 'g': g, 'b': b,
+        'rgb': (r8, g8, b8),
+        'html': f"#{r8:02X}{g8:02X}{b8:02X}",
+    }
+
+
+def registers_to_bytes(registers: list) -> bytes:
+    data = bytearray()
+    for reg in registers:
+        data.append((reg >> 8) & 0xFF)
+        data.append(reg & 0xFF)
+    return bytes(data)
+
+
+def decode_datetime_4bytes(raw: bytes) -> dict:
+    """Расшифровка 4 байт даты/времени (несколько вариантов)."""
+    import datetime as dt
+    import struct
+
+    b0, b1, b2, b3 = raw[0], raw[1], raw[2], raw[3]
+    variants = []
+
+    for endian, label in (('>I', 'uint32 BE'), ('<I', 'uint32 LE')):
+        ts = struct.unpack(endian, raw)[0]
+        if 946684800 <= ts <= 4102444800:
+            try:
+                variants.append(f"{label} unix: {dt.datetime.fromtimestamp(ts)}")
+            except (OSError, OverflowError, ValueError):
+                pass
+
+    if 1 <= b0 <= 31 and 1 <= b1 <= 12:
+        variants.append(f"DD MM YY HH: {b0:02d}.{b1:02d}.{2000 + b2:04d} {b3:02d}:00")
+    if 0 <= b0 <= 99 and 1 <= b1 <= 12 and 1 <= b2 <= 31:
+        variants.append(f"YY MM DD HH: {2000 + b0:04d}-{b1:02d}-{b2:02d} {b3:02d}:00")
+
+    return {
+        'hex': ' '.join(f'{x:02X}' for x in raw),
+        'bytes': (b0, b1, b2, b3),
+        'variants': variants,
+    }
+
+
+def read_registers_chunked(
+    sock,
+    start_addr: int,
+    quantity: int,
+    chunk_size: int = 30,
+    stop_on_address_error: bool = False,
+) -> tuple[list, bool]:
+    """Чтение нескольких input-регистров (FC 04) частями.
+
+    Returns:
+        (registers, stopped_early) — stopped_early=True если обрезано по Illegal Data Address.
+    """
+    registers = []
+    stopped_early = False
+
+    for offset in range(0, quantity, chunk_size):
+        chunk = min(chunk_size, quantity - offset)
+        addr = start_addr + offset
+        print(f"  Чтение регистров {addr}-{addr + chunk - 1} ({chunk} шт.)...")
+        frame = build_read_multiple_registers_frame(4, addr, chunk)
+
+        try:
+            hex_dump("TX", frame)
+            sock.sendall(frame)
+            time.sleep(0.1)
+
+            resp = b''
+            try:
+                sock.settimeout(1.0)
+                while True:
+                    part = sock.recv(512)
+                    if not part:
+                        break
+                    resp += part
+                    if len(resp) >= 5:
+                        start_idx = find_modbus_frame_start(resp)
+                        if start_idx >= 0:
+                            frame_start = resp[start_idx:]
+                            if len(frame_start) >= 3:
+                                byte_count = frame_start[2]
+                                expected_length = 3 + byte_count + 2
+                                if len(frame_start) >= expected_length:
+                                    break
+            except socket.timeout:
+                pass
+            finally:
+                sock.settimeout(2.0)
+
+            if not resp:
+                print("  ❌ Пустой ответ")
+                return registers if registers else [], stopped_early
+
+            hex_dump("RX", resp)
+            parsed = parse_multiple_registers_response(resp)
+            if not parsed:
+                print("  ❌ Не удалось распарсить ответ")
+                return registers if registers else [], stopped_early
+
+            if parsed.get('is_error'):
+                code = parsed.get('error_code', 0)
+                msg = parsed.get('error_message', 'Unknown')
+                if stop_on_address_error and code == 2 and registers:
+                    print(f"  ⚠️  Регистры {addr}+ недоступны ({msg}), используем прочитанное ({len(registers)} рег.)")
+                    stopped_early = True
+                    break
+                print(f"  ❌ Modbus: {msg} (код {code})")
+                return registers if (stop_on_address_error and registers) else [], stopped_early
+
+            chunk_regs = parsed.get('registers')
+            if not chunk_regs or len(chunk_regs) < chunk:
+                print(f"  ❌ Ожидалось {chunk} регистров, получено {len(chunk_regs or [])}")
+                return registers if registers else [], stopped_early
+
+            registers.extend(chunk_regs)
+        except (ConnectionError, OSError) as e:
+            print(f"  ❌ Ошибка соединения: {e}")
+            return registers if registers else [], stopped_early
+
+        if offset + chunk < quantity:
+            time.sleep(0.15)
+
+    return registers, stopped_early
+
+
+def _print_color_block(label: str, color: dict):
+    r8, g8, b8 = color['rgb']
+    print(f"  {label}:")
+    print(f"    raw={color['raw']} ({color['hex']}) bin={color['binary']}")
+    print(f"    R:G:B (3:2:2) = {color['r']}:{color['g']}:{color['b']}  →  RGB({r8}, {g8}, {b8})  {color['html']}")
+
+
+def read_reg600_text(sock, start_addr: int = REG600_START, reg_count: int = REG600_COUNT):
+    """
+    Чтение блока дисплея: регистры 600+.
+    [0:4] дата/время, [4] цвет текста, [5] цвет фона (RGB 3-2-2), [6:] текст.
+  На устройстве обычно доступны регистры 600-629 (30 шт. = 60 байт).
+    """
+    total_bytes = reg_count * 2
+    text_capacity = total_bytes - REG600_HEADER_BYTES
+
+    print(f"\n=== Регистр {start_addr}: текстовый блок ({reg_count} регистров, {total_bytes} байт) ===")
+    print(f"  Заголовок: {REG600_HEADER_BYTES} байт (дата/время + 2 цвета)")
+    print(f"  Текст: до {text_capacity} байт в этом блоке")
+
+    registers, stopped_early = read_registers_chunked(
+        sock, start_addr, reg_count, stop_on_address_error=True,
+    )
+    if not registers:
+        return None
+
+    if stopped_early:
+        print(f"  ℹ️  Устройство не отдаёт регистры после {start_addr + len(registers) - 1}")
+
+    data = registers_to_bytes(registers)
+    if len(data) < REG600_HEADER_BYTES:
+        print("❌ Слишком короткий ответ")
+        return None
+
+    dt_info = decode_datetime_4bytes(data[0:4])
+    text_color = decode_color_322(data[4])
+    bg_color = decode_color_322(data[5])
+    text_raw = data[REG600_HEADER_BYTES:]
+
+    null_pos = text_raw.find(b'\x00')
+    if null_pos >= 0:
+        text_raw = text_raw[:null_pos]
+
+    text_utf8 = text_raw.decode('utf-8', errors='replace').strip()
+    text_latin = text_raw.decode('latin-1', errors='replace').strip()
+
+    print(f"\n✓ Прочитано {len(registers)} регистров ({len(data)} байт)")
+    print(f"\n--- Дата/время (байты 0-3) ---")
+    print(f"  HEX: {dt_info['hex']}")
+    print(f"  Байты: {dt_info['bytes']}")
+    if dt_info['variants']:
+        for v in dt_info['variants']:
+            print(f"  → {v}")
+    else:
+        print("  (автоформат не определён — смотрите HEX)")
+
+    print(f"\n--- Цвета (формат 3-2-2: RRR GG BB) ---")
+    _print_color_block("Цвет текста", text_color)
+    _print_color_block("Цвет фона", bg_color)
+
+    print(f"\n--- Текст (байты {REG600_HEADER_BYTES}-{total_bytes - 1}) ---")
+    print(f"  HEX: {text_raw.hex(' ') if text_raw else '(пусто)'}")
+    print(f"  UTF-8: {text_utf8!r}")
+    if text_latin != text_utf8:
+        print(f"  Latin-1: {text_latin!r}")
+    print(f"  Длина: {len(text_raw)} байт")
+
+    return {
+        'registers': registers,
+        'data': data,
+        'datetime': dt_info,
+        'text_color': text_color,
+        'bg_color': bg_color,
+        'text': text_utf8,
+        'text_raw': text_raw,
+    }
+
+
 def read_float_value(sock, address: int):
     """Чтение float значения из двух регистров (address и address+1)"""
     print(f"\n=== Чтение float значения ===")
@@ -1805,6 +2071,310 @@ def send_frame(sock, frame: bytes, is_write: bool = False, return_parsed: bool =
             print(f"Ошибка соединения: {e}")
             return None
 
+
+# --- Screen01: сверка FC03 vs FC04 (один пакет на запрос, без повторов) ---
+
+# Регистры первого экрана (Screen01) — как в modbus_manager.py
+SCREEN01_REGISTER_SCAN = [
+    (1020, "External relays meta"),
+    (1021, "Relays"),
+    (1111, "Valves"),
+    (1131, "Fans 1-16"),
+    (1132, "Fans 17-18 (laser)"),
+    (1211, "Laser PSU voltage"),
+    (1221, "Laser PSU voltage SP"),
+    (1231, "Laser PSU current"),
+    (1241, "Laser PSU current SP"),
+    (1251, "Laser PSU state"),
+    (1301, "Magnet PSU voltage"),
+    (1311, "Magnet PSU voltage SP"),
+    (1321, "Magnet PSU current"),
+    (1331, "Magnet PSU current SP"),
+    (1341, "Magnet PSU state"),
+    (1411, "SEOP cell temp / PID temp"),
+    (1421, "SEOP cell setpoint"),
+    (1431, "PID driver on/off"),
+    (1511, "Water chiller inlet temp"),
+    (1521, "Water chiller outlet temp"),
+    (1531, "Water chiller setpoint"),
+    (1541, "Water chiller state"),
+    (1611, "Xenon pressure"),
+    (1621, "Xenon setpoint"),
+    (1651, "N2 pressure"),
+    (1661, "N2 setpoint"),
+    (1701, "Vacuum pressure"),
+    (1811, "Laser beam state"),
+    (1821, "Laser MPD"),
+    (1831, "Laser output power"),
+    (1841, "Laser temp"),
+]
+
+
+def parse_read_single_register_response(resp: bytes) -> dict | None:
+    """Расшифровка ответа FC03/FC04 на чтение одного регистра."""
+    if len(resp) < 5:
+        return None
+
+    start_idx = find_modbus_frame_start(resp)
+    if start_idx > 0:
+        resp = resp[start_idx:]
+
+    unit_id = resp[0]
+    function = resp[1]
+
+    if function & 0x80:
+        error_code = resp[2] if len(resp) > 2 else 0
+        error_messages = {
+            1: "Illegal Function",
+            2: "Illegal Data Address",
+            3: "Illegal Data Value",
+            4: "Slave Device Failure",
+            5: "Acknowledge",
+            6: "Slave Device Busy",
+            8: "Memory Parity Error",
+        }
+        error_msg = error_messages.get(error_code, f"Unknown error ({error_code})")
+        crc_valid = False
+        if len(resp) >= 5:
+            received_crc = (resp[-1] << 8) | resp[-2]
+            calculated_crc = crc16_modbus(resp[:-2])
+            crc_valid = received_crc == calculated_crc
+        return {
+            "is_error": True,
+            "unit_id": unit_id,
+            "function": function & 0x7F,
+            "error_code": error_code,
+            "error_message": error_msg,
+            "crc_valid": crc_valid,
+        }
+
+    if function not in (3, 4):
+        return None
+
+    byte_count = resp[2]
+    if byte_count < 2 or len(resp) < 7:
+        return None
+
+    value_high = resp[3]
+    value_low = resp[4]
+    value = (value_high << 8) | value_low
+
+    received_crc = (resp[-1] << 8) | resp[-2]
+    calculated_crc = crc16_modbus(resp[:-2])
+    crc_valid = received_crc == calculated_crc
+
+    return {
+        "is_error": False,
+        "unit_id": unit_id,
+        "function": function,
+        "byte_count": byte_count,
+        "value": value,
+        "value_hex": f"0x{value:04X}",
+        "crc_valid": crc_valid,
+        "received_crc": f"0x{received_crc:04X}",
+        "calculated_crc": f"0x{calculated_crc:04X}",
+    }
+
+
+def read_register_once(sock, function: int, address: int) -> dict:
+    """Один запрос — один ответ. Без повторов и без double-send."""
+    frame = build_read_frame(function, address)
+    result = {
+        "address": address,
+        "function": function,
+        "ok": False,
+        "value": None,
+        "status": "unknown",
+        "detail": "",
+    }
+
+    try:
+        sock.sendall(frame)
+    except (ConnectionError, OSError) as e:
+        result["status"] = "connection_error"
+        result["detail"] = str(e)
+        return result
+
+    resp = b""
+    old_timeout = sock.gettimeout()
+    try:
+        sock.settimeout(1.0)
+        resp = sock.recv(256)
+    except socket.timeout:
+        result["status"] = "no_response"
+        result["detail"] = "timeout (1s)"
+        return result
+    except (ConnectionError, OSError) as e:
+        result["status"] = "connection_error"
+        result["detail"] = str(e)
+        return result
+    finally:
+        sock.settimeout(old_timeout)
+
+    if not resp:
+        result["status"] = "no_response"
+        result["detail"] = "empty response"
+        return result
+
+    parsed = parse_read_single_register_response(resp)
+    if parsed is None:
+        result["status"] = "parse_error"
+        result["detail"] = resp.hex()
+        return result
+
+    if parsed.get("is_error"):
+        result["status"] = "modbus_error"
+        result["detail"] = (
+            f"exc {parsed.get('error_code')}: {parsed.get('error_message')}"
+        )
+        return result
+
+    if not parsed.get("crc_valid", True):
+        result["status"] = "crc_error"
+        result["detail"] = (
+            f"got {parsed.get('received_crc')} expected {parsed.get('calculated_crc')}"
+        )
+        return result
+
+    result["ok"] = True
+    result["status"] = "ok"
+    result["value"] = parsed["value"]
+    return result
+
+
+def _format_scan_line(address: int, label: str, fn: int, r: dict) -> str:
+    fn_name = "FC04" if fn == 4 else "FC03"
+    prefix = f"{address:4d}  {label:32s}  {fn_name}: "
+    if r["status"] == "ok":
+        v = r["value"]
+        return prefix + f"OK   value={v} (0x{v:04X})"
+    return prefix + f"{r['status'].upper():16s}  {r['detail']}"
+
+
+def reconnect_socket(sock=None):
+    """Закрыть старый сокет и открыть новое подключение."""
+    if sock is not None:
+        try:
+            sock.close()
+        except Exception:
+            pass
+    time.sleep(0.2)
+    return connect_socket()
+
+
+def _run_scan_phase(sock, function: int, summary: dict, key: str):
+    """
+    Один проход: все регистры Screen01 одной функцией (FC04 или FC03).
+    Один пакет на регистр, без retry. При connection_error — стоп фазы.
+    """
+    fn_name = "FC04" if function == 4 else "FC03"
+    print(f"\n--- Phase {fn_name}: all Screen01 registers (single send) ---")
+    print(f"{'Addr':>4}  {'Label':32s}  Result")
+    print("-" * 72)
+
+    first_break = None
+    for address, label in SCREEN01_REGISTER_SCAN:
+        if address not in summary:
+            summary[address] = {"label": label, "fc03": None, "fc04": None}
+
+        r = read_register_once(sock, function, address)
+        print(_format_scan_line(address, label, function, r))
+        summary[address][key] = r
+
+        if r["status"] == "connection_error":
+            first_break = (address, label, function, r["detail"])
+            print(
+                f"\n!!! CONN BROKEN at register {address} ({label}), "
+                f"{fn_name}: {r['detail']}"
+            )
+            break
+
+        time.sleep(0.05)
+
+    return sock, first_break
+
+
+def scan_screen01_registers(sock):
+    """
+    Два прохода на разных соединениях:
+      1) FC04 по всем регистрам
+      2) переподключение
+      3) FC03 по всем регистрам
+    Так FC03 не идёт по сокету, который устройство могло закрыть после FC04.
+    """
+    print("\n=== Screen01 scan: FC03 vs FC04 (single send, two phases) ===")
+
+    summary: dict[int, dict] = {
+        addr: {"label": lbl, "fc03": None, "fc04": None}
+        for addr, lbl in SCREEN01_REGISTER_SCAN
+    }
+    breaks: list[tuple] = []
+
+    # Phase 1: FC04
+    sock, b1 = _run_scan_phase(sock, 4, summary, "fc04")
+    if b1:
+        breaks.append(b1)
+
+    # Fresh connection before FC03 (device often drops socket after bad/empty read)
+    print("\n>>> Reconnect before FC03 phase...")
+    try:
+        sock = reconnect_socket(sock)
+        print("✓ Reconnected")
+    except Exception as e:
+        print(f"❌ Reconnect failed: {e}")
+        _print_screen01_summary(summary, breaks)
+        return None, breaks[-1] if breaks else None
+
+    # Phase 2: FC03
+    sock, b2 = _run_scan_phase(sock, 3, summary, "fc03")
+    if b2:
+        breaks.append(b2)
+
+    _print_screen01_summary(summary, breaks)
+    return sock, breaks[-1] if breaks else None
+
+
+def _print_screen01_summary(summary: dict, breaks: list):
+    print("\n--- Summary (какой FC работает) ---")
+    print(f"{'Addr':>4}  {'Label':28s}  FC04          FC03          App uses")
+    print("-" * 90)
+
+    app_fc = {
+        1021: "FC04", 1111: "FC04", 1131: "FC04", 1132: "FC04",
+        1411: "FC04", 1511: "FC04", 1521: "FC04", 1541: "FC04",
+        1611: "FC04", 1651: "FC04", 1701: "FC04",
+        1211: "FC04", 1221: "FC04", 1231: "FC04", 1241: "FC04", 1251: "FC04",
+        1301: "FC04", 1311: "FC04", 1321: "FC04", 1341: "FC04",
+        1331: "FC03", 1421: "FC03", 1531: "FC03",
+        1621: "FC03", 1661: "FC03",
+        1841: "FC04", 1811: "FC04", 1821: "FC04", 1831: "FC04",
+    }
+
+    def _short(r):
+        if r is None:
+            return "—"
+        if r["ok"]:
+            return f"OK {r['value']}"
+        return r["status"][:12]
+
+    for address, label in SCREEN01_REGISTER_SCAN:
+        s = summary.get(address)
+        if not s:
+            continue
+        fc04_s = _short(s["fc04"])
+        fc03_s = _short(s["fc03"])
+        expected = app_fc.get(address, "?")
+        print(f"{address:4d}  {label:28s}  {fc04_s:12s}  {fc03_s:12s}  {expected}")
+
+    ok_fc04 = sum(1 for s in summary.values() if s["fc04"] and s["fc04"]["ok"])
+    ok_fc03 = sum(1 for s in summary.values() if s["fc03"] and s["fc03"]["ok"])
+    print(f"\nDone: FC04 OK={ok_fc04}/{len(summary)}, FC03 OK={ok_fc03}/{len(summary)}")
+
+    for addr, label, fn, detail in breaks:
+        fn_name = "FC04" if fn == 4 else "FC03"
+        print(f"  Break in {fn_name} phase: reg {addr} ({label}) — {detail}")
+
+
 def main():
     print("=== Modbus RTU over TCP ===")
     print(f"Подключение к {IP}:{PORT}...")
@@ -1847,9 +2417,24 @@ def main():
                 if cmd.lower() in ['pxe', 'read_pxe']:
                     read_pxe_data(sock)
                     continue
-                
-                # Команда для чтения float значения
+
+                if cmd.lower() in ('screen01', 'scan screen01', 'screen01_scan', 'scan_screen01'):
+                    if sock is None:
+                        sock = connect_socket()
+                        print("✓ Подключено")
+                    sock, _broken = scan_screen01_registers(sock)
+                    continue
+
                 parts = cmd.split()
+
+                # Текстовый блок дисплея (регистры 600+, по умолчанию 30)
+                if parts and parts[0].lower() in ('text600', '600', 'read600', 'reg600'):
+                    try:
+                        count = int(parts[1]) if len(parts) > 1 else REG600_COUNT
+                        read_reg600_text(sock, reg_count=count)
+                    except ValueError:
+                        print("Использование: text600 [кол-во_регистров]  (по умолчанию 30)")
+                    continue
                 if len(parts) >= 2 and parts[0].lower() == 'float':
                     try:
                         address = int(parts[1])
@@ -1881,12 +2466,23 @@ def main():
                         print(f"  Регистр 4701: {val2}")
                     continue
                 
+                # Прямая запись без чтения (FC 06)
+                if len(parts) >= 3 and parts[0] == '061':
+                    try:
+                        address = int(parts[1])
+                        value = int(parts[2])
+                        sock = write_register_direct(sock, address, value)
+                    except ValueError:
+                        print("Ошибка: неверный формат. Использование: 061 <адрес> <значение>")
+                    continue
+
                 # Парсим команду: функция адрес [реле]
                 if len(parts) < 2:
                     print("Использование:")
                     print("  Чтение: 03 <адрес>  или  04 <адрес>")
                     print("    (03 = Read Holding Registers, 04 = Read Input Registers)")
-                    print("  Запись: 06 <адрес> <номер_реле>")
+                    print("  Запись (реле, с чтением): 06 <адрес> <номер_реле>")
+                    print("  Запись (прямая, без чтения): 061 <адрес> <значение>")
                     print("  Float: float <адрес>  - прочитать float из двух регистров")
                     print("  Int: int <адрес>  - прочитать int (16-битное знаковое) из одного регистра")
                     print("  IR данные: ir  или  read_ir  - прочитать IR через ModbusClient (регистры 400-414, 420-477)")
@@ -1894,11 +2490,14 @@ def main():
                     print("  IR данные int: ir int  или  ir_int  - прочитать IR данные как int (регистры 4201-4701)")
                     print("  NMR данные: nmr  или  read_nmr")
                     print("  PXE данные: pxe  или  read_pxe  - прочитать PXE данные (регистры 500-501, 520-519+n*2)")
+                    print("  Screen01 scan: screen01  - FC04 pass, reconnect, FC03 pass (1 packet each)")
+                    print("  Текст дисплея: text600 [N]  - регистры 600+ (по умолчанию 30, до 629)")
                     print("  Int регистры: int_regs  или  read_int_regs  - прочитать регистры 4201 и 4701")
                     print("Примеры:")
                     print("  04 102  - прочитать регистр 102")
                     print("  04 1021  - прочитать регистр 1021")
-                    print("  06 102 2  - включить реле номер 2 в регистре 102")
+                    print("  06 1021 2  - включить реле 2 в регистре 1021 (с чтением)")
+                    print("  061 91 2   - записать значение 2 в регистр 91 (без чтения)")
                     print("  float 401  - прочитать float из регистров 401-402")
                     print("  int 4201  - прочитать int из регистра 4201")
                     print("  int_regs  - прочитать регистры 4201 и 4701 как int")
@@ -2063,7 +2662,7 @@ def main():
                             time.sleep(0.5)
                 
                 else:
-                    print(f"Поддерживаются функции: 03 (Read Holding Registers), 04 (Read Input Registers), 06 (запись)")
+                    print("Поддерживаются: 03, 04 (чтение), 06 (запись реле с чтением), 061 (прямая запись)")
                     continue
                 
             except ValueError:
