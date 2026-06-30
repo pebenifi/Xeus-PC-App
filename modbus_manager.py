@@ -123,13 +123,11 @@ def _measured_ir_value_to_registers(value: float) -> tuple[int, int]:
 
 def _read_measured_ir_uint32(client, low_register: int) -> Optional[float]:
     high_addr = low_register - 1
-    # Сначала input (5010+5011, 5020+5021, …) одним запросом
-    regs = client.read_input_registers_direct(high_addr, 2, max_chunk=10)
+    regs = client.read_input_registers(high_addr, 2)
     if regs and len(regs) >= 2:
         v = _measured_ir_registers_to_value(regs[0], regs[1])
         if v is not None:
             return v
-    # Fallback: holding (запись идёт туда же)
     high = client.read_holding_register(high_addr)
     low = client.read_holding_register(low_register)
     if high is not None and low is not None:
@@ -138,13 +136,21 @@ def _read_measured_ir_uint32(client, low_register: int) -> Optional[float]:
 
 
 def _read_measured_scalar_register(client, register: int) -> Optional[float]:
-    regs = client.read_input_registers_direct(register, 1, max_chunk=10)
-    if regs and len(regs) >= 1:
-        return float(int(regs[0]))
+    val = client.read_input_register(register)
+    if val is not None:
+        return float(int(val))
     val = client.read_holding_register(register)
     if val is not None:
         return float(int(val))
     return None
+
+
+def _read_input_regs(client, address: int, count: int = 1) -> Optional[list]:
+    """Чтение input registers через pymodbus; для count=1 возвращает [value] или None."""
+    if count <= 1:
+        val = client.read_input_register(address)
+        return [val] if val is not None else None
+    return client.read_input_registers(address, count)
 
 
 def _write_measured_ir_uint32(client, low_register: int, value: float) -> bool:
@@ -688,6 +694,7 @@ class ModbusManager(QObject):
             'pid_controller': False,
             'op_cell_heating': False
         }
+        self._relay_1021_raw = 0
         # Клапаны (регистр 1111) - индексы 5-11 для X6-X12
         self._valve_states = {i: False for i in range(5, 12)}
         # Вентиляторы (регистр 1131) - индексы 0-10
@@ -1085,7 +1092,7 @@ class ModbusManager(QObject):
             return
         client = self._modbus_client
         specs = (
-            (50, "1511", "_reading_1511", "_read_1511_start_time", lambda: client.read_register_1511_direct()),
+            (50, "1511", "_reading_1511", "_read_1511_start_time", lambda: client.read_input_register(1511)),
             (80, "1411", "_reading_1411", "_read_1411_start_time", lambda: client.read_input_register(1411)),
             (110, "1841", "_reading_laser_temp", "_read_laser_temp_start_time", lambda: client.read_input_register(1841)),
             (140, "1531", "_reading_1531", "_read_1531_start_time", lambda: client.read_holding_register(1531)),
@@ -2168,7 +2175,7 @@ class ModbusManager(QObject):
     def _applyRelay1021Value(self, value: object):
         apply_time = time.time()
         logger.debug(f"📥 [RESP] Получено значение реле 1021: {value} (type={type(value)}) в {apply_time:.3f}")
-        
+
         self._reading_1021 = False
         if value is None:
             return
@@ -2177,9 +2184,41 @@ class ModbusManager(QObject):
         except Exception:
             return
 
+        self._relay_1021_raw = value_int
         low_byte = value_int & 0xFF
-        
-        # Вычисляем новые состояния сразу, они нужны для логики синхронизации
+
+        time_since_write = time.time() - self._last_write_time
+        if time_since_write < 2.0:
+            if low_byte == 0xFF or low_byte == 0x00:
+                logger.warning(
+                    f"⚠️ [1021] Подозрительное значение после записи: 0x{low_byte:02X} "
+                    f"(прошло {time_since_write:.2f} сек) - игнорируем"
+                )
+                self._pending_relay_updates.clear()
+                return
+
+            changed_count = 0
+            for relay_name in self._relay_states:
+                bit_mask = {
+                    'water_chiller': 0x01,
+                    'magnet_psu': 0x02,
+                    'laser_psu': 0x04,
+                    'vacuum_pump': 0x08,
+                    'vacuum_gauge': 0x10,
+                    'pid_controller': 0x20,
+                    'op_cell_heating': 0x40,
+                }[relay_name]
+                new_state = bool(low_byte & bit_mask)
+                if new_state != self._relay_states[relay_name]:
+                    changed_count += 1
+
+            if changed_count > 2:
+                logger.warning(
+                    f"⚠️ [1021] Слишком много изменений после записи ({changed_count} из 7) - игнорируем"
+                )
+                self._pending_relay_updates.clear()
+                return
+
         new_states = {
             'water_chiller': bool(low_byte & 0x01),
             'magnet_psu': bool(low_byte & 0x02),
@@ -2189,61 +2228,78 @@ class ModbusManager(QObject):
             'pid_controller': bool(low_byte & 0x20),
             'op_cell_heating': bool(low_byte & 0x40),
         }
-        
-        # КРИТИЧНО: если это происходит сразу после начала записи (в течение 2 секунд),
-        # то обновляем только то реле, которое мы записывали, остальные игнорируем
-        time_since_write = time.time() - self._last_write_time
-        # logger.debug(f"DEBUG: _applyRelay1021Value time_since_write={time_since_write:.3f} last_key={getattr(self, '_last_write_key', 'None')}")
-        if time_since_write < 2.0:
-            if hasattr(self, '_last_write_key'):
-                 # Если записывали реле - обновляем только его
-                if self._last_write_key.startswith("relay:"):
-                    # ... (existing logic) ...
-                    # ...
-                    return # Выходим, обновив (или нет) только целевое реле
-                
-                else:
-                    # Если записывали что-то другое (не реле), то игнорируем обновление реле полностью
-                    # logger.debug(f"⏭️ [1021] Игнорируем чтение реле, так как была запись {self._last_write_key} (защита от перекрестных помех)")
-                    return
 
-        # КРИТИЧНО: если активен режим записи (флаг _write_in_progress), блокируем кэширование
-        # if self._write_in_progress:
-            # logger.debug(f"⏭️ [1021] Пропускаем сохранение в кэш (_write_in_progress=True)")
-            # return
-        
-        # КРИТИЧНО: для начальных значений после подключения применяем напрямую, минуя кэш
-        # Это предотвращает задержку в 20-30 секунд перед отображением начальных состояний
-        time_since_connection = time.time() - self._connection_time
-        is_initial_connection = time_since_connection < 2.0 and self._connection_time > 0
-        
+        logger.debug(f"📖 [1021] Регистр прочитан: low_byte=0x{low_byte:02X} ({low_byte:08b})")
+
+        time_since_write = time.time() - self._last_write_time
+        if (
+            time_since_write < 2.0
+            and hasattr(self, '_last_write_key')
+            and self._last_write_key.startswith("relay:")
+        ):
+            try:
+                written_relay_num = int(self._last_write_key.split(":")[1])
+            except Exception:
+                written_relay_num = -1
+            relay_num_map = {
+                'water_chiller': 1,
+                'magnet_psu': 2,
+                'laser_psu': 3,
+                'vacuum_pump': 4,
+                'vacuum_gauge': 5,
+                'pid_controller': 6,
+                'op_cell_heating': 7,
+            }
+            found_written_relay = False
+            for relay_name, new_state in new_states.items():
+                if relay_num_map.get(relay_name) == written_relay_num:
+                    found_written_relay = True
+                    current_state = self._relay_states[relay_name]
+                    if new_state != current_state:
+                        if self._write_in_progress:
+                            logger.debug(
+                                f"⏭️ [1021] Пропускаем устаревшее чтение {relay_name} "
+                                f"({new_state}) во время записи (UI={current_state})"
+                            )
+                            continue
+                        self._relay_states[relay_name] = new_state
+                        logger.info(
+                            f"✅ [1021] Синхронизация {relay_name} после записи: "
+                            f"{current_state} -> {new_state}"
+                        )
+                        self._emitRelayStateChanged(relay_name, new_state)
+            if not found_written_relay:
+                logger.debug(
+                    f"⏭️ [1021] Игнорируем чтение реле сразу после записи "
+                    f"(записывали реле #{written_relay_num})"
+                )
+            return
+
+        time_since_write_start = time.time() - self._write_start_time
+        if self._write_in_progress or (
+            time_since_write_start < 2.5
+            and hasattr(self, '_last_write_key')
+            and (
+                self._last_write_key.startswith("relay:")
+                or self._last_write_key.startswith("valve:")
+                or self._last_write_key == "fan1131"
+                or self._last_write_key == "laser_fan"
+            )
+        ):
+            logger.debug(
+                f"⏭️ [1021] Пропускаем сохранение в кэш "
+                f"(запись {self._last_write_key}, прошло {time_since_write_start:.2f} сек)"
+            )
+            return
+
         current_time = time.time()
         for relay_name, new_state in new_states.items():
             current_state = self._relay_states[relay_name]
             if new_state != current_state:
-                # Временно применяем ВСЕГДА напрямую, чтобы исключить проблему кэширования
-                # if is_initial_connection:
-                if True:
-                    self._relay_states[relay_name] = new_state
-                    logger.info(f"✅ [1021] Изменение {relay_name}: {current_state} -> {new_state} (ПРИМЕНЕНО НАПРЯМУЮ)")
-                    if relay_name == 'water_chiller':
-                        self.waterChillerStateChanged.emit(new_state)
-                    elif relay_name == 'magnet_psu':
-                        self.magnetPSUStateChanged.emit(new_state)
-                    elif relay_name == 'laser_psu':
-                        self.laserPSUStateChanged.emit(new_state)
-                    elif relay_name == 'vacuum_pump':
-                        self.vacuumPumpStateChanged.emit(new_state)
-                    elif relay_name == 'vacuum_gauge':
-                        self.vacuumGaugeStateChanged.emit(new_state)
-                    elif relay_name == 'pid_controller':
-                        self.pidControllerStateChanged.emit(new_state)
-                    elif relay_name == 'op_cell_heating':
-                        self.opCellHeatingStateChanged.emit(new_state)
-                # else:
-                #     # Для остальных значений сохраняем в кэш для последующего применения
-                #     self._pending_relay_updates[relay_name] = (new_state, current_time)
-                #     logger.debug(f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)")
+                self._pending_relay_updates[relay_name] = (new_state, current_time)
+                logger.debug(
+                    f"📝 [1021] Изменение {relay_name}: {current_state} -> {new_state} (добавлено в кэш)"
+                )
 
     def _applyValve1111Value(self, value: object):
         apply_time = time.time()
@@ -3720,7 +3776,7 @@ class ModbusManager(QObject):
 
         client = self._modbus_client
         self._discard_client_problematic_for_key("1511")
-        self._enqueue_read("1511", lambda: client.read_register_1511_direct())
+        self._enqueue_read("1511", lambda: client.read_input_register(1511))
     
     def _readWaterChillerSetpoint(self):
         """
@@ -3879,7 +3935,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1421_direct(register_value)
+            result = client.write_holding_register(1421, register_value)
             if result:
                 logger.info(f"✅ Заданная температура SEOP Cell успешно установлена: {temperature}°C")
             else:
@@ -4032,7 +4088,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1621_direct(register_value)
+            result = client.write_holding_register(1621, register_value)
             if result:
                 logger.info(f"✅ Заданное давление Xenon успешно установлено: {pressure} Torr")
             else:
@@ -4132,7 +4188,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1661_direct(register_value)
+            result = client.write_holding_register(1661, register_value)
             if result:
                 logger.info(f"✅ Заданное давление N2 успешно установлено: {pressure} Torr")
             else:
@@ -4887,25 +4943,25 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров SEOP Parameters"""
             # Регистры 3011-3081 - первые 8 параметров
-            laser_max_temp_regs = client.read_input_registers_direct(3011, 1, max_chunk=1)
-            laser_min_temp_regs = client.read_input_registers_direct(3021, 1, max_chunk=1)
-            cell_max_temp_regs = client.read_input_registers_direct(3031, 1, max_chunk=1)
-            cell_min_temp_regs = client.read_input_registers_direct(3041, 1, max_chunk=1)
-            ramp_temp_regs = client.read_input_registers_direct(3051, 1, max_chunk=1)
-            seop_temp_regs = client.read_input_registers_direct(3061, 1, max_chunk=1)
-            cell_refill_temp_regs = client.read_input_registers_direct(3071, 1, max_chunk=1)
-            loop_time_regs = client.read_input_registers_direct(3081, 1, max_chunk=1)
+            laser_max_temp_regs = _read_input_regs(client, 3011)
+            laser_min_temp_regs = _read_input_regs(client, 3021)
+            cell_max_temp_regs = _read_input_regs(client, 3031)
+            cell_min_temp_regs = _read_input_regs(client, 3041)
+            ramp_temp_regs = _read_input_regs(client, 3051)
+            seop_temp_regs = _read_input_regs(client, 3061)
+            cell_refill_temp_regs = _read_input_regs(client, 3071)
+            loop_time_regs = _read_input_regs(client, 3081)
             # Новые регистры 3091-3151
-            process_duration_regs = client.read_input_registers_direct(3091, 1, max_chunk=1)
-            laser_max_output_power_regs = client.read_input_registers_direct(3101, 1, max_chunk=1)
-            laser_psu_max_current_regs = client.read_input_registers_direct(3111, 1, max_chunk=1)
-            water_chiller_max_temp_regs = client.read_input_registers_direct(3121, 1, max_chunk=1)
-            water_chiller_min_temp_regs = client.read_input_registers_direct(3131, 1, max_chunk=1)
-            xe_concentration_regs = client.read_input_registers_direct(3141, 1, max_chunk=1)
-            water_proton_concentration_regs = client.read_input_registers_direct(3151, 1, max_chunk=1)
+            process_duration_regs = _read_input_regs(client, 3091)
+            laser_max_output_power_regs = _read_input_regs(client, 3101)
+            laser_psu_max_current_regs = _read_input_regs(client, 3111)
+            water_chiller_max_temp_regs = _read_input_regs(client, 3121)
+            water_chiller_min_temp_regs = _read_input_regs(client, 3131)
+            xe_concentration_regs = _read_input_regs(client, 3141)
+            water_proton_concentration_regs = _read_input_regs(client, 3151)
             # Регистры 3171-3181
-            cell_number_regs = client.read_input_registers_direct(3171, 1, max_chunk=1)
-            refill_cycle_regs = client.read_input_registers_direct(3181, 1, max_chunk=1)
+            cell_number_regs = _read_input_regs(client, 3171)
+            refill_cycle_regs = _read_input_regs(client, 3181)
             
             result = {}
             if laser_max_temp_regs and len(laser_max_temp_regs) >= 1:
@@ -4988,16 +5044,16 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Calculated Parameters"""
             # Регистры 4011-4101
-            electron_polarization_regs = client.read_input_registers_direct(4011, 1, max_chunk=1)
-            xe_polarization_regs = client.read_input_registers_direct(4021, 1, max_chunk=1)
-            buildup_rate_regs = client.read_input_registers_direct(4031, 1, max_chunk=1)
-            electron_polarization_error_regs = client.read_input_registers_direct(4041, 1, max_chunk=1)
-            xe_polarization_error_regs = client.read_input_registers_direct(4051, 1, max_chunk=1)
-            buildup_rate_error_regs = client.read_input_registers_direct(4061, 1, max_chunk=1)
-            fitted_xe_polarization_max_regs = client.read_input_registers_direct(4071, 1, max_chunk=1)
-            fitted_xe_polarization_max_error_regs = client.read_input_registers_direct(4081, 1, max_chunk=1)
-            hp_xe_t1_regs = client.read_input_registers_direct(4091, 1, max_chunk=1)
-            hp_xe_t1_error_regs = client.read_input_registers_direct(4101, 1, max_chunk=1)
+            electron_polarization_regs = _read_input_regs(client, 4011)
+            xe_polarization_regs = _read_input_regs(client, 4021)
+            buildup_rate_regs = _read_input_regs(client, 4031)
+            electron_polarization_error_regs = _read_input_regs(client, 4041)
+            xe_polarization_error_regs = _read_input_regs(client, 4051)
+            buildup_rate_error_regs = _read_input_regs(client, 4061)
+            fitted_xe_polarization_max_regs = _read_input_regs(client, 4071)
+            fitted_xe_polarization_max_error_regs = _read_input_regs(client, 4081)
+            hp_xe_t1_regs = _read_input_regs(client, 4091)
+            hp_xe_t1_error_regs = _read_input_regs(client, 4101)
             
             result = {}
             if electron_polarization_regs and len(electron_polarization_regs) >= 1:
@@ -5119,13 +5175,13 @@ class ModbusManager(QObject):
             if hot_ir is not None:
                 result['hot_cell_ir_signal'] = hot_ir
 
-            water_1h_regs = client.read_input_registers_direct(5041, 1, max_chunk=10)
+            water_1h_regs = _read_input_regs(client, 5041)
             if water_1h_regs and len(water_1h_regs) >= 1:
                 v = _seop_register_to_scaled(water_1h_regs[0], _MEASURED_WATER_1H_NMR_SCALE)
                 if v is not None:
                     result['water_1h_nmr_reference_signal'] = v
 
-            water_t2_regs = client.read_input_registers_direct(5051, 1, max_chunk=10)
+            water_t2_regs = _read_input_regs(client, 5051)
             if water_t2_regs and len(water_t2_regs) >= 1:
                 v = _seop_register_to_scaled(water_t2_regs[0], _MEASURED_T2_MS_SCALE)
                 if v is not None:
@@ -5135,7 +5191,7 @@ class ModbusManager(QObject):
             if hp_129xe_ir is not None:
                 result['hp_129xe_nmr_signal'] = hp_129xe_ir
 
-            hp_129xe_t2_regs = client.read_input_registers_direct(5071, 1, max_chunk=10)
+            hp_129xe_t2_regs = _read_input_regs(client, 5071)
             if hp_129xe_t2_regs and len(hp_129xe_t2_regs) >= 1:
                 v = _seop_register_to_scaled(hp_129xe_t2_regs[0], _MEASURED_T2_MS_SCALE)
                 if v is not None:
@@ -5217,27 +5273,27 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Additional Parameters"""
             # Регистры идут с шагом 10 (6011, 6021, 6031...), поэтому читаем их по отдельности
-            # Но используем max_chunk=10 для оптимизации внутри read_input_registers_direct
-            magnet_psu_current_proton_nmr_regs = client.read_input_registers_direct(6011, 1, max_chunk=10)
-            magnet_psu_current_129xe_nmr_regs = client.read_input_registers_direct(6021, 1, max_chunk=10)
-            operational_laser_psu_current_regs = client.read_input_registers_direct(6031, 1, max_chunk=10)
-            rf_pulse_duration_regs = client.read_input_registers_direct(6041, 1, max_chunk=10)
-            resonance_frequency_regs = client.read_input_registers_direct(6051, 1, max_chunk=10)
-            proton_rf_pulse_power_regs = client.read_input_registers_direct(6061, 1, max_chunk=10)
-            hp_129xe_rf_pulse_power_regs = client.read_input_registers_direct(6071, 1, max_chunk=10)
-            step_size_b0_sweep_hp_129xe_regs = client.read_input_registers_direct(6081, 1, max_chunk=10)
-            step_size_b0_sweep_protons_regs = client.read_input_registers_direct(6091, 1, max_chunk=10)
-            xe_alicats_pressure_regs = client.read_input_registers_direct(6101, 1, max_chunk=10)
-            nitrogen_alicats_pressure_regs = client.read_input_registers_direct(6111, 1, max_chunk=10)
-            chiller_temp_setpoint_regs = client.read_input_registers_direct(6121, 1, max_chunk=10)
-            seop_resonance_frequency_regs = client.read_input_registers_direct(6131, 1, max_chunk=10)
-            seop_resonance_frequency_tolerance_regs = client.read_input_registers_direct(6141, 1, max_chunk=10)
-            ir_spectrometer_number_of_scans_regs = client.read_input_registers_direct(6151, 1, max_chunk=10)
-            ir_spectrometer_exposure_duration_regs = client.read_input_registers_direct(6161, 1, max_chunk=10)
-            h1_reference_n_scans_regs = client.read_input_registers_direct(6171, 1, max_chunk=10)
-            h1_current_sweep_n_scans_regs = client.read_input_registers_direct(6181, 1, max_chunk=10)
-            baseline_correction_min_frequency_regs = client.read_input_registers_direct(6191, 1, max_chunk=10)
-            baseline_correction_max_frequency_regs = client.read_input_registers_direct(6201, 1, max_chunk=10)
+            # Читаем регистры Additional Parameters через pymodbus
+            magnet_psu_current_proton_nmr_regs = _read_input_regs(client, 6011)
+            magnet_psu_current_129xe_nmr_regs = _read_input_regs(client, 6021)
+            operational_laser_psu_current_regs = _read_input_regs(client, 6031)
+            rf_pulse_duration_regs = _read_input_regs(client, 6041)
+            resonance_frequency_regs = _read_input_regs(client, 6051)
+            proton_rf_pulse_power_regs = _read_input_regs(client, 6061)
+            hp_129xe_rf_pulse_power_regs = _read_input_regs(client, 6071)
+            step_size_b0_sweep_hp_129xe_regs = _read_input_regs(client, 6081)
+            step_size_b0_sweep_protons_regs = _read_input_regs(client, 6091)
+            xe_alicats_pressure_regs = _read_input_regs(client, 6101)
+            nitrogen_alicats_pressure_regs = _read_input_regs(client, 6111)
+            chiller_temp_setpoint_regs = _read_input_regs(client, 6121)
+            seop_resonance_frequency_regs = _read_input_regs(client, 6131)
+            seop_resonance_frequency_tolerance_regs = _read_input_regs(client, 6141)
+            ir_spectrometer_number_of_scans_regs = _read_input_regs(client, 6151)
+            ir_spectrometer_exposure_duration_regs = _read_input_regs(client, 6161)
+            h1_reference_n_scans_regs = _read_input_regs(client, 6171)
+            h1_current_sweep_n_scans_regs = _read_input_regs(client, 6181)
+            baseline_correction_min_frequency_regs = _read_input_regs(client, 6191)
+            baseline_correction_max_frequency_regs = _read_input_regs(client, 6201)
             
             result = {}
             if magnet_psu_current_proton_nmr_regs and len(magnet_psu_current_proton_nmr_regs) >= 1:
@@ -5460,15 +5516,15 @@ class ModbusManager(QObject):
         def task():
             """Чтение всех регистров Manual mode settings"""
             # Регистры 6301-6381
-            rf_pulse_frequency_regs = client.read_input_registers_direct(6301, 1, max_chunk=1)
-            rf_pulse_power_regs = client.read_input_registers_direct(6311, 1, max_chunk=1)
-            rf_pulse_duration_regs = client.read_input_registers_direct(6321, 1, max_chunk=1)
-            pre_acquisition_regs = client.read_input_registers_direct(6331, 1, max_chunk=1)
-            nmr_gain_regs = client.read_input_registers_direct(6341, 1, max_chunk=1)
-            nmr_number_of_scans_regs = client.read_input_registers_direct(6351, 1, max_chunk=1)
-            nmr_recovery_regs = client.read_input_registers_direct(6361, 1, max_chunk=1)
-            center_frequency_regs = client.read_input_registers_direct(6371, 1, max_chunk=1)
-            frequency_span_regs = client.read_input_registers_direct(6381, 1, max_chunk=1)
+            rf_pulse_frequency_regs = _read_input_regs(client, 6301)
+            rf_pulse_power_regs = _read_input_regs(client, 6311)
+            rf_pulse_duration_regs = _read_input_regs(client, 6321)
+            pre_acquisition_regs = _read_input_regs(client, 6331)
+            nmr_gain_regs = _read_input_regs(client, 6341)
+            nmr_number_of_scans_regs = _read_input_regs(client, 6351)
+            nmr_recovery_regs = _read_input_regs(client, 6361)
+            center_frequency_regs = _read_input_regs(client, 6371)
+            frequency_span_regs = _read_input_regs(client, 6381)
             
             result = {}
             if rf_pulse_frequency_regs and len(rf_pulse_frequency_regs) >= 1:
@@ -6941,11 +6997,41 @@ class ModbusManager(QObject):
                 reg_1131 &= ~(1 << bit)
             self._fans_reg_1131 = reg_1131
 
+    def _relayStatesToLowByte(self) -> int:
+        low_byte = 0
+        for relay_name, bit_mask in (
+            ('water_chiller', 0x01),
+            ('magnet_psu', 0x02),
+            ('laser_psu', 0x04),
+            ('vacuum_pump', 0x08),
+            ('vacuum_gauge', 0x10),
+            ('pid_controller', 0x20),
+            ('op_cell_heating', 0x40),
+        ):
+            if self._relay_states.get(relay_name):
+                low_byte |= bit_mask
+        return low_byte
+
+    def _emitRelayStateChanged(self, relay_name: str, state: bool) -> None:
+        if relay_name == 'water_chiller':
+            self.waterChillerStateChanged.emit(state)
+        elif relay_name == 'magnet_psu':
+            self.magnetPSUStateChanged.emit(state)
+        elif relay_name == 'laser_psu':
+            self.laserPSUStateChanged.emit(state)
+        elif relay_name == 'vacuum_pump':
+            self.vacuumPumpStateChanged.emit(state)
+        elif relay_name == 'vacuum_gauge':
+            self.vacuumGaugeStateChanged.emit(state)
+        elif relay_name == 'pid_controller':
+            self.pidControllerStateChanged.emit(state)
+        elif relay_name == 'op_cell_heating':
+            self.opCellHeatingStateChanged.emit(state)
+
     def _setRelayAsync(self, relay_num: int, state: bool, name: str):
         """Асинхронная установка состояния реле (не блокирует UI)"""
         client = self._modbus_client
-        
-        # Маппинг номера реле на имя в _relay_states
+
         relay_name_map = {
             1: 'water_chiller',
             2: 'magnet_psu',
@@ -6955,12 +7041,19 @@ class ModbusManager(QObject):
             6: 'pid_controller',
             7: 'op_cell_heating',
         }
-        
+
+        relay_name = relay_name_map.get(relay_num)
+        if relay_name:
+            self._relay_states[relay_name] = state
+            self._emitRelayStateChanged(relay_name, state)
 
         def task() -> bool:
             try:
-                result = client.set_relay_1021(relay_num, state)
+                high_byte = self._relay_1021_raw & 0xFF00
+                new_value = high_byte | self._relayStatesToLowByte()
+                result = client.write_register(1021, new_value)
                 if result:
+                    self._relay_1021_raw = new_value
                     logger.info(f"✅ {name} успешно {'включен' if state else 'выключен'}")
                 else:
                     logger.error(f"❌ Не удалось {'включить' if state else 'выключить'} {name}")
@@ -7009,15 +7102,12 @@ class ModbusManager(QObject):
         return True
     
     def _write_water_chiller_setpoint_register(self, register_value: int, temperature: float) -> bool:
-        """Запись setpoint Water Chiller (1531): прямой сокет, при неудаче — pymodbus."""
+        """Запись setpoint Water Chiller (1531) через pymodbus."""
         client = self._modbus_client
         if client is None:
             return False
         client.discard_problematic_register(1531)
-        result = client.write_register_1531_direct(register_value)
-        if not result:
-            logger.warning("Прямая запись 1531 не удалась, пробуем write_holding_register")
-            result = client.write_holding_register(1531, register_value)
+        result = client.write_holding_register(1531, register_value)
         if result:
             logger.info(f"✅ Заданная температура Water Chiller установлена: {temperature}°C (1531={register_value})")
         else:
@@ -7120,7 +7210,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1331_direct(register_value)
+            result = client.write_holding_register(1331, register_value)
             if result:
                 logger.info(f"✅ Заданная температура Magnet PSU успешно установлена: {temperature}°C")
             else:
@@ -7450,7 +7540,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            return bool(client.write_register_1221_direct(register_value))
+            return bool(client.write_holding_register(1221, register_value))
 
         self._enqueue_write("1221", task, {"voltage": voltage})
         return True
@@ -7472,7 +7562,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1241_direct(register_value)
+            result = client.write_holding_register(1241, register_value)
             if result:
                 logger.info(f"✅ Заданный ток Laser PSU успешно установлен: {current} A")
             else:
@@ -7497,7 +7587,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            return bool(client.write_register_1251_direct(register_value))
+            return bool(client.write_holding_register(1251, register_value))
 
         self._enqueue_write("1251", task, {"state": state})
         return True
@@ -7516,7 +7606,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            return bool(client.write_register_1311_direct(register_value))
+            return bool(client.write_holding_register(1311, register_value))
 
         self._enqueue_write("1311", task, {"voltage": voltage})
         return True
@@ -7533,7 +7623,7 @@ class ModbusManager(QObject):
         register_value = int(current * 100)
         client = self._modbus_client
         def task() -> bool:
-            result = client.write_register_1331_direct(register_value)
+            result = client.write_holding_register(1331, register_value)
             return bool(result)
         self._enqueue_write("1331", task, {"current": current})
         return True
@@ -7549,7 +7639,6 @@ class ModbusManager(QObject):
         register_value = 1 if state else 0
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1341_direct в modbus_client.py
             result = client.write_holding_register(1341, register_value)
             return bool(result)
         self._enqueue_write("1341", task, {"state": state})
@@ -7596,7 +7685,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task() -> bool:
-            result = client.write_register_1421_direct(register_value)
+            result = client.write_holding_register(1421, register_value)
             if result:
                 logger.info(f"✅ Заданная температура PID Controller успешно установлена: {temperature}°C")
             else:
@@ -8270,7 +8359,6 @@ class ModbusManager(QObject):
         register_value = 1 if state else 0
         client = self._modbus_client
         def task() -> bool:
-            # TODO: добавить метод write_register_1541_direct в modbus_client.py
             result = client.write_holding_register(1541, register_value)
             return bool(result)
         self._enqueue_write("1541", task, {"state": state})
