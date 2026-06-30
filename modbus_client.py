@@ -592,6 +592,57 @@ class ModbusClient:
                 self._problematic_registers.add(address)
                 logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
             return None
+
+    def read_input_registers(self, address: int, count: int) -> Optional[list]:
+        """Чтение нескольких input registers через pymodbus (функция 04)."""
+        if count < 1:
+            return None
+        if address in self._problematic_registers:
+            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
+            return None
+
+        self._last_read_register = address
+
+        if self.client is None:
+            logger.warning("Клиент не инициализирован")
+            return None
+        if not self.client.is_socket_open():
+            logger.debug(f"Сокет закрыт при чтении input регистров {address}")
+            self._connected = False
+            return None
+
+        try:
+            self._flush_socket()
+            result = self.client.read_input_registers(
+                address=address,
+                count=count,
+                device_id=self.unit_id,
+            )
+            if result.isError():
+                logger.debug(f"Ошибка чтения input регистров {address} count={count}: {result}")
+                if address not in self._problematic_registers:
+                    self._problematic_registers.add(address)
+                return None
+            if not result.registers or len(result.registers) < count:
+                logger.warning(
+                    f"⚠️ Неполный ответ input регистров {address}: "
+                    f"запрошено {count}, получено {len(result.registers) if result.registers else 0}"
+                )
+                return None
+            return [int(r) for r in result.registers[:count]]
+        except (ConnectionError, OSError) as e:
+            logger.debug(f"Исключение при чтении input регистров {address}: {e}")
+            if address not in self._problematic_registers:
+                self._problematic_registers.add(address)
+            return None
+        except Exception as e:
+            error_str = str(e)
+            if "CLOSING CONNECTION" in error_str:
+                logger.debug(f"Соединение закрыто при чтении input регистров {address}")
+            else:
+                logger.error(f"Неожиданная ошибка при чтении input регистров {address}: {e}")
+            self._connected = False
+            return None
     
     def _get_socket(self):
         """
@@ -986,15 +1037,13 @@ class ModbusClient:
             logger.error(f"Номер реле должен быть от 1 до 8, получен {relay_num}")
             return False
         
-        # Читаем текущее состояние с повторными попытками, если нужно
-        # Используем обычный pymodbus для согласованности с остальными операциями
         current_value = None
-        for attempt in range(3):  # До 3 попыток
+        for attempt in range(3):
             current_value = self.read_input_register(1021)
             if current_value is not None:
                 break
-            if attempt < 2:  # Не ждем после последней попытки
-                time.sleep(0.1)  # Небольшая задержка перед повторной попыткой
+            if attempt < 2:
+                time.sleep(0.1)
         
         if current_value is None:
             logger.error("Не удалось прочитать текущее состояние регистра 1021 после нескольких попыток")
@@ -1013,10 +1062,7 @@ class ModbusClient:
         # Формируем новое значение (старший байт оставляем как есть)
         new_value = (current_value & 0xFF00) | new_low_byte
         
-        # Записываем новое значение
-        result = self.write_register_1021_direct(new_value)
-        
-        return result
+        return self.write_register(1021, new_value)
     
     def _build_read_frame_1111(self) -> bytes:
         """Формирование Modbus RTU фрейма для чтения регистра 1111 (функция 04)"""
@@ -2348,23 +2394,11 @@ class ModbusClient:
             return False
     
     def read_fan_registers(self) -> Optional[tuple]:
-        """Чтение регистров 1131 (fans 1–16) и 1132 (fans 17–18) одним запросом."""
-        try:
-            if self.client is not None and self.client.is_socket_open():
-                result = self.client.read_input_registers(1131, count=2, device_id=self.unit_id)
-                if not result.isError() and result.registers and len(result.registers) >= 2:
-                    return int(result.registers[0]), int(result.registers[1])
-        except Exception as e:
-            logger.debug(f"Не удалось прочитать регистры 1131/1132 через pymodbus: {e}")
-
-        reg_1131 = self.read_register_1131_direct()
-        reg_1132 = self.read_register_1132_direct()
-        if reg_1131 is None and reg_1132 is None:
+        """Чтение регистров 1131 (fans 1–16) и 1132 (fans 17–18) одним запросом (pymodbus)."""
+        regs = self.read_input_registers(1131, 2)
+        if regs is None or len(regs) < 2:
             return None
-        return (
-            reg_1131 if reg_1131 is not None else 0,
-            reg_1132 if reg_1132 is not None else 0,
-        )
+        return int(regs[0]), int(regs[1])
 
     def _build_write_frame_registers(self, address: int, values: list) -> bytes:
         """Modbus RTU: запись нескольких holding/input registers (функция 16)."""
@@ -2383,54 +2417,26 @@ class ModbusClient:
         return frame + bytes([crc & 0xFF, (crc >> 8) & 0xFF])
 
     def write_fan_registers_direct(self, reg_1131: int, reg_1132: int) -> bool:
-        """Запись 1131 и 1132 одним пакетом (FC16), чтобы один регистр не сбрасывал другой."""
+        """Запись 1131 и 1132 одним пакетом (FC16 через pymodbus)."""
         reg_1131 = int(reg_1131) & 0xFFFF
         reg_1132 = int(reg_1132) & 0xFFFF
-
-        try:
-            if self.client is not None and self.client.is_socket_open():
-                result = self.client.write_registers(1131, [reg_1131, reg_1132], device_id=self.unit_id)
-                if not result.isError():
-                    logger.debug(f"✅ Запись fans 1131={reg_1131}, 1132={reg_1132} (pymodbus FC16)")
-                    return True
-        except Exception as e:
-            logger.debug(f"Не удалось записать 1131/1132 через pymodbus FC16: {e}")
 
         if self.client is None or not self.client.is_socket_open():
             return False
 
         try:
-            sock = self._get_socket()
-            if sock is None:
-                logger.warning("Не удалось получить сокет для записи 1131/1132 (FC16)")
+            self._flush_socket()
+            result = self.client.write_registers(
+                1131, [reg_1131, reg_1132], device_id=self.unit_id
+            )
+            if hasattr(result, 'isError') and result.isError():
+                logger.warning(f"Ошибка записи fans 1131={reg_1131}, 1132={reg_1132}: {result}")
                 return False
-
-            write_frame = self._build_write_frame_registers(1131, [reg_1131, reg_1132])
-            for i in range(2):
-                try:
-                    sock.sendall(write_frame)
-                    time.sleep(0.02)
-                    resp = sock.recv(256)
-                    if resp and len(resp) >= 8 and resp[0] == self.unit_id and resp[1] == 16:
-                        logger.debug(f"✅ Запись fans 1131={reg_1131}, 1132={reg_1132} (direct FC16)")
-                        return True
-                except (ConnectionError, OSError) as e:
-                    if i == 0:
-                        logger.debug(f"Первая попытка FC16 1131/1132 не удалась: {e}")
-                    else:
-                        raise
-                if i < 1:
-                    time.sleep(0.05)
+            logger.debug(f"✅ Запись fans 1131={reg_1131}, 1132={reg_1132} (pymodbus FC16)")
+            return True
         except Exception as e:
-            logger.warning(f"FC16 direct для 1131/1132 не удался: {e}")
-
-        # Fallback: поочерёдная запись; 1132 в конце, т.к. запись 1131 сбрасывает laser fans
-        self._flush_socket()
-        if not self.write_register_1131_direct(reg_1131):
+            logger.warning(f"Не удалось записать 1131/1132 через pymodbus FC16: {e}")
             return False
-        self._flush_socket()
-        time.sleep(0.05)
-        return self.write_register_1132_direct(reg_1132)
 
     def set_fan_1131(self, fan_bit: int, state: bool) -> bool:
         """Установка состояния вентилятора в регистре 1131
@@ -2454,7 +2460,6 @@ class ModbusClient:
         else:
             new_value = current_value & ~(1 << fan_bit)
 
-        self._flush_socket()
         return self.write_fan_registers_direct(new_value, reg_1132)
 
     def read_register_1132_direct(self) -> Optional[int]:
@@ -2587,7 +2592,6 @@ class ModbusClient:
         else:
             new_1132 = current_1132 & ~laser_mask
 
-        self._flush_socket()
         return self.write_fan_registers_direct(reg_1131, new_1132)
 
     def _flush_socket(self):
