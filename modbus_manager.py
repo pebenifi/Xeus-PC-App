@@ -3,6 +3,7 @@ QML-модель для управления Modbus подключением
 """
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QThread
 from modbus_client import ModbusClient
+from clinical_batch import clinical_batch_read
 import logging
 from collections import deque
 from typing import Callable, Optional, Any
@@ -507,6 +508,7 @@ class ModbusManager(QObject):
         "additional_parameters": "_reading_additional_parameters",
         "manual_mode_settings": "_reading_manual_mode_settings",
         "screen01": "_reading_screen01",
+        "clinical": "_reading_clinical",
     }
     
     # Сигналы для QML
@@ -1070,6 +1072,13 @@ class ModbusManager(QObject):
         self._screen01_batch_timer.setInterval(self._POLL_INTERVAL_FAST_MS)
         self._reading_screen01 = False
 
+        # Clinical (Screen02): один batched-проход вместо screen01 + 5 clinical-таймеров
+        self._clinical_foreground = False
+        self._clinical_batch_timer = QTimer(self)
+        self._clinical_batch_timer.timeout.connect(self._readClinicalBatch)
+        self._clinical_batch_timer.setInterval(self._POLL_INTERVAL_FAST_MS)
+        self._reading_clinical = False
+
         # Список таймеров для паузы/возобновления опросов
         self._polling_timers = [
             self._connection_check_timer,
@@ -1202,6 +1211,9 @@ class ModbusManager(QObject):
         if not self._is_connected or self._modbus_client is None or self._polling_paused:
             return
         self._reset_periodic_read_flags()
+        if self._clinical_foreground:
+            self._readClinicalBatch()
+            return
         self._readScreen01Batch()
         if self._seop_parameters_timer.isActive():
             self._readSEOPParameters()
@@ -1214,9 +1226,18 @@ class ModbusManager(QObject):
         if self._manual_mode_settings_timer.isActive():
             self._readManualModeSettings()
 
+    def _triggerIoBatchRead(self) -> None:
+        """Мгновенное batched-чтение для текущего экрана (Screen01 или Clinical)."""
+        if self._clinical_foreground:
+            self._readClinicalBatch()
+        else:
+            self._readScreen01Batch()
+
     def _readScreen01Batch(self) -> None:
         """Один batched-проход Screen01 (все регистры подряд, без reconnect)."""
         if not self._is_connected or self._modbus_client is None or self._polling_paused:
+            return
+        if self._clinical_foreground:
             return
         if self._reading_screen01:
             return
@@ -1228,6 +1249,68 @@ class ModbusManager(QObject):
             return _screen01_batch_read(client)
 
         self._enqueue_read("screen01", task)
+
+    def _readClinicalBatch(self) -> None:
+        """Clinical: Screen01 IO + SEOP/Calculated/Measured/Additional/Manual в одном проходе."""
+        if not self._is_connected or self._modbus_client is None or self._polling_paused:
+            return
+        if not self._clinical_foreground:
+            return
+        if self._reading_clinical:
+            return
+
+        self._reading_clinical = True
+        client = self._modbus_client
+
+        def task():
+            return clinical_batch_read(client)
+
+        self._enqueue_read("clinical", task)
+
+    def _applyClinicalBatch(self, batch: object) -> None:
+        """Применить результаты batched-чтения Clinical к UI."""
+        self._reading_clinical = False
+        if not isinstance(batch, dict):
+            return
+        self._applyScreen01Batch(batch)
+        if "seop_parameters" in batch:
+            self._applySEOPParametersValue(batch["seop_parameters"])
+        if "calculated_parameters" in batch:
+            self._applyCalculatedParametersValue(batch["calculated_parameters"])
+        if "measured_parameters" in batch:
+            self._applyMeasuredParametersValue(batch["measured_parameters"])
+        if "additional_parameters" in batch:
+            self._applyAdditionalParametersValue(batch["additional_parameters"])
+        if "manual_mode_settings" in batch:
+            self._applyManualModeSettingsValue(batch["manual_mode_settings"])
+        self._emitCachedStates(include_relays=True)
+
+    @Slot(bool)
+    def setClinicalForeground(self, active: bool) -> None:
+        """Clinical на переднем плане: unified batch вместо screen01 + отдельных clinical-таймеров."""
+        if self._clinical_foreground == active:
+            return
+        self._clinical_foreground = active
+        clinical_timers = self._clinical_individual_timers()
+        if active:
+            if self._screen01_batch_timer.isActive():
+                self._screen01_batch_timer.stop()
+            for t in clinical_timers:
+                if t.isActive():
+                    t.stop()
+            if self._is_connected and not self._polling_paused:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._readClinicalBatch()
+            logger.info("▶️ Clinical foreground: unified batch polling")
+        else:
+            if self._clinical_batch_timer.isActive():
+                self._clinical_batch_timer.stop()
+            if self._is_connected and not self._polling_paused:
+                if not self._screen01_batch_timer.isActive():
+                    self._screen01_batch_timer.start()
+                self._readScreen01Batch()
+            logger.info("⏸ Clinical foreground off, Screen01 batch restored")
 
     def _applyScreen01Batch(self, batch: object) -> None:
         """Применить результаты batched-чтения Screen01 к UI."""
@@ -1262,11 +1345,35 @@ class ModbusManager(QObject):
             self._applyVacuumPressureValue(batch["1701"])
         if "laser" in batch:
             self._applyLaserValue(batch["laser"])
+        self._emitCachedStates(include_relays=True)
+
+    def _clinical_individual_timers(self):
+        return (
+            self._seop_parameters_timer,
+            self._calculated_parameters_timer,
+            self._measured_parameters_timer,
+            self._additional_parameters_timer,
+            self._manual_mode_settings_timer,
+        )
+
+    def _startActivePollingTimers(self) -> None:
+        """Запуск таймеров с учётом активного экрана (Screen01 vs Clinical)."""
+        clinical_only = self._clinical_individual_timers()
+        for t in self._polling_timers:
+            if self._clinical_foreground and t is self._screen01_batch_timer:
+                continue
+            if self._clinical_foreground and t in clinical_only:
+                continue
+            t.start()
+        if self._clinical_foreground:
+            if not self._clinical_batch_timer.isActive():
+                self._clinical_batch_timer.start()
+        elif self._clinical_batch_timer.isActive():
+            self._clinical_batch_timer.stop()
 
     def _startPollingTimersAfterConnect(self) -> None:
         """Запуск всех таймеров опроса после успешного connect/reconnect."""
-        for t in self._polling_timers:
-            t.start()
+        self._startActivePollingTimers()
         self._pollAllImmediately()
 
     @Slot()
@@ -1277,6 +1384,8 @@ class ModbusManager(QObject):
         self._polling_paused = True
         for t in self._polling_timers:
             t.stop()
+        if self._clinical_batch_timer.isActive():
+            self._clinical_batch_timer.stop()
         self.pollingPausedChanged.emit(True)
         logger.info("⏸ Опрос Modbus приостановлен для переключения экрана")
 
@@ -1299,8 +1408,7 @@ class ModbusManager(QObject):
         # Добавляем небольшую задержку перед возобновлением опроса, чтобы соединение стабилизировалось
         # Используем QTimer для неблокирующей задержки
         def startPollingAfterDelay():
-            for t in self._polling_timers:
-                t.start()
+            self._startActivePollingTimers()
             self._pollAllImmediately()
             self.pollingPausedChanged.emit(False)
             logger.info("▶️ Опрос Modbus возобновлен после переключения экрана")
@@ -1311,9 +1419,12 @@ class ModbusManager(QObject):
     def enableRelayPolling(self):
         """Включить чтение регистра 1021 (реле) по требованию (например, при открытии External Relays)"""
         if self._is_connected and not self._polling_paused:
-            if not self._screen01_batch_timer.isActive():
+            if self._clinical_foreground:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+            elif not self._screen01_batch_timer.isActive():
                 self._screen01_batch_timer.start()
-            self._readScreen01Batch()
+            self._triggerIoBatchRead()
             logger.info("▶️ Опрос реле (регистр 1021) включен")
     
     @Slot()
@@ -1325,7 +1436,12 @@ class ModbusManager(QObject):
     def enableValvePolling(self):
         """Включить чтение регистра 1111 (клапаны) по требованию (например, при открытии Valves and Fans)"""
         if self._is_connected and not self._polling_paused:
-            if not self._valve_1111_timer.isActive():
+            if self._clinical_foreground:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._triggerIoBatchRead()
+                logger.info("▶️ Опрос клапанов (1111) включен (clinical batch)")
+            elif not self._valve_1111_timer.isActive():
                 self._valve_1111_timer.start()
                 logger.info("▶️ Опрос клапанов (регистр 1111) включен")
     
@@ -1342,9 +1458,12 @@ class ModbusManager(QObject):
     def enableFanPolling(self):
         """Включить чтение регистра 1131 (вентиляторы) по требованию (например, при открытии Valves and Fans)"""
         if self._is_connected and not self._polling_paused:
-            if not self._screen01_batch_timer.isActive():
+            if self._clinical_foreground:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+            elif not self._screen01_batch_timer.isActive():
                 self._screen01_batch_timer.start()
-            self._readScreen01Batch()
+            self._triggerIoBatchRead()
             logger.info("▶️ Опрос вентиляторов (регистр 1131) включен")
     
     @Slot()
@@ -1360,9 +1479,12 @@ class ModbusManager(QObject):
     def enablePowerSupplyPolling(self):
         """Включить чтение регистров Power Supply (Laser PSU и Magnet PSU) по требованию (например, при открытии Power Supply)"""
         if self._is_connected and not self._polling_paused:
-            if not self._screen01_batch_timer.isActive():
+            if self._clinical_foreground:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+            elif not self._screen01_batch_timer.isActive():
                 self._screen01_batch_timer.start()
-            self._readScreen01Batch()
+            self._triggerIoBatchRead()
             logger.info("▶️ Опрос Power Supply включен")
     
     @Slot()
@@ -1391,9 +1513,12 @@ class ModbusManager(QObject):
     def enableWaterChillerPolling(self):
         """Включить чтение регистров Water Chiller (1511, 1521, 1531, 1541) по требованию (например, при открытии Water Chiller)"""
         if self._is_connected and not self._polling_paused:
-            if not self._screen01_batch_timer.isActive():
+            if self._clinical_foreground:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+            elif not self._screen01_batch_timer.isActive():
                 self._screen01_batch_timer.start()
-            self._readScreen01Batch()
+            self._triggerIoBatchRead()
             logger.info("▶️ Опрос Water Chiller включен")
     
     @Slot()
@@ -1472,9 +1597,14 @@ class ModbusManager(QObject):
     def enableSEOPParametersPolling(self):
         """Включить чтение регистров SEOP Parameters (3011-3081) по требованию (например, при открытии SEOP Parameters)"""
         logger.debug(f"enableSEOPParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._clinical_foreground:
+            if self._is_connected and not self._polling_paused:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._readClinicalBatch()
+            return
         if self._is_connected and not self._polling_paused:
             if not self._seop_parameters_timer.isActive():
-                # Сразу делаем первое чтение, не ждем таймера
                 self._readSEOPParameters()
                 self._seop_parameters_timer.start()
                 logger.info("▶️ Опрос SEOP Parameters включен (первое чтение выполнено сразу)")
@@ -1494,9 +1624,14 @@ class ModbusManager(QObject):
     def enableCalculatedParametersPolling(self):
         """Включить чтение регистров Calculated Parameters (4011-4101) по требованию (например, при открытии Calculated Parameters)"""
         logger.debug(f"enableCalculatedParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._clinical_foreground:
+            if self._is_connected and not self._polling_paused:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._readClinicalBatch()
+            return
         if self._is_connected and not self._polling_paused:
             if not self._calculated_parameters_timer.isActive():
-                # Сразу делаем первое чтение, не ждем таймера
                 self._readCalculatedParameters()
                 self._calculated_parameters_timer.start()
                 logger.info("▶️ Опрос Calculated Parameters включен (первое чтение выполнено сразу)")
@@ -1516,6 +1651,12 @@ class ModbusManager(QObject):
     def enableMeasuredParametersPolling(self):
         """Включить чтение регистров Measured Parameters (5011-5081) по требованию (например, при открытии Measured Parameters)"""
         logger.info(f"enableMeasuredParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._clinical_foreground:
+            if self._is_connected and not self._polling_paused:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._readClinicalBatch()
+            return
         if self._is_connected and not self._polling_paused:
             if not self._measured_parameters_timer.isActive():
                 # Сразу делаем первое чтение, не ждем таймера
@@ -1538,6 +1679,12 @@ class ModbusManager(QObject):
     def enableAdditionalParametersPolling(self):
         """Включить чтение регистров Additional Parameters (6011-6201) по требованию (например, при открытии Additional Parameters)"""
         logger.info(f"enableAdditionalParametersPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._clinical_foreground:
+            if self._is_connected and not self._polling_paused:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._readClinicalBatch()
+            return
         if self._is_connected and not self._polling_paused:
             if not self._additional_parameters_timer.isActive():
                 # Сразу делаем первое чтение, не ждем таймера
@@ -1560,6 +1707,12 @@ class ModbusManager(QObject):
     def enableManualModeSettingsPolling(self):
         """Включить чтение регистров Manual mode settings (6301-6381) по требованию (например, при открытии Manual mode settings)"""
         logger.info(f"enableManualModeSettingsPolling вызван: _is_connected={self._is_connected}, _polling_paused={self._polling_paused}")
+        if self._clinical_foreground:
+            if self._is_connected and not self._polling_paused:
+                if not self._clinical_batch_timer.isActive():
+                    self._clinical_batch_timer.start()
+                self._readClinicalBatch()
+            return
         if self._is_connected and not self._polling_paused:
             if not self._manual_mode_settings_timer.isActive():
                 # Сразу делаем первое чтение, не ждем таймера
@@ -1580,8 +1733,15 @@ class ModbusManager(QObject):
     
     @Slot()
     def refreshUIFromCache(self):
-        """Публичный метод для принудительного обновления UI из буфера (можно вызывать из QML при переключении страниц)"""
-        self._emitCachedStates()
+        """Принудительно обновить все экраны из буфера (при переключении Screen01 ↔ Clinical)."""
+        self._emitCachedStates(include_relays=True)
+
+    @Slot()
+    def refreshUIOnScreenSwitch(self):
+        """Переключение экрана: пушим все состояния в QML + немедленный batch с устройства."""
+        self.refreshUIFromCache()
+        if self._is_connected and not self._polling_paused:
+            self._triggerIoBatchRead()
     
     @Property(bool, notify=connectionStatusChanged)
     def isConnected(self):
@@ -2027,6 +2187,13 @@ class ModbusManager(QObject):
 
     @Slot(str, object)
     def _onWorkerReadFinished(self, key: str, value: object):
+        if key == "clinical":
+            if isinstance(value, dict) and (value.get("_conn") or value.get("_ok", 0) > 0):
+                self._last_modbus_ok_time = time.time()
+                self._connection_fail_count = 0
+            self._applyClinicalBatch(value)
+            return
+
         if key == "screen01":
             if isinstance(value, dict) and (value.get("_conn") or value.get("_ok", 0) > 0):
                 self._last_modbus_ok_time = time.time()
@@ -6975,6 +7142,7 @@ class ModbusManager(QObject):
         relay_name = relay_name_map.get(relay_num)
         if relay_name:
             self._relay_states[relay_name] = state
+            self._emitRelayStateChanged(relay_name, state)
 
         high = self._relay_1021_raw & 0xFF00
         new_value = high | self._relayStatesToLowByte()
