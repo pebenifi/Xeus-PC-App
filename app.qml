@@ -26,6 +26,9 @@ Window {
             }
             screen01Item.z = 1
             clinicalModeLoader.z = 0
+            if (typeof modbusManager !== 'undefined' && modbusManager) {
+                modbusManager.refreshUIOnScreenSwitch()
+            }
             console.log("✅ Screen01 показан, время:", Date.now())
         } else if (screenName === "Clinicalmode") {
             // ВАЖНО: pausePolling только когда Clinicalmode уже загружен. Иначе при
@@ -41,6 +44,9 @@ Window {
                     modbusManager.resumePolling()
                 }
                 clinicalModeLoader.item.activateForeground()
+                if (typeof modbusManager !== 'undefined' && modbusManager) {
+                    modbusManager.refreshUIOnScreenSwitch()
+                }
                 console.log("✅ Clinicalmode показан, опросы возобновлены, время:", Date.now())
             } else {
                 console.log("⏳ Clinicalmode еще не готов, статус:", clinicalModeLoader.status,

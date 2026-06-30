@@ -26,22 +26,34 @@ Item {
         root.foreground = true
         if (modbusManager) {
             root.cachedIsConnected = modbusManager.isConnected
+            modbusManager.setClinicalForeground(true)
+            modbusManager.refreshUIFromCache()
             modbusManager.enableSEOPParametersPolling()
             modbusManager.enableCalculatedParametersPolling()
             if (modbusManager.isConnected) {
-                Qt.callLater(function() {
-                    if (modbusManager && root.foreground) {
-                        modbusManager.requestIrSpectrum()
-                        modbusManager.requestNmrSpectrum()
-                    }
-                })
+                // Сначала clinical batch (1021/1111/SEOP…), потом IR/NMR — иначе priority-очередь блокирует IO
+                irNmrDelay.start()
+            }
+        }
+    }
+
+    Timer {
+        id: irNmrDelay
+        interval: 2500
+        repeat: false
+        onTriggered: {
+            if (modbusManager && root.foreground && modbusManager.isConnected) {
+                modbusManager.requestIrSpectrum()
+                modbusManager.requestNmrSpectrum()
             }
         }
     }
 
     function deactivateForeground() {
+        irNmrDelay.stop()
         root.foreground = false
         if (modbusManager) {
+            modbusManager.setClinicalForeground(false)
             modbusManager.disableSEOPParametersPolling()
             modbusManager.disableCalculatedParametersPolling()
         }
