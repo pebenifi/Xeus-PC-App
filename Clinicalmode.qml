@@ -3724,7 +3724,7 @@ Item {
                                     height: 28
                                     font: Constants.fontMicroPx
                                     color: Constants.colorBlack
-                                    text: "0"
+                                    text: "-----"
                                     verticalAlignment: Text.AlignVCenter
                                 }
                             }
@@ -3968,7 +3968,7 @@ Item {
                                     height: 28
                                     font: Constants.fontMicroPx
                                     color: Constants.colorBlack
-                                    text: "0"
+                                    text: "-----"
                                     verticalAlignment: Text.AlignVCenter
                                 }
                             }
@@ -4047,7 +4047,7 @@ Item {
                                     height: 28
                                     font: Constants.fontMicroPx
                                     color: Constants.colorBlack
-                                    text: "0"
+                                    text: "-----"
                                     verticalAlignment: Text.AlignVCenter
                                 }
                             }
@@ -5266,12 +5266,12 @@ Item {
                             }
                             function onAdditionalXeAlicatsPressureChanged(value) {
                                 if (!additionalXeAlicatsPressure.activeFocus) {
-                                    additionalXeAlicatsPressure.text = value.toFixed(2)
+                                    additionalXeAlicatsPressure.text = value.toFixed(0)
                                 }
                             }
                             function onAdditionalNitrogenAlicatsPressureChanged(value) {
                                 if (!additionalNitrogenAlicatsPressure.activeFocus) {
-                                    additionalNitrogenAlicatsPressure.text = value.toFixed(2)
+                                    additionalNitrogenAlicatsPressure.text = value.toFixed(0)
                                 }
                             }
                             function onAdditionalChillerTempSetpointChanged(value) {
@@ -5296,7 +5296,7 @@ Item {
                             }
                             function onAdditionalIRSpectrometerExposureDurationChanged(value) {
                                 if (!additionalIRSpectrometerExposureDuration.activeFocus) {
-                                    additionalIRSpectrometerExposureDuration.text = value.toFixed(2)
+                                    additionalIRSpectrometerExposureDuration.text = value.toFixed(0)
                                 }
                             }
                             function onAdditional1HReferenceNScansChanged(value) {
