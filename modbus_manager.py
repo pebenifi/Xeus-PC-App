@@ -52,14 +52,22 @@ def _laser_temp_register_to_celsius(raw: object) -> Optional[float]:
         return None
 
 
-# Water chiller: 1511/1521/1531 — °C × 10 (175 → 17.5)
-_WATER_CHILLER_TEMP_SCALE = 10.0
+# Water chiller: inlet 1511 — °C × 100 (1752 → 17.5); outlet 1521 и setpoint 1531 — °C × 10 (175 → 17.5)
+_WATER_CHILLER_INLET_TEMP_SCALE = 100.0
+_WATER_CHILLER_OUTLET_TEMP_SCALE = 10.0
 _WATER_CHILLER_SETPOINT_SCALE = 10.0
 
 
-def _water_chiller_temp_register_to_celsius(raw: object) -> Optional[float]:
+def _water_chiller_inlet_temp_register_to_celsius(raw: object) -> Optional[float]:
     try:
-        return float(int(raw)) / _WATER_CHILLER_TEMP_SCALE
+        return float(int(raw)) / _WATER_CHILLER_INLET_TEMP_SCALE
+    except Exception:
+        return None
+
+
+def _water_chiller_outlet_temp_register_to_celsius(raw: object) -> Optional[float]:
+    try:
+        return float(int(raw)) / _WATER_CHILLER_OUTLET_TEMP_SCALE
     except Exception:
         return None
 
@@ -94,7 +102,7 @@ def _seop_scaled_to_register(value: float, scale: float) -> int:
     return int(round(value * scale))
 
 
-# Measured Parameters (5011-5081): IR — uint32 (high reg−1, low reg); Water 1H ÷1000; T2 ms ÷10
+# Measured Parameters (5011-5081): IR 5011/5021/5031/5061 — uint32 (high reg−1, low reg); 5041/5051/5071/5081 — scalar; Water 1H ÷1000; T2 ms ÷10
 _MEASURED_WATER_1H_NMR_SCALE = 1000.0
 _MEASURED_T2_MS_SCALE = 10.0
 
@@ -114,11 +122,29 @@ def _measured_ir_value_to_registers(value: float) -> tuple[int, int]:
 
 
 def _read_measured_ir_uint32(client, low_register: int) -> Optional[float]:
-    high_regs = client.read_input_registers_direct(low_register - 1, 1, max_chunk=10)
-    low_regs = client.read_input_registers_direct(low_register, 1, max_chunk=10)
-    if not high_regs or not low_regs:
-        return None
-    return _measured_ir_registers_to_value(high_regs[0], low_regs[0])
+    high_addr = low_register - 1
+    # Сначала input (5010+5011, 5020+5021, …) одним запросом
+    regs = client.read_input_registers_direct(high_addr, 2, max_chunk=10)
+    if regs and len(regs) >= 2:
+        v = _measured_ir_registers_to_value(regs[0], regs[1])
+        if v is not None:
+            return v
+    # Fallback: holding (запись идёт туда же)
+    high = client.read_holding_register(high_addr)
+    low = client.read_holding_register(low_register)
+    if high is not None and low is not None:
+        return _measured_ir_registers_to_value(high, low)
+    return None
+
+
+def _read_measured_scalar_register(client, register: int) -> Optional[float]:
+    regs = client.read_input_registers_direct(register, 1, max_chunk=10)
+    if regs and len(regs) >= 1:
+        return float(int(regs[0]))
+    val = client.read_holding_register(register)
+    if val is not None:
+        return float(int(val))
+    return None
 
 
 def _write_measured_ir_uint32(client, low_register: int, value: float) -> bool:
@@ -131,12 +157,12 @@ def _write_measured_ir_uint32(client, low_register: int, value: float) -> bool:
 # Additional Parameters (6011-6201)
 _ADDITIONAL_MAGNET_CURRENT_SCALE = 1000.0  # A (858 → 0.858)
 _ADDITIONAL_LASER_CURRENT_SCALE = 10.0  # A (375 → 37.5)
-_ADDITIONAL_SCALE_10 = 10.0  # kHz, %, baseline kHz, chiller °C
+_ADDITIONAL_SCALE_10 = 10.0  # kHz, %, baseline kHz, chiller °C (408 → 40.8)
 _ADDITIONAL_STEP_SCALE = 1000.0  # B0 sweep step A (20 → 0.020)
-_ADDITIONAL_PRESSURE_SCALE = 100.0  # Torr setpoint (2000 → 20.00)
-_ADDITIONAL_NM_SCALE = 100.0  # SEOP resonance nm (13939 → 139.39)
-_ADDITIONAL_TOLERANCE_SCALE = 100.0  # SEOP tolerance (5 → 0.05)
-_ADDITIONAL_EXPOSURE_SCALE = 100.0  # IR exposure (120 → 1.20)
+_ADDITIONAL_ALICATS_PRESSURE_SCALE = 1.0  # Torr 6101/6111 (2000 → 2000)
+_ADDITIONAL_NM_SCALE = 100.0  # SEOP resonance nm 6131 (79475 → 794.75)
+_ADDITIONAL_TOLERANCE_SCALE = 100.0  # SEOP tolerance 6141 (5 → 0.05)
+_ADDITIONAL_EXPOSURE_SCALE = 1.0  # IR exposure ms 6161 (120 → 120)
 
 
 # Manual mode settings (6301-6381): kHz/% ×10; duration, pre-acq, recovery — 1:1; gain — index 0/1/2
@@ -2264,7 +2290,7 @@ class ModbusManager(QObject):
         if value is None:
             return
             
-        temperature = _water_chiller_temp_register_to_celsius(value)
+        temperature = _water_chiller_inlet_temp_register_to_celsius(value)
         if temperature is None:
             return
 
@@ -4714,11 +4740,11 @@ class ModbusManager(QObject):
             
             result = {}
             if inlet_temp_value is not None:
-                temp = _water_chiller_temp_register_to_celsius(inlet_temp_value)
+                temp = _water_chiller_inlet_temp_register_to_celsius(inlet_temp_value)
                 if temp is not None:
                     result['inlet_temperature'] = temp
             if outlet_temp_value is not None:
-                temp = _water_chiller_temp_register_to_celsius(outlet_temp_value)
+                temp = _water_chiller_outlet_temp_register_to_celsius(outlet_temp_value)
                 if temp is not None:
                     result['outlet_temperature'] = temp
             if setpoint_value is not None:
@@ -5115,7 +5141,7 @@ class ModbusManager(QObject):
                 if v is not None:
                     result['hp_129xe_t2'] = v
 
-            t2_corr = _read_measured_ir_uint32(client, 5081)
+            t2_corr = _read_measured_scalar_register(client, 5081)
             if t2_corr is not None:
                 result['t2_correction_factor'] = t2_corr
 
@@ -5249,11 +5275,11 @@ class ModbusManager(QObject):
                 if v is not None:
                     result['step_size_b0_sweep_protons'] = v
             if xe_alicats_pressure_regs and len(xe_alicats_pressure_regs) >= 1:
-                v = _seop_register_to_scaled(xe_alicats_pressure_regs[0], _ADDITIONAL_PRESSURE_SCALE)
+                v = _seop_register_to_scaled(xe_alicats_pressure_regs[0], _ADDITIONAL_ALICATS_PRESSURE_SCALE)
                 if v is not None:
                     result['xe_alicats_pressure'] = v
             if nitrogen_alicats_pressure_regs and len(nitrogen_alicats_pressure_regs) >= 1:
-                v = _seop_register_to_scaled(nitrogen_alicats_pressure_regs[0], _ADDITIONAL_PRESSURE_SCALE)
+                v = _seop_register_to_scaled(nitrogen_alicats_pressure_regs[0], _ADDITIONAL_ALICATS_PRESSURE_SCALE)
                 if v is not None:
                     result['nitrogen_alicats_pressure'] = v
             if chiller_temp_setpoint_regs and len(chiller_temp_setpoint_regs) >= 1:
@@ -5981,7 +6007,7 @@ class ModbusManager(QObject):
         self._additional_xe_alicats_pressure = pressure_torr
         self._additional_xe_alicats_pressure_user_interaction = True
         self.additionalXeAlicatsPressureChanged.emit(pressure_torr)
-        register_value = _seop_scaled_to_register(pressure_torr, _ADDITIONAL_PRESSURE_SCALE)
+        register_value = _seop_scaled_to_register(pressure_torr, _ADDITIONAL_ALICATS_PRESSURE_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6101, register_value)
@@ -6009,7 +6035,7 @@ class ModbusManager(QObject):
         self._additional_nitrogen_alicats_pressure = pressure_torr
         self._additional_nitrogen_alicats_pressure_user_interaction = True
         self.additionalNitrogenAlicatsPressureChanged.emit(pressure_torr)
-        register_value = _seop_scaled_to_register(pressure_torr, _ADDITIONAL_PRESSURE_SCALE)
+        register_value = _seop_scaled_to_register(pressure_torr, _ADDITIONAL_ALICATS_PRESSURE_SCALE)
         client = self._modbus_client
         def task() -> bool:
             result = client.write_holding_register(6111, register_value)
@@ -6159,13 +6185,13 @@ class ModbusManager(QObject):
     
     @Slot(result=bool)
     def increaseAdditionalIRSpectrometerExposureDuration(self) -> bool:
-        """Увеличение IR spectrometer exposure duration на 0.01 ms"""
-        return self.setAdditionalIRSpectrometerExposureDuration(self._additional_ir_spectrometer_exposure_duration + 0.01)
+        """Увеличение IR spectrometer exposure duration на 1 ms"""
+        return self.setAdditionalIRSpectrometerExposureDuration(self._additional_ir_spectrometer_exposure_duration + 1.0)
     
     @Slot(result=bool)
     def decreaseAdditionalIRSpectrometerExposureDuration(self) -> bool:
-        """Уменьшение IR spectrometer exposure duration на 0.01 ms"""
-        return self.setAdditionalIRSpectrometerExposureDuration(self._additional_ir_spectrometer_exposure_duration - 0.01)
+        """Уменьшение IR spectrometer exposure duration на 1 ms"""
+        return self.setAdditionalIRSpectrometerExposureDuration(self._additional_ir_spectrometer_exposure_duration - 1.0)
     
     @Slot(float, result=bool)
     def setAdditional1HReferenceNScans(self, num_scans: float) -> bool:
@@ -6569,7 +6595,7 @@ class ModbusManager(QObject):
         def task() -> bool:
             result = client.write_holding_register(6341, register_value)
             return bool(result)
-        self._enqueue_write("manual_mode_nmr_gain", task, {"gain_db": gain_db})
+        self._enqueue_write("manual_mode_nmr_gain", task, {"gain_index": gain_index})
         return True
     
     @Slot(result=bool)
