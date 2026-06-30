@@ -2013,7 +2013,7 @@ Item {
                                     }
                                     Connections {
                                         target: modbusManager
-                                        function onMagnetPSUStateChanged(state) {
+                                        function onMagnetPSUDriverStateChanged(state) {
                                             if (magnetPSUPower.checked !== state) magnetPSUPower.checked = state
                                         }
                                     }
@@ -6135,7 +6135,7 @@ Item {
                                     }
                                     Connections {
                                         target: modbusManager
-                                        function onWaterChillerStateChanged(state) {
+                                        function onWaterChillerDriverStateChanged(state) {
                                             if (waterChillerPower.checked !== state) waterChillerPower.checked = state
                                         }
                                     }

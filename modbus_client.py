@@ -38,18 +38,16 @@ class ModbusClient:
         self.framer = framer
         self.client: Optional[ModbusTcpClient] = None
         self._connected = False
-        # Список проблемных регистров, которые вызывают разрыв соединения
-        self._problematic_registers: set[int] = set()
         # Последний регистр, который читался перед разрывом соединения
         self._last_read_register: Optional[int] = None
 
     def clear_problematic_registers(self) -> None:
-        """Сброс списка проблемных регистров (после connect / перед повторной попыткой)."""
-        self._problematic_registers.clear()
+        """No-op (legacy)."""
+        pass
 
     def discard_problematic_register(self, address: int) -> None:
-        """Убрать один регистр из списка проблемных перед повторным чтением."""
-        self._problematic_registers.discard(address)
+        """No-op (legacy)."""
+        pass
     
     def connect(self) -> bool:
         """
@@ -177,9 +175,6 @@ class ModbusClient:
                             self._connected = True
                             # При успешном переподключении очищаем список проблемных регистров
                             # чтобы попробовать прочитать их снова
-                            if self._problematic_registers:
-                                logger.info(f"Очищаем список проблемных регистров после переподключения: {sorted(self._problematic_registers)}")
-                                self._problematic_registers.clear()
                             logger.info(f"Успешно подключено к Modbus устройству {self.host}:{self.port} с фреймером '{actual_framer}'")
                             # Добавляем небольшую задержку после подключения, чтобы устройство успело инициализироваться
                             # Первый пакет может теряться, если отправить его сразу после подключения
@@ -300,10 +295,6 @@ class ModbusClient:
         Returns:
             Значение регистра или None в случае ошибки
         """
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
         
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -328,16 +319,11 @@ class ModbusClient:
                 device_id=self.unit_id
             )
             if result.isError():
-                # Не логируем как ошибку, если это просто таймаут - это нормально при проблемах с устройством
                 error_str = str(result)
                 if "No response" in error_str or "timeout" in error_str.lower():
                     logger.debug(f"Таймаут при чтении регистра {address}")
-                    # При таймауте также добавляем регистр в проблемные
-                    if address not in self._problematic_registers:
-                        self._problematic_registers.add(address)
-                        logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (таймаут при чтении)")
                 else:
-                    logger.error(f"Ошибка чтения регистра {address}: {result}")
+                    logger.debug(f"Ошибка чтения регистра {address}: {result}")
                 return None
             value = None
             if result.registers:
@@ -355,14 +341,16 @@ class ModbusClient:
             # При ошибках соединения (Connection reset, Broken pipe и т.д.) пробуем переподключиться
             if error_code in (54, 32, 104, 107):  # Connection reset, Broken pipe, Connection reset by peer, Transport endpoint is not connected
                 # Запоминаем проблемный регистр
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (вызывает разрыв соединения)")
                 logger.info("Обнаружен разрыв соединения, пробуем переподключиться...")
                 if self._reconnect():
-                    # После успешного переподключения НЕ пробуем повторить запрос для проблемного регистра
-                    # Просто возвращаем None, чтобы не вызывать повторный разрыв
-                    logger.debug(f"Переподключение успешно, но пропускаем проблемный регистр {address}")
+                    try:
+                        result = self.client.read_holding_registers(
+                            address, count=1, device_id=self.unit_id
+                        )
+                        if not (hasattr(result, "isError") and result.isError()) and result.registers:
+                            return result.registers[0]
+                    except Exception:
+                        pass
                     return None
             self._connected = False
             return None
@@ -515,10 +503,6 @@ class ModbusClient:
         Returns:
             Значение регистра или None в случае ошибки
         """
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
         
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -549,9 +533,6 @@ class ModbusClient:
                 # В тесте ошибки просто логируются, соединение не разрывается
                 logger.debug(f"Ошибка чтения input регистра {address}: {result}")
                 # Добавляем в проблемные, но НЕ разрываем соединение (как в тесте)
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
-                    logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
                 return None
             value = None
             if result.registers:
@@ -569,9 +550,6 @@ class ModbusClient:
             error_code = getattr(e, 'errno', None)
             logger.debug(f"Исключение при чтении input регистра {address}: {e} (errno={error_code})")
             # Добавляем в проблемные, но НЕ разрываем соединение (как в тесте)
-            if address not in self._problematic_registers:
-                self._problematic_registers.add(address)
-                logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
             return None
         except Exception as e:
             # Не логируем таймауты как критические ошибки
@@ -588,17 +566,11 @@ class ModbusClient:
             error_str = str(e)
             logger.debug(f"Исключение при чтении input регистра {address}: {e}")
             # Добавляем в проблемные, но НЕ разрываем соединение (как в тесте)
-            if address not in self._problematic_registers:
-                self._problematic_registers.add(address)
-                logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных")
             return None
 
     def read_input_registers(self, address: int, count: int) -> Optional[list]:
         """Чтение нескольких input registers через pymodbus (функция 04)."""
         if count < 1:
-            return None
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
             return None
 
         self._last_read_register = address
@@ -620,8 +592,6 @@ class ModbusClient:
             )
             if result.isError():
                 logger.debug(f"Ошибка чтения input регистров {address} count={count}: {result}")
-                if address not in self._problematic_registers:
-                    self._problematic_registers.add(address)
                 return None
             if not result.registers or len(result.registers) < count:
                 logger.warning(
@@ -632,8 +602,6 @@ class ModbusClient:
             return [int(r) for r in result.registers[:count]]
         except (ConnectionError, OSError) as e:
             logger.debug(f"Исключение при чтении input регистров {address}: {e}")
-            if address not in self._problematic_registers:
-                self._problematic_registers.add(address)
             return None
         except Exception as e:
             error_str = str(e)
@@ -754,10 +722,6 @@ class ModbusClient:
         Returns:
             Значение регистра или None при ошибке
         """
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
         
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -814,10 +778,6 @@ class ModbusClient:
                             # НЕ разрываем соединение - это нормальная ситуация (как в pymodbus)
                             if exc_code in (2, 3):  # Illegal Data Address или Illegal Data Value
                                 logger.debug(f"Регистр {address} вернул Modbus exception code={exc_code} ({exception_info['error_message']}) - регистр отсутствует или недоступен")
-                                # Добавляем в проблемные, чтобы не опрашивать его дальше, но НЕ разрываем соединение
-                                if address not in self._problematic_registers:
-                                    self._problematic_registers.add(address)
-                                    logger.debug(f"⚠️ Регистр {address} добавлен в список проблемных (Modbus exception code={exc_code})")
                                 return None  # Просто возвращаем None, соединение остается активным
                             else:
                                 # Другие Modbus exceptions - тоже не разрываем соединение
@@ -867,17 +827,9 @@ class ModbusClient:
                         else:
                             logger.error("❌ Ошибка переподключения")
                             if retry_count >= max_retries:
-                                # Запоминаем проблемный регистр
-                                if address not in self._problematic_registers:
-                                    self._problematic_registers.add(address)
-                                    logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (не удалось переподключиться)")
                                 return None
                     else:
                         logger.error(f"❌ Не удалось переподключиться после {max_retries} попыток")
-                        # Запоминаем проблемный регистр
-                        if address not in self._problematic_registers:
-                            self._problematic_registers.add(address)
-                            logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (не удалось переподключиться после {max_retries} попыток)")
                         return None
                 except Exception as e:
                     logger.error(f"Ошибка при чтении регистра {address}: {e}")
@@ -890,9 +842,6 @@ class ModbusClient:
                 time.sleep(0.5)  # Задержка между попытками как в test_modbus.py
         
         # Если обе попытки не удались
-        if address not in self._problematic_registers:
-            self._problematic_registers.add(address)
-            logger.warning(f"⚠️ Регистр {address} добавлен в список проблемных (не удалось прочитать после 2 попыток)")
         return None
     
     def _parse_read_response_1021(self, resp: bytes) -> Optional[int]:
@@ -946,10 +895,6 @@ class ModbusClient:
             value: Полное значение для записи в регистр
         """
         address = 1021
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
 
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -1141,10 +1086,6 @@ class ModbusClient:
             value: Полное значение для записи в регистр
         """
         address = 1111
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
 
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -1484,9 +1425,6 @@ class ModbusClient:
 
     def write_register_direct(self, address: int, value: int) -> bool:
         """Запись в регистр через прямой сокет (функция 06). Значение — uint16 (например, A×100)."""
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return False
 
         if self.client is None or not self.client.is_socket_open():
             return False
@@ -1735,10 +1673,6 @@ class ModbusClient:
     def read_register_1421_direct(self) -> Optional[int]:
         """Чтение регистра 1421 (setpoint SEOP Cell) через прямой сокет (функция 04)"""
         address = 1421
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
 
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -2334,10 +2268,6 @@ class ModbusClient:
             value: Полное значение для записи в регистр
         """
         address = 1131
-        # Проверяем, не является ли регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return None
 
         # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
@@ -2469,9 +2399,6 @@ class ModbusClient:
     def write_register_1132_direct(self, value: int) -> bool:
         """Запись в регистр 1132 через прямой сокет (функция 06) — fans 17+18."""
         address = 1132
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return False
 
         self._last_read_register = address
 
@@ -2760,12 +2687,6 @@ class ModbusClient:
         if quantity <= 0:
             return []
         
-        # Проверяем, не является ли начальный регистр проблемным
-        if address in self._problematic_registers:
-            logger.warning(f"⚠️ Пропускаем проблемный регистр {address} (вызывает разрыв соединения)")
-            return []
-        
-        # Сохраняем адрес регистра для отслеживания проблем
         self._last_read_register = address
         
         if self.client is None or not self.client.is_socket_open():
