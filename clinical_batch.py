@@ -223,9 +223,34 @@ def _build_manual_mode_settings(client: ModbusClient) -> dict:
     return result
 
 
-def clinical_batch_read(client: ModbusClient) -> dict:
+def _screen01_io_minimal_read(client: ModbusClient) -> dict:
+    """Только реле/клапаны/вентиляторы — для фона при опросе текста дисплея."""
+    result: dict = {"_conn": False, "_ok": 0}
+    if client.client is None or not client.client.is_socket_open():
+        return result
+    result["_conn"] = True
+    v1021 = client.read_input_register(1021)
+    if v1021 is not None:
+        result["1021"] = v1021
+        result["_ok"] = int(result["_ok"]) + 1
+    v1111 = client.read_input_register(1111)
+    if v1111 is not None:
+        result["1111"] = v1111
+        result["_ok"] = int(result["_ok"]) + 1
+    fan_regs = client.read_input_registers(1131, 2)
+    if fan_regs is not None and len(fan_regs) >= 2:
+        result["1131"] = {"1131": fan_regs[0], "1132": fan_regs[1]}
+        result["_ok"] = int(result["_ok"]) + 1
+    return result
+
+
+def clinical_batch_read(client: ModbusClient, *, light: bool = False) -> dict:
     """Screen02: Screen01 IO + SEOP/Calculated/Measured/Additional/Manual в одном проходе."""
     mm = _mm()
+    if light:
+        result = _screen01_io_minimal_read(client)
+        return result
+
     result = mm._screen01_batch_read(client)
     ok = int(result.get("_ok", 0))
 

@@ -509,6 +509,7 @@ class ModbusManager(QObject):
         "manual_mode_settings": "_reading_manual_mode_settings",
         "screen01": "_reading_screen01",
         "clinical": "_reading_clinical",
+        "display_text": "_reading_display_text",
     }
     
     # Сигналы для QML
@@ -1079,6 +1080,14 @@ class ModbusManager(QObject):
         self._clinical_batch_timer.setInterval(self._POLL_INTERVAL_FAST_MS)
         self._reading_clinical = False
 
+        # Текст дисплея (регистры 600+) — пока открыта Advanced Program
+        self._display_text_timer = QTimer(self)
+        self._display_text_timer.timeout.connect(self._readDisplayTextFast)
+        self._display_text_timer.setInterval(100)
+        self._display_text_polling = False
+        self._reading_display_text = False
+        self._last_display_text = ""
+
         # Список таймеров для паузы/возобновления опросов
         self._polling_timers = [
             self._connection_check_timer,
@@ -1263,7 +1272,7 @@ class ModbusManager(QObject):
         client = self._modbus_client
 
         def task():
-            return clinical_batch_read(client)
+            return clinical_batch_read(client, light=self._display_text_polling)
 
         self._enqueue_read("clinical", task)
 
@@ -1300,6 +1309,8 @@ class ModbusManager(QObject):
                     t.stop()
             if self._is_connected and not self._polling_paused:
                 if not self._clinical_batch_timer.isActive():
+                    interval = 800 if self._display_text_polling else self._POLL_INTERVAL_FAST_MS
+                    self._clinical_batch_timer.setInterval(interval)
                     self._clinical_batch_timer.start()
                 self._readClinicalBatch()
             logger.info("▶️ Clinical foreground: unified batch polling")
@@ -1386,6 +1397,7 @@ class ModbusManager(QObject):
             t.stop()
         if self._clinical_batch_timer.isActive():
             self._clinical_batch_timer.stop()
+        self.stopDisplayTextPolling()
         self.pollingPausedChanged.emit(True)
         logger.info("⏸ Опрос Modbus приостановлен для переключения экрана")
 
@@ -1731,6 +1743,62 @@ class ModbusManager(QObject):
             self._manual_mode_settings_timer.stop()
             logger.info("⏸ Опрос Manual mode settings выключен")
     
+    @Slot()
+    def startDisplayTextPolling(self) -> None:
+        """Быстрый опрос текста дисплея (600+): приоритетная очередь, каждые 100 ms."""
+        if not self._is_connected or self._modbus_client is None:
+            return
+        self._display_text_polling = True
+        self._last_display_text = ""
+        if self._clinical_batch_timer.isActive():
+            self._clinical_batch_timer.setInterval(800)
+        elif self._clinical_foreground and self._is_connected and not self._polling_paused:
+            self._clinical_batch_timer.setInterval(800)
+            self._clinical_batch_timer.start()
+        if not self._display_text_timer.isActive():
+            self._display_text_timer.start()
+        self._readDisplayTextFast()
+        logger.info("▶️ Опрос текста дисплея (600+) включен")
+
+    @Slot()
+    def stopDisplayTextPolling(self) -> None:
+        """Остановить опрос текста дисплея."""
+        self._display_text_polling = False
+        self._last_display_text = ""
+        if self._display_text_timer.isActive():
+            self._display_text_timer.stop()
+        self._reading_display_text = False
+        if self._clinical_foreground and self._is_connected and not self._polling_paused:
+            self._clinical_batch_timer.setInterval(self._POLL_INTERVAL_FAST_MS)
+            if not self._clinical_batch_timer.isActive():
+                self._clinical_batch_timer.start()
+            self._readClinicalBatch()
+        logger.info("⏸ Опрос текста дисплея выключен")
+
+    def _readDisplayTextFast(self) -> None:
+        if not self._display_text_polling or not self._is_connected or self._modbus_client is None:
+            return
+        client = self._modbus_client
+
+        def task():
+            from display_text import read_and_parse_display_text
+            return read_and_parse_display_text(client)
+
+        self._enqueue_read_priority("display_text", task)
+
+    def _applyDisplayTextValue(self, value: object) -> None:
+        self._reading_display_text = False
+        if not self._display_text_polling:
+            return
+        if value is None or not isinstance(value, str):
+            return
+        text = value.strip()
+        if not text or text == self._last_display_text:
+            return
+        self._last_display_text = text
+        self._addLog(f"Display: {text}")
+        QTimer.singleShot(50, self._readDisplayTextFast)
+
     @Slot()
     def refreshUIFromCache(self):
         """Принудительно обновить все экраны из буфера (при переключении Screen01 ↔ Clinical)."""
@@ -2192,6 +2260,13 @@ class ModbusManager(QObject):
                 self._last_modbus_ok_time = time.time()
                 self._connection_fail_count = 0
             self._applyClinicalBatch(value)
+            return
+
+        if key == "display_text":
+            if value is not None:
+                self._last_modbus_ok_time = time.time()
+                self._connection_fail_count = 0
+            self._applyDisplayTextValue(value)
             return
 
         if key == "screen01":
@@ -7447,7 +7522,17 @@ class ModbusManager(QObject):
         # Неблокирующая отправка в worker; возвращаем True если задача поставлена
         self._enqueue_write(f"write:{address}", task, {"address": address, "value": value})
         return True
-    
+
+    @Slot(int, result=bool)
+    def startAdvancedProgram(self, register: int) -> bool:
+        """Запуск Advanced Program: запись 1 в holding register 2011–2191 (шаг 10)."""
+        if register < 2011 or register > 2191 or register % 10 != 1:
+            logger.warning(f"startAdvancedProgram: недопустимый регистр {register}")
+            return False
+        self._addLog(f"Start: register {register}")
+        self._updateActionStatus(f"start program {register}")
+        logger.info(f"▶️ Advanced program start: register {register} = 1")
+        return self.writeRegister(register, 1)
     
     # Методы для управления реле через регистр 1021
     @Slot(bool, result=bool)

@@ -53,6 +53,7 @@ Item {
         irNmrDelay.stop()
         root.foreground = false
         if (modbusManager) {
+            modbusManager.stopDisplayTextPolling()
             modbusManager.setClinicalForeground(false)
             modbusManager.disableSEOPParametersPolling()
             modbusManager.disableCalculatedParametersPolling()
@@ -649,7 +650,27 @@ Item {
             },
             "2 Advanced Programs List": { 
                 label: "2 Advanced Programs List", 
-                params: ["Measure IR Hot Field On", "Measure IR Hot Field Off", "Acquire Hot Cell Mag Off", "Measure IR Cold", "Acquire Current HP 129XE Signal", "Automated Current Sweep On HP 129XE", "Automated Current Sweep On Water", "Acquire Reference 1H Signal", "Timed Polarization Build Up", "Timed Polarization Decay", "SEOP Cell QA Study", "SEOP Initialization", "Laser Reinitialization", "SEOP Process", "HP XE Eject", "HP XE Flow", "Clinical Sequence", "Purge Cycle Initialization", "Restore Default State"] 
+                params: [
+                    "Measure IR Hot Field On",
+                    "Measure IR Hot Field Off",
+                    "Measure IR Cold",
+                    "Acquire Current HP 129XE Signal",
+                    "Automated Current Sweep On HP 129XE",
+                    "Automated Current Sweep On Water",
+                    "Acquire Reference 1H Signal",
+                    "Timed Polarization Build Up",
+                    "Timed Polarization Decay",
+                    "SEOP Cell QA Study",
+                    "SEOP Initialization",
+                    "SEOP Process",
+                    "HP XE Eject",
+                    "Restore Default State",
+                    "Disable Laser and Heater",
+                    "Laser Reinitialization",
+                    "HP XE Flow",
+                    "Clinical Sequence",
+                    "Purge Cycle Initialization"
+                ] 
             },
             "3 SEOP Parameters": { 
                 label: "3 SEOP Parameters", 
@@ -684,12 +705,138 @@ Item {
             "Vacuum Controller": { id: 108, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" },
             "Laser": { id: 106, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" }
         })
+
+        // Advanced Programs: registers 2011, 2021, … 2191 (write 1 to start)
+        property var advancedPrograms: ({
+            "Measure IR Hot Field On": {
+                register: 2011,
+                description: "Measure IR spectrum with hot field ON."
+            },
+            "Measure IR Hot Field Off": {
+                register: 2021,
+                description: "Measure IR spectrum with hot field OFF."
+            },
+            "Measure IR Cold": {
+                register: 2031,
+                description: "Measure IR spectrum on cold cell."
+            },
+            "Acquire Current HP 129XE Signal": {
+                register: 2041,
+                description: "Acquire current hyperpolarized 129Xe NMR signal."
+            },
+            "Automated Current Sweep On HP 129XE": {
+                register: 2051,
+                description: "Automated magnet current sweep on HP 129Xe resonance."
+            },
+            "Automated Current Sweep On Water": {
+                register: 2061,
+                description: "Automated magnet current sweep on water (1H) resonance."
+            },
+            "Acquire Reference 1H Signal": {
+                register: 2071,
+                description: "Acquire water 1H NMR reference signal."
+            },
+            "Timed Polarization Build Up": {
+                register: 2081,
+                description: "Timed SEOP polarization build-up sequence."
+            },
+            "Timed Polarization Decay": {
+                register: 2091,
+                description: "Timed polarization decay measurement."
+            },
+            "SEOP Cell QA Study": {
+                register: 2101,
+                description: "SEOP cell quality assurance study."
+            },
+            "SEOP Initialization": {
+                register: 2111,
+                description: "Initialize SEOP cell and subsystems."
+            },
+            "SEOP Process": {
+                register: 2121,
+                description: "Run full SEOP polarization process."
+            },
+            "HP XE Eject": {
+                register: 2131,
+                description: "Eject hyperpolarized xenon from the cell."
+            },
+            "Restore Default State": {
+                register: 2141,
+                description: "Restore instrument to default safe state."
+            },
+            "Disable Laser and Heater": {
+                register: 2151,
+                description: "Disable laser and cell heater."
+            },
+            "Laser Reinitialization": {
+                register: 2161,
+                description: "Re-initialize laser subsystem."
+            },
+            "HP XE Flow": {
+                register: 2171,
+                description: "Flow hyperpolarized xenon through the system."
+            },
+            "Clinical Sequence": {
+                register: 2181,
+                description: "Run clinical measurement sequence."
+            },
+            "Purge Cycle Initialization": {
+                register: 2191,
+                description: "Initialize purge cycle."
+            }
+        })
     }
     
     // Состояние для отслеживания раскрытых групп и активного параметра
     property string expandedMenuItem: ""
     property string activeParam: ""
     property string activeParamGroup: ""
+    property int advancedProgramRegister: 0
+
+    function hideAllParamPanels() {
+        if (modbusManager)
+            modbusManager.stopDisplayTextPolling()
+        relayTableGrid.visible = false
+        valvesFansTableGrid.visible = false
+        powerSupplyGrid.visible = false
+        pidControllerGrid.visible = false
+        waterChillerGrid.visible = false
+        alicatsGrid.visible = false
+        vacuumControllerGrid.visible = false
+        laserGrid.visible = false
+        seopParametersGrid.visible = false
+        calculatedParametersGrid.visible = false
+        measuredParametersGrid.visible = false
+        additionalParametersGrid.visible = false
+        manualModeSettingsGrid.visible = false
+        paramGrid.visible = false
+        advancedProgramPanel.visible = false
+    }
+
+    function showAdvancedProgram(programName) {
+        hideAllParamPanels()
+        advancedProgramPanel.visible = true
+        var prog = menuData.advancedPrograms[programName]
+        advancedProgramRegister = prog ? prog.register : 0
+        infoTitle.text = programName
+        infoSubtitle.text = "2 Advanced Programs List"
+        if (prog) {
+            infoContent.text = prog.description + "\n\nModbus register: " + prog.register + "\nStart command: write 1"
+            paramGrid.visible = true
+            paramId.text = prog.register.toString()
+            paramType.text = "CMD"
+            paramUnits.text = "—"
+            paramDefault.text = "1"
+            paramMin.text = "—"
+            paramMax.text = "—"
+            paramDtype.text = "DT_NONE"
+            if (modbusManager)
+                modbusManager.startDisplayTextPolling()
+        } else {
+            infoContent.text = "Advanced program.\n\nRegister not configured."
+            paramGrid.visible = false
+        }
+    }
 
     // При смене активного параметра выключаем опрос реле/клапанов/вентиляторов/Power Supply, если закрываем соответствующие меню
     onActiveParamChanged: {
@@ -820,6 +967,49 @@ Item {
                         Text { id: paramMax; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
                         Text { text: "Data Type:"; font: Constants.fontDetailPx; color: Constants.colorTextGrey }
                         Text { id: paramDtype; text: "—"; font: Constants.fontDetailPx; color: Constants.colorBlack }
+                    }
+
+                    Column {
+                        id: advancedProgramPanel
+                        width: parent.width
+                        spacing: 12
+                        visible: false
+
+                        Button {
+                            id: advancedProgramStartBtn
+                            width: 120
+                            height: 36
+                            text: "Start"
+                            font: Constants.fontButtonSmallPx
+                            enabled: modbusManager && modbusManager.isConnected && root.advancedProgramRegister >= 2011
+                            background: Rectangle {
+                                color: advancedProgramStartBtn.enabled
+                                       ? (advancedProgramStartBtn.pressed ? "#2d5016" : "#38691e")
+                                       : "#979797"
+                                radius: 4
+                            }
+                            contentItem: Text {
+                                text: advancedProgramStartBtn.text
+                                font: advancedProgramStartBtn.font
+                                color: Constants.colorWhite
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: {
+                                if (modbusManager && root.advancedProgramRegister >= 2011)
+                                    modbusManager.startAdvancedProgram(root.advancedProgramRegister)
+                            }
+                        }
+
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            font: Constants.fontDetailPx
+                            color: Constants.colorTextGrey
+                            text: root.advancedProgramRegister >= 2011
+                                  ? "Writes value 1 to register " + root.advancedProgramRegister
+                                  : ""
+                        }
                     }
 
                     // Таблица реле для External Relays (в стиле paramGrid с кнопками on/off справа)
@@ -6800,6 +6990,8 @@ Item {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: {
+                                            advancedProgramPanel.visible = false
+                                            root.advancedProgramRegister = 0
                                             // Устанавливаем активный параметр
                                             activeParam = modelData
                                             activeParamGroup = menuItemContainer.groupData.label
@@ -6962,6 +7154,8 @@ Item {
                                                 infoSubtitle.text = menuItemContainer.groupData.label
                                                 infoContent.text = "Control Water Chiller temperature"
                                                 console.log("Water Chiller grid visible:", waterChillerGrid.visible)
+                                            } else if (menuItemContainer.groupData.label === "2 Advanced Programs List") {
+                                                root.showAdvancedProgram(modelData)
                                             } else {
                                                 // Для остальных параметров - стандартная таблица
                                                 if (modbusManager) {
