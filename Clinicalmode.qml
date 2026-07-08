@@ -792,6 +792,18 @@ Item {
     property string activeParam: ""
     property string activeParamGroup: ""
     property int advancedProgramRegister: 0
+    property bool advancedProgramStarted: false
+    property string logsHistory: ""
+    property string lastLogMessage: ""
+
+    function appendLog(message) {
+        if (lastLogMessage !== "") {
+            if (logsHistory !== "")
+                logsHistory += "\n"
+            logsHistory += lastLogMessage
+        }
+        lastLogMessage = message
+    }
 
     function hideAllParamPanels() {
         if (modbusManager)
@@ -811,11 +823,13 @@ Item {
         manualModeSettingsGrid.visible = false
         paramGrid.visible = false
         advancedProgramPanel.visible = false
+        advancedProgramStarted = false
     }
 
     function showAdvancedProgram(programName) {
         hideAllParamPanels()
         advancedProgramPanel.visible = true
+        advancedProgramStarted = false
         var prog = menuData.advancedPrograms[programName]
         advancedProgramRegister = prog ? prog.register : 0
         infoTitle.text = programName
@@ -975,29 +989,65 @@ Item {
                         spacing: 12
                         visible: false
 
-                        Button {
-                            id: advancedProgramStartBtn
-                            width: 120
-                            height: 36
-                            text: "Start"
-                            font: Constants.fontButtonSmallPx
-                            enabled: modbusManager && modbusManager.isConnected && root.advancedProgramRegister >= 2011
-                            background: Rectangle {
-                                color: advancedProgramStartBtn.enabled
-                                       ? (advancedProgramStartBtn.pressed ? "#2d5016" : "#38691e")
-                                       : "#979797"
-                                radius: 4
+                        Row {
+                            spacing: 8
+
+                            Button {
+                                id: advancedProgramStartBtn
+                                width: 120
+                                height: 36
+                                text: "Start"
+                                font: Constants.fontButtonSmallPx
+                                enabled: modbusManager && modbusManager.isConnected && root.advancedProgramRegister >= 2011
+                                background: Rectangle {
+                                    color: {
+                                        if (!advancedProgramStartBtn.enabled)
+                                            return "#979797"
+                                        if (root.advancedProgramStarted)
+                                            return advancedProgramStartBtn.pressed ? "#2d5016" : "#38691e"
+                                        return advancedProgramStartBtn.pressed ? "#7a7a7a" : "#979797"
+                                    }
+                                    radius: 4
+                                }
+                                contentItem: Text {
+                                    text: advancedProgramStartBtn.text
+                                    font: advancedProgramStartBtn.font
+                                    color: Constants.colorWhite
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                onClicked: {
+                                    if (modbusManager && root.advancedProgramRegister >= 2011) {
+                                        modbusManager.startAdvancedProgram(root.advancedProgramRegister)
+                                        root.advancedProgramStarted = true
+                                    }
+                                }
                             }
-                            contentItem: Text {
-                                text: advancedProgramStartBtn.text
-                                font: advancedProgramStartBtn.font
-                                color: Constants.colorWhite
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            onClicked: {
-                                if (modbusManager && root.advancedProgramRegister >= 2011)
-                                    modbusManager.startAdvancedProgram(root.advancedProgramRegister)
+
+                            Button {
+                                id: advancedProgramEnterBtn
+                                width: 120
+                                height: 36
+                                text: "Enter"
+                                font: Constants.fontButtonSmallPx
+                                enabled: modbusManager && modbusManager.isConnected
+                                background: Rectangle {
+                                    color: advancedProgramEnterBtn.enabled
+                                           ? (advancedProgramEnterBtn.pressed ? "#7a7a7a" : "#979797")
+                                           : "#c0c0c0"
+                                    radius: 4
+                                }
+                                contentItem: Text {
+                                    text: advancedProgramEnterBtn.text
+                                    font: advancedProgramEnterBtn.font
+                                    color: Constants.colorWhite
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                onClicked: {
+                                    if (modbusManager)
+                                        modbusManager.sendDisplayEnter()
+                                }
                             }
                         }
 
@@ -1007,7 +1057,8 @@ Item {
                             font: Constants.fontDetailPx
                             color: Constants.colorTextGrey
                             text: root.advancedProgramRegister >= 2011
-                                  ? "Writes value 1 to register " + root.advancedProgramRegister
+                                  ? "Start: write 1 to register " + root.advancedProgramRegister
+                                    + "\nEnter: write 0x0008 to register 91"
                                   : ""
                         }
                     }
@@ -6400,46 +6451,76 @@ Item {
                 color: "#d3d3d3"
             }
 
-            ScrollView {
-                id: logsScrollView
+            Rectangle {
+                id: logsPanel
                 width: parent.width
                 height: Math.max(150, (parent.height - 200) * 0.4)
+                color: "#424242"
                 clip: true
 
-                TextArea {
-                    id: logsTextArea
-                    width: valuesPanel.width - 32
-                    readOnly: true
+                Text {
+                    anchors.centerIn: parent
+                    visible: root.lastLogMessage === "" && root.logsHistory === ""
                     font: Constants.fontNanoPx
-                    // Используем системный моноширинный шрифт по умолчанию (без указания family)
-                    // Это избегает проблем с отсутствующими шрифтами на разных платформах
-                    color: Constants.colorWhite
-                    wrapMode: TextArea.Wrap
-                    background: Rectangle {
-                        color: "#424242"
-                    }
+                    color: "#aaaaaa"
                     text: "Logs will appear here..."
+                }
+
+                Flickable {
+                    id: logsFlickable
+                    anchors.fill: parent
+                    anchors.margins: 4
+                    clip: true
+                    contentWidth: width
+                    contentHeight: logsColumn.height
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    onContentHeightChanged: {
+                        if (contentHeight > height)
+                            contentY = contentHeight - height
+                    }
+
+                    Column {
+                        id: logsColumn
+                        width: logsFlickable.width
+                        spacing: 4
+
+                        Text {
+                            width: parent.width
+                            visible: root.logsHistory !== ""
+                            text: root.logsHistory
+                            font: Constants.fontNanoPx
+                            color: Constants.colorWhite
+                            wrapMode: Text.Wrap
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            visible: root.lastLogMessage !== ""
+                            radius: 2
+                            color: "transparent"
+                            border.width: 2
+                            border.color: "#38691e"
+                            height: lastLogText.implicitHeight + 8
+
+                            Text {
+                                id: lastLogText
+                                anchors.fill: parent
+                                anchors.margins: 4
+                                text: root.lastLogMessage
+                                font: Constants.fontNanoPx
+                                color: Constants.colorWhite
+                                wrapMode: Text.Wrap
+                            }
+                        }
+                    }
                 }
             }
 
             Connections {
                 target: modbusManager
                 function onLogMessageChanged(message) {
-                    if (logsTextArea.text === "Logs will appear here...") {
-                        logsTextArea.text = message
-                    } else {
-                        logsTextArea.text += "\n" + message
-                    }
-                    // Автоматически прокручиваем вниз
-                    Qt.callLater(function() {
-                        if (logsScrollView.ScrollBar && logsScrollView.ScrollBar.vertical) {
-                            logsScrollView.ScrollBar.vertical.position = 1.0
-                        }
-                        // Альтернативный способ прокрутки через Flickable
-                        if (logsScrollView.contentItem) {
-                            logsScrollView.contentItem.contentY = logsScrollView.contentItem.contentHeight - logsScrollView.height
-                        }
-                    })
+                    root.appendLog(message)
                 }
             }
 
@@ -6992,6 +7073,7 @@ Item {
                                         onClicked: {
                                             advancedProgramPanel.visible = false
                                             root.advancedProgramRegister = 0
+                                            root.advancedProgramStarted = false
                                             // Устанавливаем активный параметр
                                             activeParam = modelData
                                             activeParamGroup = menuItemContainer.groupData.label

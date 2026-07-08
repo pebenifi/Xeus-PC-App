@@ -7533,6 +7533,14 @@ class ModbusManager(QObject):
         self._updateActionStatus(f"start program {register}")
         logger.info(f"▶️ Advanced program start: register {register} = 1")
         return self.writeRegister(register, 1)
+
+    @Slot(result=bool)
+    def sendDisplayEnter(self) -> bool:
+        """Enter на дисплее устройства: holding register 91 = 0x0008."""
+        self._addLog("Enter")
+        self._updateActionStatus("enter display")
+        logger.info("↵ Display Enter: register 91 = 0x0008")
+        return self.writeRegister(91, 0x0008)
     
     # Методы для управления реле через регистр 1021
     @Slot(bool, result=bool)
