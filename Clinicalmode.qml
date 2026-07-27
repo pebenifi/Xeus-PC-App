@@ -1049,6 +1049,32 @@ Item {
                                         modbusManager.sendDisplayEnter()
                                 }
                             }
+
+                            Button {
+                                id: advancedProgramEscapeBtn
+                                width: 120
+                                height: 36
+                                text: "Escape"
+                                font: Constants.fontButtonSmallPx
+                                enabled: modbusManager && modbusManager.isConnected
+                                background: Rectangle {
+                                    color: advancedProgramEscapeBtn.enabled
+                                           ? (advancedProgramEscapeBtn.pressed ? "#7a7a7a" : "#979797")
+                                           : "#c0c0c0"
+                                    radius: 4
+                                }
+                                contentItem: Text {
+                                    text: advancedProgramEscapeBtn.text
+                                    font: advancedProgramEscapeBtn.font
+                                    color: Constants.colorWhite
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                onClicked: {
+                                    if (modbusManager)
+                                        modbusManager.sendDisplayEscape()
+                                }
+                            }
                         }
 
                         Text {
@@ -1059,6 +1085,7 @@ Item {
                             text: root.advancedProgramRegister >= 2011
                                   ? "Start: write 1 to register " + root.advancedProgramRegister
                                     + "\nEnter: write 0x0008 to register 91"
+                                    + "\nEscape: write 0x0010 to register 91"
                                   : ""
                         }
                     }

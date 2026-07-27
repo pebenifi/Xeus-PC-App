@@ -7541,6 +7541,14 @@ class ModbusManager(QObject):
         self._updateActionStatus("enter display")
         logger.info("↵ Display Enter: register 91 = 0x0008")
         return self.writeRegister(91, 0x0008)
+
+    @Slot(result=bool)
+    def sendDisplayEscape(self) -> bool:
+        """Escape на дисплее устройства: holding register 91 = 0x0010."""
+        self._addLog("Escape")
+        self._updateActionStatus("escape display")
+        logger.info("⎋ Display Escape: register 91 = 0x0010")
+        return self.writeRegister(91, 0x0010)
     
     # Методы для управления реле через регистр 1021
     @Slot(bool, result=bool)
