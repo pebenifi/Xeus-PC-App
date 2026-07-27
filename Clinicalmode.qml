@@ -835,7 +835,7 @@ Item {
         infoTitle.text = programName
         infoSubtitle.text = "2 Advanced Programs List"
         if (prog) {
-            infoContent.text = prog.description + "\n\nModbus register: " + prog.register + "\nStart command: write 1"
+            infoContent.text = prog.description
             paramGrid.visible = true
             paramId.text = prog.register.toString()
             paramType.text = "CMD"
@@ -1075,18 +1075,6 @@ Item {
                                         modbusManager.sendDisplayEscape()
                                 }
                             }
-                        }
-
-                        Text {
-                            width: parent.width
-                            wrapMode: Text.WordWrap
-                            font: Constants.fontDetailPx
-                            color: Constants.colorTextGrey
-                            text: root.advancedProgramRegister >= 2011
-                                  ? "Start: write 1 to register " + root.advancedProgramRegister
-                                    + "\nEnter: write 0x0008 to register 91"
-                                    + "\nEscape: write 0x0010 to register 91"
-                                  : ""
                         }
                     }
 
@@ -7556,42 +7544,6 @@ Item {
                 x: 5
                 y: 5
             }
-        }
-    }
-
-
-
-
-    Rectangle {
-        id: rectangle14
-        anchors.left: rectangle2.right
-        anchors.leftMargin: 17
-        anchors.right: valuesPanel.right
-        anchors.rightMargin: 0
-        anchors.top: rectangle1.bottom
-        anchors.topMargin: 20
-        height: 39
-        color: "#424242"
-        radius: 15
-
-        Text {
-            id: text14
-            anchors.left: parent.left
-            anchors.leftMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-            color: Constants.colorWhite
-            text: qsTr("Progress: Now")
-            font: Constants.fontMediumPx
-        }
-
-        Label {
-            id: label2
-            anchors.left: text14.right
-            anchors.leftMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-            color: Constants.colorWhite
-            text: qsTr("Label synthesis, NEXT: label synthesis")
-            font: Constants.fontMediumPt
         }
     }
 
