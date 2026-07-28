@@ -2993,6 +2993,9 @@ class ModbusManager(QObject):
             temp = float(value['temperature'])
             self._pid_controller_temperature = temp
             self.pidControllerTemperatureChanged.emit(temp)
+            # Регистр 1411 общий: SEOP Cell Value на Screen01
+            self._seop_cell_temperature = temp
+            self.seopCellTemperatureChanged.emit(temp)
         if 'state' in value:
             driver_on = bool(value['state'])
             self._pid_controller_driver_on = driver_on
