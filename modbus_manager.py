@@ -456,7 +456,7 @@ class _ModbusIoWorker(QObject):
                 except Exception:
                     logger.exception("Modbus read task failed")
                     value = None
-                if key in ("ir", "nmr"):
+                if key in ("ir", "nmr", "pxe"):
                     # Большой dict через QueuedConnection даёт SIGSEGV — кладём в слот потока.
                     self._last_spectrum[key] = value
                     self.readFinished.emit(key, bool(value is not None))
@@ -643,6 +643,7 @@ class ModbusManager(QObject):
     irSpectrumChanged = Signal('QVariantMap')  # payload map: {x_min,x_max,y_min,y_max,points,data,...}
     # NMR spectrum (Clinicalmode NMR graph)
     nmrSpectrumChanged = Signal('QVariantMap')  # payload map: {samples,x_min,x_max,y_min,y_max,freq,ampl,int,t2,points,data,...}
+    pxeChartChanged = Signal('QVariantMap')  # payload: {samples,fit_type,x_min,x_max,y_min,y_max,points,...}; QML overlay uses fit_type 0/1/3
     # Logging signal for Clinicalmode screen
     logMessageChanged = Signal(str)  # log message to display in logs TextArea
 
@@ -850,6 +851,10 @@ class ModbusManager(QObject):
         # NMR spectrum cache
         self._nmr_last = None
         self._nmr_request_in_flight = False
+
+        # PXE chart cache (Clinicalmode)
+        self._pxe_last = None
+        self._pxe_request_in_flight = False
         
         # Буфер состояний устройств для мгновенного отображения при переключении страниц
         # Реле (регистр 1021)
@@ -2312,6 +2317,17 @@ class ModbusManager(QObject):
             self._applyNmrSpectrum(payload)
             return
 
+        if key == "pxe":
+            payload = self._io_worker._last_spectrum.pop("pxe", None)
+            self._pxe_request_in_flight = False
+            if payload is None:
+                logger.debug("PXE chart read returned None")
+            else:
+                self._last_modbus_ok_time = time.time()
+                self._connection_fail_count = 0
+            self._applyPxeChart(payload)
+            return
+
         if value is None:
             self._clear_reading_flag_for_key(key)
             return
@@ -3311,6 +3327,20 @@ class ModbusManager(QObject):
         self._nmr_last = value
         self.nmrSpectrumChanged.emit(value)
 
+    def _applyPxeChart(self, value: object):
+        """Применяет PXE chart (GUI поток) и дергает сигнал для QML графика."""
+        if not value or not isinstance(value, dict):
+            logger.debug("PXE chart: empty/invalid payload (not a dict or None)")
+            return
+        pts = value.get("points")
+        logger.info(
+            f"PXE chart: payload received, points={len(pts) if isinstance(pts, list) else 'n/a'} "
+            f"samples={value.get('samples')} fit={value.get('fit_type')} "
+            f"x=[{value.get('x_min')},{value.get('x_max')}] y=[{value.get('y_min')},{value.get('y_max')}]"
+        )
+        self._pxe_last = value
+        self.pxeChartChanged.emit(value)
+
     @Slot(result=bool)
     def requestIrSpectrum(self) -> bool:
         """
@@ -3849,6 +3879,152 @@ class ModbusManager(QObject):
             return result
 
         self._enqueue_read("nmr", task)
+        return True
+
+    @Slot(result=bool)
+    def requestPxeChart(self) -> bool:
+        """
+        PXE chart as in driver ReadReg (controller_wifi.cpp / modbus.h):
+        - 500: samplesN (0..47)
+        - 501: fit type (0 buildup / 1 decay / 2 SEOP ramp / 3 SEOP).
+          Same X=time min, Y=PXe % for all four; type selects which experiment
+          filled the buffer. Driver overlays exp curve for 0/1/3 (not 2);
+          QML Clinicalmode draws that overlay from calculated params.
+        - DATA_X=520, DATA_Y=521: floats (2 regs/sample), striped like IR/NMR
+          PXE_CHART_ARRAYSIZE=94, PXE_CHART_ARRAYS=1
+          j = (baseAddr - DATA) * 94 + (addr - baseAddr), j < (n << 1)
+          u.f = PXeChartData[(j >> 1)]; value = u.w[j & 1] (STM32 = Modbus CDAB)
+        pymodbus read_input_registers only — not *_direct. Not priority. One in-flight.
+        """
+        if not self._is_connected or self._modbus_client is None:
+            logger.info("PXE chart request ignored: not connected")
+            return False
+        if self._pxe_request_in_flight:
+            logger.debug("PXE chart request ignored: previous request still in flight")
+            return False
+        self._pxe_request_in_flight = True
+        logger.info("PXE chart request queued")
+
+        client = self._modbus_client
+
+        def task():
+            import math
+            import struct
+            import json
+
+            def _float_from_regs_cdab(reg1: int, reg2: int) -> float:
+                C = (reg2 >> 8) & 0xFF
+                D = reg2 & 0xFF
+                A = (reg1 >> 8) & 0xFF
+                B = reg1 & 0xFF
+                try:
+                    v = float(struct.unpack(">f", bytes([C, D, A, B]))[0])
+                except Exception:
+                    return float("nan")
+                return v if math.isfinite(v) else float("nan")
+
+            def _read_stripes(base_addr: int, n_regs: int, axis: str) -> Optional[list]:
+                arraysize = 94  # PXE_CHART_ARRAYSIZE
+                data_regs: list[int] = [0] * n_regs
+                n_stripes = (n_regs + arraysize - 1) // arraysize
+                for k in range(n_stripes):
+                    start_idx = k * arraysize
+                    qty = min(arraysize, n_regs - start_idx)
+                    stripe = client.read_input_registers(base_addr + k, qty)
+                    if stripe is None or len(stripe) < qty:
+                        logger.info(
+                            f"PXE chart: {axis} stripe {k} addr={base_addr + k} qty={qty} "
+                            f"failed or short: {None if stripe is None else len(stripe)}"
+                        )
+                        return None
+                    data_regs[start_idx:start_idx + qty] = [int(v) for v in stripe[:qty]]
+                return data_regs
+
+            meta = client.read_input_registers(500, 2)
+            if meta is None or len(meta) < 2:
+                logger.info(f"PXE chart: meta read failed or short: {None if meta is None else len(meta)}")
+                return None
+
+            n_points = int(meta[0])
+            fit_type = int(meta[1])
+            pxe_chart_n = 47
+            if n_points < 1:
+                logger.info(f"PXE chart: samplesN={n_points}, skip")
+                return None
+            if n_points > pxe_chart_n:
+                logger.info(f"PXE chart: samplesN={n_points} capped to {pxe_chart_n}")
+                n_points = pxe_chart_n
+
+            n_regs = n_points * 2
+            regs_x = _read_stripes(520, n_regs, "X")
+            if regs_x is None:
+                return None
+            regs_y = _read_stripes(521, n_regs, "Y")
+            if regs_y is None:
+                return None
+
+            data_x = [
+                _float_from_regs_cdab(regs_x[i], regs_x[i + 1])
+                for i in range(0, n_regs, 2)
+            ]
+            data_y = [
+                _float_from_regs_cdab(regs_y[i], regs_y[i + 1])
+                for i in range(0, n_regs, 2)
+            ]
+
+            pairs = [
+                (float(x), float(y))
+                for x, y in zip(data_x, data_y)
+                if math.isfinite(x) and math.isfinite(y)
+            ]
+            if not pairs:
+                logger.info("PXE chart: no finite X/Y points, skip apply")
+                return None
+
+            # PaintExp: xmin=data_x[0], xmax=data_x[n-1]; Draw() autoscales Y from data.
+            x_min = pairs[0][0]
+            x_max = pairs[-1][0]
+            if not (math.isfinite(x_min) and math.isfinite(x_max) and x_max > x_min):
+                xs = [p[0] for p in pairs]
+                x_min = float(min(xs))
+                x_max = float(max(xs))
+            if x_max <= x_min:
+                x_max = x_min + 1.0
+
+            ys = [p[1] for p in pairs]
+            y_min = float(min(ys))
+            y_max = float(max(ys))
+            y_range = y_max - y_min
+            if y_range <= 0:
+                y_max = y_min + 1.0
+                y_range = 1.0
+            pad = y_range * 0.1
+            if y_min >= 0.0:
+                y_min = max(0.0, y_min - pad)
+            else:
+                y_min -= pad
+            y_max += pad
+
+            points = [{"x": x, "y": y} for x, y in pairs]
+            logger.info(
+                f"PXE chart: samplesN={n_points} fit={fit_type} "
+                f"x=[{x_min},{x_max}] y=[{y_min},{y_max}] "
+                f"data_x_first5={data_x[:5]} data_y_first5={data_y[:5]}"
+            )
+            return {
+                "samples": n_points,
+                "fit_type": fit_type,
+                "x_min": float(x_min),
+                "x_max": float(x_max),
+                "y_min": float(y_min),
+                "y_max": float(y_max),
+                "data_x": [float(v) if math.isfinite(v) else 0.0 for v in data_x],
+                "data_y": [float(v) if math.isfinite(v) else 0.0 for v in data_y],
+                "data_json": json.dumps([float(v) if math.isfinite(v) else 0.0 for v in data_y]),
+                "points": points,
+            }
+
+        self._enqueue_read("pxe", task)
         return True
 
     def _check_connection(self):

@@ -45,6 +45,7 @@ Item {
             if (modbusManager && root.foreground && modbusManager.isConnected) {
                 modbusManager.requestIrSpectrum()
                 modbusManager.requestNmrSpectrum()
+                modbusManager.requestPxeChart()
             }
         }
     }
@@ -415,6 +416,170 @@ Item {
         }
     }
 
+    // Как в драйвере NMRFitType: 0 buildup, 1 decay, 2 SEOP ramp, 3 SEOP.
+    // X/Y всегда time min / PXe %; тип выбирает эксперимент и формулу overlay.
+    property var pxeLastPoints: []
+    property int pxeLastFitType: -1
+
+    function pxeFitTypeName(ft) {
+        if (ft === 0) return "PXe buildup"
+        if (ft === 1) return "T1 decay"
+        if (ft === 2) return "SEOP ramp"
+        if (ft === 3) return "SEOP"
+        return "PXe"
+    }
+
+    function clearPxeFitSeries() {
+        try { if (pxeFitSeries.clear) pxeFitSeries.clear() } catch (e0) {}
+    }
+
+    function drawPxeFitOverlay() {
+        // Chart::Draw STYLE_EXP_*: красная экспонента, если fit valid.
+        // type 2 (SEOP ramp) в NMRFit fit не считает — только сырые точки.
+        clearPxeFitSeries()
+        var ft = root.pxeLastFitType
+        var pts = root.pxeLastPoints
+        if (!pts || pts.length < 2)
+            return
+        if (ft === 2 || ft < 0)
+            return
+
+        var x0 = Number(pxeAxisX.min)
+        var x1 = Number(pxeAxisX.max)
+        if (!isFinite(x0) || !isFinite(x1) || x1 <= x0)
+            return
+
+        var a = 0
+        var g = 0
+        var rising = false
+        if (ft === 0 || ft === 3) {
+            // y = Pmax * (1 - exp(-gSEOP * t))  — PaintExp PAINT_EXP_RISING
+            a = modbusManager ? Number(modbusManager.calculatedFittedXePolarizationMax) : 0
+            g = modbusManager ? Number(modbusManager.calculatedBuildupRate) : 0
+            if (!(a > 0) || !(g > 0) || !isFinite(a) || !isFinite(g))
+                return
+            rising = true
+        } else if (ft === 1) {
+            // y = A * exp(-t / T1)  — PAINT_EXP_FALLING; Fit_A в Modbus нет
+            var t1 = modbusManager ? Number(modbusManager.calculatedHPXeT1) : 0
+            if (!(t1 > 0) || !isFinite(t1))
+                return
+            g = 1.0 / t1
+            var num = 0
+            var den = 0
+            for (var i = 0; i < pts.length; i++) {
+                var sx = Number(pts[i].x)
+                var sy = Number(pts[i].y)
+                if (!isFinite(sx) || !isFinite(sy))
+                    continue
+                var e = Math.exp(-sx * g)
+                num += sy * e
+                den += e * e
+            }
+            if (!(den > 0))
+                return
+            a = num / den
+            if (!(a > 0) || !isFinite(a))
+                return
+            rising = false
+        } else {
+            return
+        }
+
+        var n = 80
+        var addedFit = 0
+        for (var k = 0; k < n; k++) {
+            var x = x0 + (x1 - x0) * k / (n - 1)
+            var y = rising ? (a * (1.0 - Math.exp(-g * x))) : (a * Math.exp(-g * x))
+            if (!isFinite(y))
+                continue
+            try {
+                if (pxeFitSeries.append) {
+                    pxeFitSeries.append(x, y)
+                    addedFit++
+                }
+            } catch (e1) {}
+        }
+        console.log("[PXE] Clinicalmode: fit overlay type=", ft, "n=", addedFit, "A=", a, "g=", g)
+    }
+
+    function updatePxeGraph(payload) {
+        if (!payload) {
+            console.log("[PXE] Clinicalmode: payload is null/undefined")
+            return
+        }
+        var pts = payload.points
+        if (!pts || pts.length === undefined || pts.length === 0) {
+            console.log("[PXE] Clinicalmode: no points to draw")
+            return
+        }
+        var x0 = Number(payload.x_min)
+        var x1 = Number(payload.x_max)
+        if (!isFinite(x0) || !isFinite(x1) || x1 <= x0) { x0 = 0; x1 = 1 }
+        pxeAxisX.min = x0
+        pxeAxisX.max = x1
+        pxeAxisX.tickAnchor = x0
+        var dx = x1 - x0
+        pxeAxisX.tickInterval = (dx >= 20) ? 5 : ((dx >= 5) ? 1 : ((dx >= 1) ? 0.2 : 0.05))
+        var y0 = Number(payload.y_min)
+        var y1 = Number(payload.y_max)
+        if (!isFinite(y0) || !isFinite(y1) || y1 <= y0) { y0 = 0; y1 = 100 }
+        pxeAxisY.min = y0
+        pxeAxisY.max = y1
+
+        try { if (pxeLineSeries.clear) pxeLineSeries.clear() } catch (e0) {
+            console.log("[PXE] Clinicalmode: pxeLineSeries.clear() failed:", e0)
+        }
+        var added = 0
+        for (var k = 0; k < pts.length; k++) {
+            try {
+                var px = Number(pts[k].x)
+                var py = Number(pts[k].y)
+                if (isFinite(px) && isFinite(py) && !isNaN(px) && !isNaN(py)) {
+                    if (pxeLineSeries.append) {
+                        pxeLineSeries.append(px, py)
+                        added++
+                    }
+                }
+            } catch (e1) {
+                console.log("[PXE] Clinicalmode: append failed at", k, e1)
+            }
+        }
+        root.pxeLastPoints = pts
+        root.pxeLastFitType = Number(payload.fit_type)
+        if (pxeChartCaption)
+            pxeChartCaption.text = root.pxeFitTypeName(root.pxeLastFitType)
+        root.drawPxeFitOverlay()
+        console.log("[PXE] Clinicalmode: drawn", added, "of", pts.length,
+                    "fit=", payload.fit_type, "x=[" + x0 + "," + x1 + "] y=[" + y0 + "," + y1 + "]")
+    }
+
+    Timer {
+        id: pxeRetryTimer
+        interval: 12000
+        repeat: true
+        running: root.cachedIsConnected && root.foreground
+        onTriggered: {
+            if (modbusManager) modbusManager.requestPxeChart()
+        }
+    }
+
+    Connections {
+        target: modbusManager
+        function onPxeChartChanged(payload) {
+            root.updatePxeGraph(payload)
+        }
+        function onCalculatedFittedXePolarizationMaxChanged(value) {
+            root.drawPxeFitOverlay()
+        }
+        function onCalculatedBuildupRateChanged(value) {
+            root.drawPxeFitOverlay()
+        }
+        function onCalculatedHPXeT1Changed(value) {
+            root.drawPxeFitOverlay()
+        }
+    }
+
     // При подключении дергаем один раз IR спектр
     Connections {
         target: modbusManager
@@ -425,6 +590,7 @@ Item {
                     if (modbusManager && root.foreground) {
                         modbusManager.requestIrSpectrum()
                         modbusManager.requestNmrSpectrum()
+                        modbusManager.requestPxeChart()
                     }
                 })
             }
@@ -7504,28 +7670,70 @@ Item {
         anchors.topMargin: 16
         width: 480
         height: 280
-        SplineSeries {
-            id: splineSeries1
-            XYPoint {
-                x: 1
-                y: 1
-            }
+        axisX: pxeAxisX
+        axisY: pxeAxisY
+        marginLeft: -17
+        marginRight: 17
+        marginTop: 10
+        marginBottom: -10
 
-            XYPoint {
-                x: 2
-                y: 4
-            }
+        GraphsTheme { id: pxeTheme }
+        theme: pxeTheme
 
-            XYPoint {
-                x: 4
-                y: 2
-            }
-
-            XYPoint {
-                x: 5
-                y: 5
-            }
+        Component.onCompleted: {
+            try { pxeTheme.backgroundColor = "#424242" } catch (e0) {}
+            try { pxeTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+            try { pxeTheme.plotAreaColor = "#424242" } catch (e0b) {}
+            try { pxeTheme.grid.mainColor = "#979797" } catch (e1) {}
+            try { pxeTheme.grid.subColor = "#979797" } catch (e2) {}
+            try { pxeTheme.axisX.mainColor = "#979797" } catch (e3) {}
+            try { pxeTheme.axisX.subColor = "#979797" } catch (e4) {}
+            try { pxeTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+            try { pxeTheme.axisY.mainColor = "#979797" } catch (e6) {}
+            try { pxeTheme.axisY.subColor = "#979797" } catch (e7) {}
+            try { pxeTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
         }
+
+        ValueAxis {
+            id: pxeAxisX
+            min: 0
+            max: 1
+            tickAnchor: 0
+            tickInterval: 0.2
+            labelsVisible: true
+        }
+        ValueAxis {
+            id: pxeAxisY
+            min: 0
+            max: 100
+            labelsVisible: true
+        }
+        LineSeries {
+            id: pxeLineSeries
+            color: "#ffffff"
+            width: 2
+            axisX: pxeAxisX
+            axisY: pxeAxisY
+        }
+        LineSeries {
+            id: pxeFitSeries
+            color: "#ff0000"
+            width: 2
+            axisX: pxeAxisX
+            axisY: pxeAxisY
+        }
+    }
+
+    Text {
+        id: pxeChartCaption
+        anchors.left: spline1.left
+        anchors.leftMargin: 28
+        anchors.top: spline1.top
+        anchors.topMargin: 6
+        z: 2
+        color: "#ffffff"
+        font.pixelSize: 13
+        text: ""
     }
 
 }
