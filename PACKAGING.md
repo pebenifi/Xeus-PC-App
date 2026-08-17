@@ -9,7 +9,7 @@
 | Платформа | Артефакт | Как запускать |
 |-----------|----------|----------------|
 | Windows | `XeusGUI-windows` → `XeusGUI-Setup.exe` | Двойной клик по установщику, затем ярлык **XeusGUI**. Python не ставится. |
-| macOS | `XeusGUI-macos` → `XeusGUI-macos.dmg` | Открыть DMG, перетащить `XeusGUI.app` в Программы. Если Gatekeeper ругается — см. `КАК_УСТАНОВИТЬ.txt`. |
+| macOS | `XeusGUI-macos` → `XeusGUI-macos.dmg` | Открыть DMG, перетащить `XeusGUI.app` в Программы. Если Gatekeeper ругается — правый клик по приложению → «Открыть», либо Системные настройки → Конфиденциальность и безопасность. |
 | Linux | `XeusGUI-linux` → `XeusGUI-x86_64.AppImage` (или `.tar.gz`) | `chmod +x` и запуск AppImage; либо распаковать tar.gz и запустить `XeusGUI`. |
 
 Локально на Mac после `scripts/build.sh`: `dist/XeusGUI.app` и `dist/XeusGUI-macos.dmg`.
