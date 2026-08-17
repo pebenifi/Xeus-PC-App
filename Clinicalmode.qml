@@ -840,7 +840,8 @@ Item {
                     "Laser Reinitialization",
                     "HP XE Flow",
                     "Clinical Sequence",
-                    "Purge Cycle Initialization"
+                    "Purge Cycle Initialization",
+                    "User program"
                 ] 
             },
             "3 SEOP Parameters": { 
@@ -877,7 +878,9 @@ Item {
             "Laser": { id: 106, type: "CMD", units: "", defaultValue: "", min: "", max: "", dtype: "DT_NONE" }
         })
 
-        // Advanced Programs: registers 2011, 2021, … 2191 (write 1 to start)
+        // Advanced Programs: registers 2011, 2021, … 2191 (write 1 to start).
+        // User program: no dedicated CMD in firmware maps (params 201–219);
+        // most likely next VTYPE_CMD is param 220 → holding register 2201.
         property var advancedPrograms: ({
             "Measure IR Hot Field On": {
                 register: 2011,
@@ -954,6 +957,10 @@ Item {
             "Purge Cycle Initialization": {
                 register: 2191,
                 description: "Initialize purge cycle."
+            },
+            "User program": {
+                register: 2201,
+                description: "Run user program (CMD param 220). Name is hardcoded in GUI; firmware has no Modbus catalog of USB/flash program names."
             }
         })
     }

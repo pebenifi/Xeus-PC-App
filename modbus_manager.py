@@ -7670,8 +7670,12 @@ class ModbusManager(QObject):
 
     @Slot(int, result=bool)
     def startAdvancedProgram(self, register: int) -> bool:
-        """Запуск Advanced Program: запись 1 в holding register 2011–2191 (шаг 10)."""
-        if register < 2011 or register > 2191 or register % 10 != 1:
+        """Запуск Advanced Program: запись 1 в holding register 2011–2201 (шаг 10).
+
+        2201 — User program (param 220). В картах параметров 201–219 отдельного CMD нет;
+        220 — следующий слот после Purge Cycle Initialization (219).
+        """
+        if register < 2011 or register > 2201 or register % 10 != 1:
             logger.warning(f"startAdvancedProgram: недопустимый регистр {register}")
             return False
         self._addLog(f"Start: register {register}")
