@@ -36,22 +36,28 @@ if __name__ == "__main__":
     # Гарантированно останавливаем I/O thread при выходе (даже если QML не загрузился)
     app.aboutToQuit.connect(lambda: modbus_manager._shutdownIoThread())
 
-    # Определяем базовый путь (директория исполняемого файла)
-    if getattr(sys, 'frozen', False):
-        # Если приложение собрано (PyInstaller)
-        base_path = os.path.dirname(sys.executable)
-        # Для macOS: ресурсы в .app/Contents/Resources
-        # Для Windows: ресурсы в той же папке или в _internal
-        if sys.platform == 'darwin':
-            resources_path = os.path.join(base_path, "../Resources")
-        else:
-            # Windows: проверяем _internal (onedir) или текущую папку (onefile)
-            resources_path = base_path
-            _internal_path = os.path.join(base_path, "_internal")
-            if os.path.exists(_internal_path):
-                resources_path = _internal_path
+    # QML next to sources in dev; inside the frozen bundle (no system Python).
+    if getattr(sys, "frozen", False):
+        exe_dir = os.path.dirname(sys.executable)
+        candidates = [
+            getattr(sys, "_MEIPASS", None),
+            os.path.join(exe_dir, "_internal"),
+            os.path.join(exe_dir, "..", "Resources"),
+            os.path.join(exe_dir, "..", "Frameworks"),
+            os.path.join(exe_dir, "..", "Resources", "_internal"),
+            os.path.join(exe_dir, "..", "Frameworks", "_internal"),
+            exe_dir,
+        ]
+        resources_path = exe_dir
+        for candidate in candidates:
+            if not candidate:
+                continue
+            path = os.path.abspath(candidate)
+            if os.path.isfile(os.path.join(path, "app.qml")):
+                resources_path = path
+                break
+        base_path = resources_path
     else:
-        # Режим разработки
         base_path = os.path.abspath(os.path.dirname(__file__))
         resources_path = base_path
 

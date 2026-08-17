@@ -1,0 +1,124 @@
+name: Build standalone apps
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Freeze with PyInstaller
+        run: python -m PyInstaller XeusGUI.spec --noconfirm --clean
+
+      - name: macOS DMG
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x dist/XeusGUI.app/Contents/MacOS/XeusGUI
+          xattr -cr dist/XeusGUI.app || true
+          python scripts/write_icon.py freeze/xeusgui.png
+          bash scripts/make_dmg.sh
+          du -sh dist/XeusGUI.app dist/XeusGUI-macos.dmg
+
+      - name: Linux AppImage + tarball
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x dist/XeusGUI/XeusGUI
+          tar -C dist -czf dist/XeusGUI-linux-x86_64.tar.gz XeusGUI
+          bash scripts/linux_appimage.sh
+          du -sh dist/XeusGUI dist/XeusGUI-linux-x86_64.tar.gz dist/XeusGUI-x86_64.AppImage || true
+
+      - name: Windows Setup.exe
+        if: runner.os == 'Windows'
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\xeusgui.iss
+          Get-ChildItem dist\XeusGUI-Setup.exe, dist\XeusGUI | Format-Table Name, Length
+
+      - name: Upload macOS
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: XeusGUI-macos
+          path: dist/XeusGUI-macos.dmg
+          retention-days: 30
+
+      - name: Upload Linux
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: XeusGUI-linux
+          path: |
+            dist/XeusGUI-x86_64.AppImage
+            dist/XeusGUI-linux-x86_64.tar.gz
+          retention-days: 30
+
+      - name: Upload Windows
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: XeusGUI-windows
+          path: dist/XeusGUI-Setup.exe
+          retention-days: 30
+
+  release:
+    name: GitHub Release
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List files
+        run: ls -lh artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'Latest builds' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/') }}
+          generate_release_notes: true
+          files: |
+            artifacts/XeusGUI-macos.dmg
+            artifacts/XeusGUI-Setup.exe
+            artifacts/XeusGUI-x86_64.AppImage
+            artifacts/XeusGUI-linux-x86_64.tar.gz
+          body: |
+            Standalone XeusGUI — Python and libraries are bundled. Do not install Python.
+
+            - **Windows:** `XeusGUI-Setup.exe` — double-click to install
+            - **macOS:** `XeusGUI-macos.dmg` — open and drag to Applications
+            - **Linux:** `XeusGUI-x86_64.AppImage` (or `.tar.gz`)

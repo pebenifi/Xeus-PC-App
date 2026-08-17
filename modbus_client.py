@@ -2,7 +2,7 @@
 Modbus клиент для работы с XeUS driver
 Поддерживает Modbus RTU over TCP/IP
 """
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.tcp import ModbusTcpClient
 from typing import Optional, Callable
 import logging
 import socket
@@ -2728,11 +2728,14 @@ class ModbusClient:
 
                         resp = b""
                         # Собираем ответ до полного фрейма
-                        deadline = time.time() + 0.3  # Уменьшаем deadline с 0.5 до 0.3 секунды
+                        deadline = time.time() + 0.8
                         while time.time() < deadline:
                             try:
-                                part = sock.recv(512)
+                                part = sock.recv(1024)
                             except socket.timeout:
+                                break
+                            except (ConnectionError, OSError):
+                                parsed = None
                                 break
                             if not part:
                                 break
