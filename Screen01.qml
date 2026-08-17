@@ -42,39 +42,29 @@ Rectangle {
             return
         }
 
-        // Требование: разметка оси X начинается с 38000 и шаг 500.
-        // Чтобы не было смещения (и странных вертикальных "палок" при неправильных X),
-        // рисуем NMR в фиксированном диапазоне X: 38000..44000, равномерно распределяя точки.
-        var X_MIN = 38000
-        var X_MAX = 44000
+        var x0 = Number(payload.x_min)
+        var x1 = Number(payload.x_max)
+        if (!isFinite(x0) || !isFinite(x1) || x1 <= x0) { x0 = 38000; x1 = 44000 }
+        nmrAxisX.min = x0
+        nmrAxisX.max = x1
+        nmrAxisX.tickAnchor = x0
+        nmrAxisX.tickInterval = ((x1 - x0) >= 4000) ? 1000 : (((x1 - x0) >= 500) ? 100 : 50)
 
-        nmrAxisX.min = X_MIN
-        nmrAxisX.max = X_MAX
-        nmrAxisX.tickAnchor = X_MIN
-        // подписи не должны налезать — оставляем крупные тики 1000, а 500 делаем как subTickCount на оси
-        nmrAxisX.tickInterval = 1000
+        var y0 = Number(payload.y_min)
+        var y1 = Number(payload.y_max)
+        if (!isFinite(y0) || !isFinite(y1) || y1 <= y0) { y0 = 0; y1 = 1 }
+        nmrAxisY.min = y0
+        nmrAxisY.max = y1
 
-        // Y берем из backend (если есть)
-        if (payload.y_min !== undefined && payload.y_max !== undefined) {
-            nmrAxisY.min = payload.y_min
-            nmrAxisY.max = payload.y_max
-        }
-
-        // 1) Предпочитаем payload.points — backend уже посчитал корректные X (с учетом freq).
         var pts = payload.points
         if (pts && pts.length !== undefined && pts.length > 0) {
             try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e0) {
                 console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e0)
             }
 
-            var metaFreqPts = Number(payload.freq)
-            var metaAmplPts = Number(payload.ampl)
-            var maxYPts = -1
-            var maxIdxPts = -1
             var addedPts = 0
             for (var k = 0; k < pts.length; k++) {
                 try {
-                    // X берём из backend (payload.points). Это убирает сдвиги/искажения по частоте.
                     var px = Number(pts[k].x)
                     var py = Number(pts[k].y)
                     if (isFinite(px) && isFinite(py) && !isNaN(px) && !isNaN(py)) {
@@ -82,24 +72,20 @@ Rectangle {
                             nmrLineSeries.append(px, py)
                             addedPts++
                         }
-                        if (py > maxYPts) { maxYPts = py; maxIdxPts = k }
                     }
                 } catch (e1) {
                     console.log("[NMR] Screen01: append(points) failed at", k, e1)
                 }
             }
-            console.log("[NMR] Screen01: meta freq=", metaFreqPts, "ampl=", metaAmplPts,
-                        "max(points.y)=", maxYPts, "maxIdx=", maxIdxPts,
-                        "drawn from payload.points, added=", addedPts, "of", pts.length)
+            console.log("[NMR] Screen01: drawn from payload.points, added=", addedPts, "of", pts.length,
+                        "x=[" + x0 + "," + x1 + "] y=[" + y0 + "," + y1 + "]")
             return
         }
 
-        // 2) Fallback: payload.data_json / payload.data
         var data = null
         if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
             try {
                 data = JSON.parse(payload.data_json)
-                console.log("[NMR] Screen01: parsed data_json, type=", (Array.isArray(data) ? "array" : typeof data), "len=", (data && data.length !== undefined ? data.length : "n/a"))
             } catch (ejson) {
                 console.log("[NMR] Screen01: JSON.parse(data_json) failed:", ejson)
                 data = payload.data
@@ -107,81 +93,36 @@ Rectangle {
         } else {
             data = payload.data
         }
-
-        // иногда data_json может быть объектом {data:[...]} — подхватываем
         if (data && !Array.isArray(data) && data.data !== undefined) {
             data = data.data
         }
-
         if (!data || !Array.isArray(data) || data.length === 0) {
             console.log("[NMR] Screen01: no array data to draw; data=", data)
             return
         }
 
         var n = data.length
-        var metaFreq = Number(payload.freq)
-        var metaAmpl = Number(payload.ampl)
-        var maxY = -1
-        var maxIdx = -1
-        for (var mi = 0; mi < n; mi++) {
-            var vy = Number(data[mi])
-            if (isFinite(vy) && !isNaN(vy) && vy > maxY) {
-                maxY = vy
-                maxIdx = mi
-            }
-        }
-        console.log("[NMR] Screen01: meta freq=", metaFreq, "ampl=", metaAmpl, "max(data)=", maxY, "maxIdx=", maxIdx, "n=", n)
-        var y0 = payload.y_min
-        var y1 = payload.y_max
-
-        if (y0 === undefined || y1 === undefined) {
-            console.log("[NMR] Screen01: missing Y axis ranges", "y0=", y0, "y1=", y1)
-            return
-        }
-
-        nmrAxisY.min = y0
-        nmrAxisY.max = y1
-
-        // Вычисляем сдвиг X так, чтобы пик (maxIdx) оказался на meta freq
-        var dx = (n > 1) ? ((X_MAX - X_MIN) / (n - 1)) : 0
-        var xPeakDefault = (n > 1) ? (X_MIN + dx * maxIdx) : X_MIN
-        var shift = 0.0
-        if (isFinite(metaFreq) && !isNaN(metaFreq) && maxIdx >= 0) {
-            shift = metaFreq - xPeakDefault
-        }
-
-        var pointsToAdd = []
-        var valid = 0
-        for (var i = 0; i < n; i++) {
-            var x = (n > 1) ? (X_MIN + dx * i + shift) : X_MIN
-            var y = Number(data[i])
-            if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
-                pointsToAdd.push({x: x, y: y})
-                valid++
-            }
-        }
-        if (pointsToAdd.length === 0) {
-            console.log("[NMR] Screen01: no valid points prepared (n=", n, ")")
-            return
-        }
-
         try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e2) {
             console.log("[NMR] Screen01: nmrLineSeries.clear() failed:", e2)
         }
-
         var added = 0
-        for (var j = 0; j < pointsToAdd.length; j++) {
-            try {
-                if (nmrLineSeries.append) {
-                    nmrLineSeries.append(pointsToAdd[j].x, pointsToAdd[j].y)
-                    added++
+        for (var i = 0; i < n; i++) {
+            var x = (n > 1) ? (x0 + (x1 - x0) * i / (n - 1)) : x0
+            var y = Number(data[i])
+            if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
+                try {
+                    if (nmrLineSeries.append) {
+                        nmrLineSeries.append(x, y)
+                        added++
+                    }
+                } catch (e3) {
+                    console.log("[NMR] Screen01: append failed at", i, x, y, e3)
                 }
-            } catch (e3) {
-                console.log("[NMR] Screen01: append failed at", j, pointsToAdd[j].x, pointsToAdd[j].y, e3)
             }
         }
-        console.log("[NMR] Screen01: added", added, "points (validPrepared=", valid, "n=", n, ")")
+        console.log("[NMR] Screen01: added", added, "points from data n=", n)
     }
+
 
     function _updateDashedVerticalMarker(markerSegments, xVal, yLo, yHi, xMin, xMax, tag) {
         if (!markerSegments || markerSegments.length === 0) return
@@ -361,10 +302,12 @@ Rectangle {
         target: modbusManager
         function onConnectionStatusChanged(connected) {
             screen01.cachedIsConnected = connected
-            if (connected && modbusManager) {
+            if (connected && modbusManager && !modbusManager.clinicalForeground) {
                 Qt.callLater(function() {
-                    modbusManager.requestIrSpectrum()
-                    modbusManager.requestNmrSpectrum()
+                    if (modbusManager && !modbusManager.clinicalForeground) {
+                        modbusManager.requestIrSpectrum()
+                        modbusManager.requestNmrSpectrum()
+                    }
                 })
             }
         }
@@ -378,14 +321,23 @@ Rectangle {
 
     Timer {
         id: irRetryTimer
-        interval: 2000
+        interval: 3000
         repeat: true
-        running: screen01.cachedIsConnected
+        running: screen01.cachedIsConnected && !(modbusManager && modbusManager.clinicalForeground)
         onTriggered: {
-            if (modbusManager) {
+            if (modbusManager)
                 modbusManager.requestIrSpectrum()
+        }
+    }
+
+    Timer {
+        id: nmrRetryTimer
+        interval: 8000
+        repeat: true
+        running: screen01.cachedIsConnected && !(modbusManager && modbusManager.clinicalForeground)
+        onTriggered: {
+            if (modbusManager)
                 modbusManager.requestNmrSpectrum()
-            }
         }
     }
 

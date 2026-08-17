@@ -98,13 +98,22 @@ Item {
         // Сначала пробуем payload.points (backend уже посчитал корректные X)
         var pts = payload.points
         if (pts && pts.length !== undefined && pts.length > 0) {
+            var x0 = Number(payload.x_min)
+            var x1 = Number(payload.x_max)
+            if (!isFinite(x0) || !isFinite(x1) || x1 <= x0) { x0 = 38000; x1 = 44000 }
+            nmrAxisX.min = x0
+            nmrAxisX.max = x1
+            nmrAxisX.tickAnchor = x0
+            nmrAxisX.tickInterval = ((x1 - x0) >= 4000) ? 1000 : (((x1 - x0) >= 500) ? 100 : 50)
+            var y0 = Number(payload.y_min)
+            var y1 = Number(payload.y_max)
+            if (!isFinite(y0) || !isFinite(y1) || y1 <= y0) { y0 = 0; y1 = 1 }
+            nmrAxisY.min = y0
+            nmrAxisY.max = y1
+
             try { if (nmrLineSeries.clear) nmrLineSeries.clear() } catch (e0) {
                 console.log("[NMR] Clinicalmode: nmrLineSeries.clear() failed:", e0)
             }
-            var metaFreqPts = Number(payload.freq)
-            var metaAmplPts = Number(payload.ampl)
-            var maxYPts = -1
-            var maxIdxPts = -1
             var addedPts = 0
             for (var k = 0; k < pts.length; k++) {
                 try {
@@ -115,15 +124,13 @@ Item {
                             nmrLineSeries.append(px, py)
                             addedPts++
                         }
-                        if (py > maxYPts) { maxYPts = py; maxIdxPts = k }
                     }
                 } catch (e1) {
                     console.log("[NMR] Clinicalmode: append(points) failed at", k, e1)
                 }
             }
-            console.log("[NMR] Clinicalmode: meta freq=", metaFreqPts, "ampl=", metaAmplPts,
-                        "max(points.y)=", maxYPts, "maxIdx=", maxIdxPts,
-                        "drawn from payload.points, added=", addedPts, "of", pts.length)
+            console.log("[NMR] Clinicalmode: drawn from payload.points, added=", addedPts, "of", pts.length,
+                        "x=[" + x0 + "," + x1 + "] y=[" + y0 + "," + y1 + "]")
             return
         }
         
@@ -177,7 +184,7 @@ Item {
         var pointsToAdd = []
         var validPoints = 0
         for (var i = 0; i < n; i++) {
-            var x = (n > 1) ? (X_MIN + dx * i + shift) : X_MIN
+            var x = (n > 1) ? (X_MIN + dx * i) : X_MIN
             var y = Number(data[i])
             if (isFinite(x) && isFinite(y) && !isNaN(x) && !isNaN(y)) {
                 pointsToAdd.push({x: x, y: y})
@@ -374,14 +381,12 @@ Item {
     // Retry: если IR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
     Timer {
         id: irRetryTimer
-        interval: 2000
+        interval: 3000
         repeat: true
         running: root.cachedIsConnected && root.foreground
         onTriggered: {
-            if (modbusManager) {
+            if (modbusManager)
                 modbusManager.requestIrSpectrum()
-                modbusManager.requestNmrSpectrum()
-            }
         }
     }
 
@@ -395,7 +400,7 @@ Item {
     // Retry: если NMR не пришел (адресация/устройство занято) — будем аккуратно запрашивать
     Timer {
         id: nmrRetryTimer
-        interval: 2000
+        interval: 8000
         repeat: true
         running: root.cachedIsConnected && root.foreground
         onTriggered: {
@@ -7448,41 +7453,17 @@ Item {
             tickAnchor: 792
             tickInterval: 1.0
             labelsVisible: true
-            // Убрали labelDelegate для избежания ошибок с modelData/value
-            // Используем стандартные подписи осей
         }
         ValueAxis { 
             id: irAxisY
             min: 0
             max: 1
             labelsVisible: true
-            // Убрали labelDelegate для избежания ошибок с modelData/value
-            // Используем стандартные подписи осей
         }
         LineSeries {
             id: splineSeries
-            // Линия спектра — красная, без сглаживания
             color: "#ff0000"
             width: 2
-            XYPoint {
-                x: 1
-                y: 1
-            }
-
-            XYPoint {
-                x: 2
-                y: 4
-            }
-
-            XYPoint {
-                x: 4
-                y: 2
-            }
-
-            XYPoint {
-                x: 5
-                y: 5
-            }
         }
 
         // Пунктирные вертикальные маркеры (делаем набором коротких сегментов)
