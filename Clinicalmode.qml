@@ -19,6 +19,10 @@ Item {
     property bool cachedIsConnected: false
     // Пока Clinical «сзади» (z ниже Screen01), не опрашиваем Modbus — иначе дублируем IR/NMR/SEOP с первым экраном и забиваем очередь.
     property bool foreground: false
+    property string nmrOverlayFreq: "—"
+    property string nmrOverlayAmpl: "—"
+    property string nmrOverlayInt: "—"
+    property string nmrOverlayT2: "—"
 
     function activateForeground() {
         if (root.foreground)
@@ -89,12 +93,126 @@ Item {
         }
     }
 
+    function _nmrFinite(v) {
+        if (v === undefined || v === null || v === "")
+            return NaN
+        var n = Number(v)
+        return isFinite(n) ? n : NaN
+    }
+
+    function _nmrFormatFixed(v, digits) {
+        return isFinite(v) ? Number(v).toFixed(digits) : "—"
+    }
+
+    function _nmrXyFromPayload(payload) {
+        var xs = []
+        var ys = []
+        var pts = payload.points
+        if (pts && pts.length !== undefined && pts.length > 0) {
+            for (var i = 0; i < pts.length; i++) {
+                var px = Number(pts[i].x)
+                var py = Number(pts[i].y)
+                if (isFinite(px) && isFinite(py)) {
+                    xs.push(px)
+                    ys.push(py)
+                }
+            }
+            return { xs: xs, ys: ys }
+        }
+        var data = null
+        if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
+            try { data = JSON.parse(payload.data_json) } catch (e) { data = payload.data }
+        } else {
+            data = payload.data
+        }
+        if (data && !Array.isArray(data) && data.data !== undefined)
+            data = data.data
+        if (!data || data.length === undefined || data.length === 0)
+            return { xs: xs, ys: ys }
+        var x0 = Number(payload.x_min)
+        var x1 = Number(payload.x_max)
+        if (!isFinite(x0) || !isFinite(x1) || x1 <= x0) { x0 = 0; x1 = Math.max(data.length - 1, 1) }
+        var n = data.length
+        for (var j = 0; j < n; j++) {
+            var y = Number(data[j])
+            if (!isFinite(y))
+                continue
+            xs.push((n > 1) ? (x0 + (x1 - x0) * j / (n - 1)) : x0)
+            ys.push(y)
+        }
+        return { xs: xs, ys: ys }
+    }
+
+    function _nmrStatsFromXy(xy) {
+        var out = { freq: NaN, ampl: NaN, integral: NaN, t2: NaN }
+        if (!xy || !xy.ys || xy.ys.length === 0)
+            return out
+        var maxY = xy.ys[0]
+        var maxI = 0
+        var i
+        for (i = 1; i < xy.ys.length; i++) {
+            if (xy.ys[i] > maxY) { maxY = xy.ys[i]; maxI = i }
+        }
+        out.ampl = maxY
+        out.freq = xy.xs[maxI]
+        var thr = maxY * 0.1
+        var area = 0
+        for (i = 1; i < xy.ys.length; i++) {
+            if (xy.ys[i] < thr && xy.ys[i - 1] < thr)
+                continue
+            area += 0.5 * (xy.ys[i] + xy.ys[i - 1]) * (xy.xs[i] - xy.xs[i - 1])
+        }
+        out.integral = area
+        var half = maxY * 0.5
+        var left = NaN
+        var right = NaN
+        for (i = maxI; i > 0; i--) {
+            if (xy.ys[i] >= half && xy.ys[i - 1] < half) {
+                var tl = (half - xy.ys[i - 1]) / (xy.ys[i] - xy.ys[i - 1])
+                left = xy.xs[i - 1] + tl * (xy.xs[i] - xy.xs[i - 1])
+                break
+            }
+        }
+        for (i = maxI; i < xy.ys.length - 1; i++) {
+            if (xy.ys[i] >= half && xy.ys[i + 1] < half) {
+                var tr = (half - xy.ys[i]) / (xy.ys[i + 1] - xy.ys[i])
+                right = xy.xs[i] + tr * (xy.xs[i + 1] - xy.xs[i])
+                break
+            }
+        }
+        if (isFinite(left) && isFinite(right) && right > left) {
+            var fwhm = right - left
+            if (fwhm > 0)
+                out.t2 = 1000.0 / (Math.PI * fwhm)
+        }
+        return out
+    }
+
+    function _updateNmrStatsOverlay(payload) {
+        var freq = root._nmrFinite(payload.freq)
+        var ampl = root._nmrFinite(payload.ampl)
+        var integral = root._nmrFinite(payload.integral)
+        var t2 = root._nmrFinite(payload.t2)
+        if (!isFinite(freq) || !isFinite(ampl) || !isFinite(integral) || !isFinite(t2)) {
+            var fb = root._nmrStatsFromXy(root._nmrXyFromPayload(payload))
+            if (!isFinite(freq)) freq = fb.freq
+            if (!isFinite(ampl)) ampl = fb.ampl
+            if (!isFinite(integral)) integral = fb.integral
+            if (!isFinite(t2)) t2 = fb.t2
+        }
+        root.nmrOverlayFreq = root._nmrFormatFixed(freq, 1)
+        root.nmrOverlayAmpl = root._nmrFormatFixed(ampl, 6)
+        root.nmrOverlayInt = root._nmrFormatFixed(integral, 5)
+        root.nmrOverlayT2 = root._nmrFormatFixed(t2, 3)
+    }
+
     function updateNmrGraph(payload) {
         console.log("[NMR] Clinicalmode updateNmrGraph payload=", payload)
         if (!payload) {
             console.log("[NMR] Clinicalmode: payload is null/undefined")
             return
         }
+        root._updateNmrStatsOverlay(payload)
         
         // Сначала пробуем payload.points (backend уже посчитал корректные X)
         var pts = payload.points
@@ -884,83 +1002,83 @@ Item {
         property var advancedPrograms: ({
             "Measure IR Hot Field On": {
                 register: 2011,
-                description: "Measure IR spectrum with hot field ON."
+                description: "This sequence allows measuring integral IR signal using IR spectrometer during the process of Xe-129 hyperpolarization, when the SEOP cell is hot, and the B0 magnet field is ON. The IR signal is used to compute Rb electron polarization, which reports on the efficiency of Rb polarization by the laser light. Rb electron polarization acts as an intermediary between the photons and Xe-129 hyperpolarization. Rb polarization represents the maximum ceiling for Xe-129 polarization."
             },
             "Measure IR Hot Field Off": {
                 register: 2021,
-                description: "Measure IR spectrum with hot field OFF."
+                description: "This sequence allows measuring integral IR signal using IR spectrometer during the process of Xe-129 hyperpolarization, when the SEOP cell is hot, laser is ON and at resonance and the B0 magnet field is set to 0.00 A, corresponding to no magnetic field. After acquisition, the sequence sets back the magnet PSU value to its original value. The IR signal is used to compute Rb electron polarization, which reports on the efficiency of Rb polarization by the laser light. Rb electron polarization acts as an intermediary between the photons and Xe-129 hyperpolarization. Rb polarization represents the maximum ceiling for Xe-129 polarization."
             },
             "Measure IR Cold": {
                 register: 2031,
-                description: "Measure IR spectrum on cold cell."
+                description: "This sequence allows measuring integral IR signal using IR spectrometer before the process of Xe-129 hyperpolarization. The SEOP cell is at room temperature, (the temperature is not set to any specific value but it is usually well below 35C; PID is on for room temperature setting), laser is on and at resonance, and the B0 magnet field is ON. The IR signal is used to compute Rb electron polarization, which reports on the efficiency of Rb polarization by the laser light. Rb electron polarization acts as an intermediary between the photons and Xe-129 hyperpolarization. Rb polarization represents the maximum ceiling for Xe-129 polarization."
             },
             "Acquire Current HP 129XE Signal": {
                 register: 2041,
-                description: "Acquire current hyperpolarized 129Xe NMR signal."
+                description: "This sequence allows measuring integral NMR signal of hyperpolarized 129Xenon using NMR spectrometer during the process of 129Xe hyperpolarization. The sequence sets the magnet Power Supply Unit (PSU) value to the 129Xe current, and the sequence uses the 129Xe pulse power to acquire the NMR signal. The NMR signal integral and T2* values is used to compute 129Xe polarization, using signal reference value of thermally polarized water phantom."
             },
             "Automated Current Sweep On HP 129XE": {
                 register: 2051,
-                description: "Automated magnet current sweep on HP 129Xe resonance."
+                description: "This sequence allows the current sweep on HP 129Xe. The sequence sweeps through 10 equally spaced magnet current values, and runs 10 corresponding NMR acquisition at these different B0 magnet current settings by predetermined parameters/settings in the driver. After the completion of the 10 runs, the obtained resonance frequencies and signal intensity are displayed. The driver assigns a TRUE or FALSE value to each of the value based on the frequency difference values between the neighboring acquisition. If the frequency difference falls within the 20% of the anticipated value (based on the magnet current settings), the TRUE value is assigned. If not, a FALSE value is assigned (indicating that the spectrum is likely dominated by noise). The driver needs at least 4 consecutive TRUE values (in a row) to be sure the NMR signal are resonating the anticipated settings. Once this is confirmed, the driver computes the adjusted new 129Xe magnet current, which it displays and automatically sets on the magnet PSU as the new 129Xe magnet current setting. Some parameters of this procedure can be modified on the driver settings in the corresponding menu."
             },
             "Automated Current Sweep On Water": {
                 register: 2061,
-                description: "Automated magnet current sweep on water (1H) resonance."
+                description: "This sequence allows the current sweep on water (1H) protons (or any other signal reference sample in principle). The sequence sweeps through 10 equally spaced magnet current values, and runs 10 corresponding NMR acquisition at these different B0 magnet current settings by predetermined parameters/settings in the driver. After the completion of the 10 runs, the obtained resonance frequencies and signal intensity are displayed. The driver assigns a TRUE or FALSE value to each of the value based on the frequency difference values between the neighboring acquisition. If the frequency difference falls within the 20% of the anticipated value (based on the magnet current settings), the TRUE value is assigned. If not, a FALSE value is assigned (indicating that the spectrum is likely dominated by noise). The driver needs at least 4 consecutive TRUE values (in a row) to be sure the NMR signal are resonating the anticipated settings. Once this is confirmed, the driver computes the adjusted new 1H magnet current, which it displays and automatically sets on the magnet PSU as the new 1H magnet current setting. Some parameters of this procedure can be modified on the driver settings in the corresponding menu."
             },
             "Acquire Reference 1H Signal": {
                 register: 2071,
-                description: "Acquire water 1H NMR reference signal."
+                description: "This sequence allows measuring integral NMR signal from a signal reference sample using NMR spectrometer. The sequence sets magnet power supply unit (PSU) to 1H current value and RF pulse power to 1H pulse, and it acquires the NMR signal. The reference 1H NMR signal integral and T2* information ared used to compute 129Xe polarization."
             },
             "Timed Polarization Build Up": {
                 register: 2081,
-                description: "Timed SEOP polarization build-up sequence."
+                description: "This sequence sets magnet PSU to 129Xe current value and sets the RF pulse power for 129Xe value. The sequence runs in a loop and acquires 16 NMR signals at specific time interval (for example, every 4 minutes) which is preset during a buildup experiment through the NMR spectrometer. After each NMR acquisition, the signal integral and T2* are displayed. Polarization percentage (PXe), build up rate (g-SEOP) and their error bars are computed. The buildup curve is displayed.  The sequence also acquires IR-Hot-Filed-ON, through the IR spectrometer. The IR signal is used to compute Rb electron polarization."
             },
             "Timed Polarization Decay": {
                 register: 2091,
-                description: "Timed polarization decay measurement."
+                description: "This sequence enables chassis fans. This sequence enables and set magnet PSU to 129Xe current value, and sets RF pulse power for 129Xe value. The sequence runs in a loop and acquires several NMR signals (up to 190), if sequence is not terminated) through the NMR spectrometer at specific time interval (for example, 4 minutes). After each NMR acquisition, the signal integral and T2* are displayed. Polarization percentage (PXe), T1 relaxation and their error bars are computed. The 129Xe T1 relaxation curve is displayed. This curve reports on the “health” of the SEOP cell. If the T1 is below 60 mins, one should plan for SEOP cell replacement soon. If T1 is below 20 mins, the replacement of the SOEP cell must be done as soon as possible. After completion of the loop, the magnet PSU is disabled."
             },
             "SEOP Cell QA Study": {
                 register: 2101,
-                description: "SEOP cell quality assurance study."
+                description: "This sequence enables us to fill the SEOP cell with either xenon or nitrogen gas OR to perform a QA study. First, the sequence purges all lines leading from the tanks (xenon mix tank and nitrogen tank) to the SEOP cell a couple of times with nitrogen gas for each cycle. The number of cycles is 3 in this preparation phase. Once the lines are purged, then the user has an option either to fill the cell with Xe gas mixture or perform a QA study. The Xe gas mixture fill enables to user to fill the Xe gas mixture in the SEOP cell and then the sequence ends relatively quickly. If the QA study option is chosen, then the user enters the number of cycles (N) to perform the QA study with nitrogen gas refill of the SEOP cell, simulating the long-term use of the SEOP cell in the polarizer. The previous study utilized 600 cycles, which took more than one day."
             },
             "SEOP Initialization": {
                 register: 2111,
-                description: "Initialize SEOP cell and subsystems."
+                description: "This sequence enables user to initialize the device. It turns on chiller, magnet PSU, laser fans, some chassis fans, laser PSU, and PID controller for control of the SEOP cell temperature. The sequence also sets the states for the water chiller, set magnet PSU to 129Xe current values. It also sets the PID to a specific value (20 degrees). It sets the laser to on-resonance condition and acquires a cold-cell IR data through the IR spectrometer. After the IR acquisition is done, the user has 3 options to select from to either end process, restore default state or acquire Hot-Field magnet OFF NIR data. The typically selected option to the “end process” to be able to proceed to SEOP process sequence."
             },
             "SEOP Process": {
                 register: 2121,
-                description: "Run full SEOP polarization process."
+                description: "This sequence enables laser fans, some chassis fans, sets PID to a specific value (known as Tramp which is preset in SEOP parameters screen). The sequence acquires 3 NMR signals in a loop, computing the NMR signal integral value as well as %PXe, and it displays PXe buildup curve. Between NMR acquisitions, the sequence also acquires IR hot-field magnet-ON data. It also computes displays the values. After 3 NMR data acquisitions, the sequence sets PID to another temperature (known as Tseop in the SEOP parameters screen) and acquires several (about 41) NMR signals for the PXe buildup process. It displays each NMR signal after acquisition along with its integral, compute PXe, displays buildup curve with buildup rate and PXe max (maximum attainable PXe) with their error bars. IR-hot –Filed magnet ON signal is acquired with the IR spectrometer, and the IR signal is used to compute Rb electron polarization. After the complete buildup process is done, the user has the option to eject the gas or restore default state, which shuts down the device safely. To enhance the safety of the device, if user inputs no option, the sequence defaults to restore default state, which shuts down the device safely."
             },
             "HP XE Eject": {
                 register: 2131,
-                description: "Eject hyperpolarized xenon from the cell."
+                description: "This sequence enables all chassis fans, vacuum pump and purges the Tedlar bag with nitrogen gas three times, then does a final bag evacuation procedure to make the bag ready to accept hyperpolarized Xe gas. The sequence powers down the laser, acquires one last NMR signal from hyperpolarized Xe gas, and uses the signal to compute the polarization of 129Xe. The sequence then ejects the hyperpolarized Xe gas into the Tedlar bag (approximately over 20 seconds). After that, it evacuates the lines from the xenon tank to the cell and refills the SEOP cell with xenon gas from the tank. Once this is successful, the vacuum pump and chassis fans are disabled thereby ending the process leaving the hyperpolarizer in its default state."
             },
             "Restore Default State": {
                 register: 2141,
-                description: "Restore instrument to default safe state."
+                description: "This sequence sets laser PSU to 15A, set PID to 20 degrees, enables all chassis fans. Once the PID controller reads below 20, it proceeds to another sequence ,which disables laser and SEOP cell heaters."
             },
             "Disable Laser and Heater": {
                 register: 2151,
-                description: "Disable laser and cell heater."
+                description: "This sequence sets laser PSU to 0.00A, then disables laser PSU, PID, water chiller, laser fans, all chassis fans and magnet PSU."
             },
             "Laser Reinitialization": {
                 register: 2161,
-                description: "Re-initialize laser subsystem."
+                description: "This sequence enables user to initialize the device. It turns on chiller, magnet PSU, laser fans, some chassis fans, laser PSU, PID controller. The sequence also sets the states for the water chiller, sets magnet PSU to 129Xe current value. It sets the PID controller to a specific value (20 degrees). The sequence ramps the laser current to the on-resonance condition (parameter from SEOP screen). The difference between this sequence and the laser initialization sequence is that this sequence does not acquire any IR signal at all. It just turns on all necessary devices and ramps laser to the on-resonance condition. Then the sequence automatically proceeds to the SEOP process sequence (without the user input)."
             },
             "HP XE Flow": {
                 register: 2171,
-                description: "Flow hyperpolarized xenon through the system."
+                description: "This sequence is NEARLY the same as the HP XE eject sequence. The only difference here is that the ejection of the hyperpolarized Xe gas lasts longer (15 minutes versus 20 seconds). This sequence was designed for ejection into NMR tube for utilization in a pseudo-continuous eject for applications in biosensors and materials science research/experiments. All processes are done exactly same way as those in HP Xe Eject sequence already described above. Unlike in the HP Xe Eject sequence, the user has two options at the end: disable laser and Heater or perform Laser Re-initialization (for the sub-sequent addition run). The default option is to disable the Laser and Heater."
             },
             "Clinical Sequence": {
                 register: 2181,
-                description: "Run clinical measurement sequence."
+                description: "This sequence is a combination of laser initialization, SEOP process, and HP Xe eject and laser reinitialization process all combined into one big sequence. The sequence runs one after the other unless the sequence is terminated by the user."
             },
             "Purge Cycle Initialization": {
                 register: 2191,
-                description: "Initialize purge cycle."
+                description: "This sequence evacuates all the gas handling lines in the polarizer: all the way to the tanks and keeps lines pressurized with ultra-pure deoxygenated nitrogen gas if needed."
             },
             "User program": {
                 register: 2201,
-                description: "Run user program (CMD param 220). Name is hardcoded in GUI; firmware has no Modbus catalog of USB/flash program names."
+                description: ""
             }
         })
     }
@@ -1013,15 +1131,7 @@ Item {
         infoTitle.text = programName
         infoSubtitle.text = "2 Advanced Programs List"
         if (prog) {
-            infoContent.text = prog.description
-            paramGrid.visible = true
-            paramId.text = prog.register.toString()
-            paramType.text = "CMD"
-            paramUnits.text = "—"
-            paramDefault.text = "1"
-            paramMin.text = "—"
-            paramMax.text = "—"
-            paramDtype.text = "DT_NONE"
+            infoContent.text = prog.description || ""
             if (modbusManager)
                 modbusManager.startDisplayTextPolling()
         } else {
@@ -7570,6 +7680,26 @@ Item {
             axisX: nmrAxisX
             axisY: nmrAxisY
         }
+    }
+
+    Grid {
+        id: nmrStatsOverlay
+        anchors.right: spline2.right
+        anchors.rightMargin: 24
+        anchors.top: spline2.top
+        anchors.topMargin: 8
+        z: 2
+        columns: 2
+        columnSpacing: 8
+        rowSpacing: 1
+        Text { text: "Freq"; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+        Text { text: root.nmrOverlayFreq; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
+        Text { text: "Ampl"; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+        Text { text: root.nmrOverlayAmpl; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
+        Text { text: "Int."; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+        Text { text: root.nmrOverlayInt; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
+        Text { text: "T2"; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+        Text { text: root.nmrOverlayT2; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
     }
 
     GraphsView {

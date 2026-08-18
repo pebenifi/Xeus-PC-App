@@ -34,6 +34,123 @@ Rectangle {
 
     // IR spectrum on main screen
     property bool cachedIsConnected: false
+    property string nmrOverlayFreq: "—"
+    property string nmrOverlayAmpl: "—"
+    property string nmrOverlayInt: "—"
+    property string nmrOverlayT2: "—"
+
+    function _nmrFinite(v) {
+        if (v === undefined || v === null || v === "")
+            return NaN
+        var n = Number(v)
+        return isFinite(n) ? n : NaN
+    }
+
+    function _nmrFormatFixed(v, digits) {
+        return isFinite(v) ? Number(v).toFixed(digits) : "—"
+    }
+
+    function _nmrXyFromPayload(payload) {
+        var xs = []
+        var ys = []
+        var pts = payload.points
+        if (pts && pts.length !== undefined && pts.length > 0) {
+            for (var i = 0; i < pts.length; i++) {
+                var px = Number(pts[i].x)
+                var py = Number(pts[i].y)
+                if (isFinite(px) && isFinite(py)) {
+                    xs.push(px)
+                    ys.push(py)
+                }
+            }
+            return { xs: xs, ys: ys }
+        }
+        var data = null
+        if (payload.data_json !== undefined && payload.data_json !== null && payload.data_json !== "") {
+            try { data = JSON.parse(payload.data_json) } catch (e) { data = payload.data }
+        } else {
+            data = payload.data
+        }
+        if (data && !Array.isArray(data) && data.data !== undefined)
+            data = data.data
+        if (!data || data.length === undefined || data.length === 0)
+            return { xs: xs, ys: ys }
+        var x0 = Number(payload.x_min)
+        var x1 = Number(payload.x_max)
+        if (!isFinite(x0) || !isFinite(x1) || x1 <= x0) { x0 = 0; x1 = Math.max(data.length - 1, 1) }
+        var n = data.length
+        for (var j = 0; j < n; j++) {
+            var y = Number(data[j])
+            if (!isFinite(y))
+                continue
+            xs.push((n > 1) ? (x0 + (x1 - x0) * j / (n - 1)) : x0)
+            ys.push(y)
+        }
+        return { xs: xs, ys: ys }
+    }
+
+    function _nmrStatsFromXy(xy) {
+        var out = { freq: NaN, ampl: NaN, integral: NaN, t2: NaN }
+        if (!xy || !xy.ys || xy.ys.length === 0)
+            return out
+        var maxY = xy.ys[0]
+        var maxI = 0
+        var i
+        for (i = 1; i < xy.ys.length; i++) {
+            if (xy.ys[i] > maxY) { maxY = xy.ys[i]; maxI = i }
+        }
+        out.ampl = maxY
+        out.freq = xy.xs[maxI]
+        var thr = maxY * 0.1
+        var area = 0
+        for (i = 1; i < xy.ys.length; i++) {
+            if (xy.ys[i] < thr && xy.ys[i - 1] < thr)
+                continue
+            area += 0.5 * (xy.ys[i] + xy.ys[i - 1]) * (xy.xs[i] - xy.xs[i - 1])
+        }
+        out.integral = area
+        var half = maxY * 0.5
+        var left = NaN
+        var right = NaN
+        for (i = maxI; i > 0; i--) {
+            if (xy.ys[i] >= half && xy.ys[i - 1] < half) {
+                var tl = (half - xy.ys[i - 1]) / (xy.ys[i] - xy.ys[i - 1])
+                left = xy.xs[i - 1] + tl * (xy.xs[i] - xy.xs[i - 1])
+                break
+            }
+        }
+        for (i = maxI; i < xy.ys.length - 1; i++) {
+            if (xy.ys[i] >= half && xy.ys[i + 1] < half) {
+                var tr = (half - xy.ys[i]) / (xy.ys[i + 1] - xy.ys[i])
+                right = xy.xs[i] + tr * (xy.xs[i + 1] - xy.xs[i])
+                break
+            }
+        }
+        if (isFinite(left) && isFinite(right) && right > left) {
+            var fwhm = right - left
+            if (fwhm > 0)
+                out.t2 = 1000.0 / (Math.PI * fwhm)
+        }
+        return out
+    }
+
+    function _updateNmrStatsOverlay(payload) {
+        var freq = screen01._nmrFinite(payload.freq)
+        var ampl = screen01._nmrFinite(payload.ampl)
+        var integral = screen01._nmrFinite(payload.integral)
+        var t2 = screen01._nmrFinite(payload.t2)
+        if (!isFinite(freq) || !isFinite(ampl) || !isFinite(integral) || !isFinite(t2)) {
+            var fb = screen01._nmrStatsFromXy(screen01._nmrXyFromPayload(payload))
+            if (!isFinite(freq)) freq = fb.freq
+            if (!isFinite(ampl)) ampl = fb.ampl
+            if (!isFinite(integral)) integral = fb.integral
+            if (!isFinite(t2)) t2 = fb.t2
+        }
+        screen01.nmrOverlayFreq = screen01._nmrFormatFixed(freq, 1)
+        screen01.nmrOverlayAmpl = screen01._nmrFormatFixed(ampl, 6)
+        screen01.nmrOverlayInt = screen01._nmrFormatFixed(integral, 5)
+        screen01.nmrOverlayT2 = screen01._nmrFormatFixed(t2, 3)
+    }
 
     function updateNmrGraph(payload) {
         console.log("[NMR] Screen01 updateNmrGraph payload=", payload)
@@ -41,6 +158,7 @@ Rectangle {
             console.log("[NMR] Screen01: payload is null/undefined")
             return
         }
+        screen01._updateNmrStatsOverlay(payload)
 
         var x0 = Number(payload.x_min)
         var x1 = Number(payload.x_max)
@@ -1353,53 +1471,76 @@ Rectangle {
             }
 
             // NMR graph
-            GraphsView {
-                id: spline1
+            Item {
                 width: 480
                 height: 280
-                axisX: nmrAxisX
-                axisY: nmrAxisY
-                marginLeft: -17
-                marginRight: 17
-                marginTop: 10
-                marginBottom: -10
 
-                GraphsTheme { id: nmrTheme }
-                theme: nmrTheme
+                GraphsView {
+                    id: spline1
+                    anchors.fill: parent
+                    axisX: nmrAxisX
+                    axisY: nmrAxisY
+                    marginLeft: -17
+                    marginRight: 17
+                    marginTop: 10
+                    marginBottom: -10
 
-                Component.onCompleted: {
-                    try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
-                    try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
-                    try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
-                    try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
-                    try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
-                    try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
-                    try { nmrTheme.axisX.subColor = "#979797" } catch (e4) {}
-                    try { nmrTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
-                    try { nmrTheme.axisY.mainColor = "#979797" } catch (e6) {}
-                    try { nmrTheme.axisY.subColor = "#979797" } catch (e7) {}
-                    try { nmrTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+                    GraphsTheme { id: nmrTheme }
+                    theme: nmrTheme
+
+                    Component.onCompleted: {
+                        try { nmrTheme.backgroundColor = "#424242" } catch (e0) {}
+                        try { nmrTheme.plotAreaBackgroundColor = "#424242" } catch (e0a) {}
+                        try { nmrTheme.plotAreaColor = "#424242" } catch (e0b) {}
+                        try { nmrTheme.grid.mainColor = "#979797" } catch (e1) {}
+                        try { nmrTheme.grid.subColor = "#979797" } catch (e2) {}
+                        try { nmrTheme.axisX.mainColor = "#979797" } catch (e3) {}
+                        try { nmrTheme.axisX.subColor = "#979797" } catch (e4) {}
+                        try { nmrTheme.axisX.labelTextColor = "#ffffff" } catch (e5) {}
+                        try { nmrTheme.axisY.mainColor = "#979797" } catch (e6) {}
+                        try { nmrTheme.axisY.subColor = "#979797" } catch (e7) {}
+                        try { nmrTheme.axisY.labelTextColor = "#ffffff" } catch (e8) {}
+                    }
+
+                    ValueAxis {
+                        id: nmrAxisX
+                        min: 38000
+                        max: 44000
+                        tickAnchor: 38000
+                        tickInterval: 1000
+                        subTickCount: 1
+                        labelsVisible: true
+                    }
+                    ValueAxis {
+                        id: nmrAxisY
+                        min: 0
+                        max: 1
+                        labelsVisible: true
+                    }
+                    LineSeries {
+                        id: nmrLineSeries
+                        color: "#4a90e2"
+                        width: 2
+                    }
                 }
 
-                ValueAxis {
-                    id: nmrAxisX
-                    min: 38000
-                    max: 44000
-                    tickAnchor: 38000
-                    tickInterval: 1000
-                    subTickCount: 1
-                    labelsVisible: true
-                }
-                ValueAxis {
-                    id: nmrAxisY
-                    min: 0
-                    max: 1
-                    labelsVisible: true
-                }
-                LineSeries {
-                    id: nmrLineSeries
-                    color: "#4a90e2"
-                    width: 2
+                Grid {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 24
+                    anchors.top: parent.top
+                    anchors.topMargin: 8
+                    z: 2
+                    columns: 2
+                    columnSpacing: 8
+                    rowSpacing: 1
+                    Text { text: "Freq"; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+                    Text { text: screen01.nmrOverlayFreq; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
+                    Text { text: "Ampl"; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+                    Text { text: screen01.nmrOverlayAmpl; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
+                    Text { text: "Int."; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+                    Text { text: screen01.nmrOverlayInt; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
+                    Text { text: "T2"; color: "#ffd400"; font.family: Constants.fontFamily; font.pixelSize: 13 }
+                    Text { text: screen01.nmrOverlayT2; color: "#ffffff"; font.family: Constants.fontFamily; font.pixelSize: 13; horizontalAlignment: Text.AlignRight; width: 86 }
                 }
             }
         }
